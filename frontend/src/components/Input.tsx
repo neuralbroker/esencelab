@@ -22,7 +22,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         <label
           htmlFor={inputId}
           className={`absolute left-4 transition-all duration-200 pointer-events-none
-            ${isFloating ? '-top-1 text-xs px-1 bg-background text-secondary z-10' : 'top-5 text-base text-secondary z-0'}`}
+            ${isFloating ? '-top-1 text-xs px-1 bg-white/80 text-secondary z-10 rounded' : 'top-5 text-base text-secondary z-0'}`}
         >
           {label}
         </label>
@@ -37,12 +37,12 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             setIsFocused(false);
             onBlur?.(e);
           }}
-          className={`w-full rounded-xl border bg-transparent px-4 py-3.5 text-primary text-base transition-colors focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary relative z-0
-            ${error ? 'border-red-500' : 'border-border'} ${className}`}
+          className={`w-full rounded-xl border bg-white/68 px-4 py-3.5 text-primary text-base transition-colors focus:outline-none focus:border-[#4b4b4b] focus:ring-2 focus:ring-[#4b4b4b]/25 relative z-0
+            ${error ? 'border-gray-600' : 'border-border'} ${className}`}
           {...rest}
         />
         {error && (
-          <p className="mt-1.5 text-sm text-red-500 px-1">
+          <p className="mt-1.5 text-sm text-gray-600 px-1">
             {error}
           </p>
         )}
@@ -54,3 +54,4 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
 Input.displayName = 'Input';
 
 export default Input;
+

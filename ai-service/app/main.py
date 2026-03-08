@@ -1,9 +1,15 @@
 from __future__ import annotations
 
 import io
+import json
+import hashlib
 import os
 import re
+import time
+import urllib.error
+import urllib.request
 from typing import Any, Dict, List, Optional
+from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -37,6 +43,28 @@ except Exception:  # pragma: no cover
     cosine_similarity = None
 
 app = FastAPI(title="EsenceLab AI Service")
+
+
+def _load_local_env() -> None:
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    if not env_path.exists():
+        return
+    try:
+        for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = value
+    except Exception:
+        # Non-blocking for local demos if env parsing fails.
+        return
+
+
+_load_local_env()
 
 app.add_middleware(
     CORSMiddleware,
@@ -86,6 +114,25 @@ EXPERIENCE_KEYWORDS = [
     "internship",
 ]
 
+SUPPORTED_STUDENT_FEATURES = {
+    "skill_gap",
+    "resume_improvement",
+    "interview_prep",
+    "project_ideas",
+    "study_plan",
+}
+
+STUDENT_ASSISTANT_PROMPTS = {
+    "skill_gap": "Analyze skill gaps and suggest high-impact next skills with practical actions.",
+    "resume_improvement": "Improve resume quality with precise, ATS-friendly and recruiter-friendly suggestions.",
+    "interview_prep": "Generate technical and behavioral interview prep advice with actionable practice steps.",
+    "project_ideas": "Suggest portfolio-worthy project ideas aligned to the target role and missing skills.",
+    "study_plan": "Create a concise weekly study plan with milestones and realistic outcomes.",
+}
+
+ASSISTANT_CACHE_TTL_SEC = int(os.getenv("STUDENT_ASSISTANT_CACHE_TTL_SEC", "300"))
+_assistant_cache: Dict[str, Dict[str, Any]] = {}
+
 
 class ResumeParseResponse(BaseModel):
     parsedData: Dict[str, Any]
@@ -104,6 +151,22 @@ class MatchResponse(BaseModel):
     matchedSkills: List[str]
     missingSkills: List[str]
     explanation: Optional[str] = None
+
+
+class StudentAssistantRequest(BaseModel):
+    feature: str
+    prompt: Optional[str] = None
+    context: Dict[str, Any] = {}
+
+
+class StudentAssistantResponse(BaseModel):
+    provider: str
+    model: Optional[str] = None
+    feature: str
+    title: str
+    summary: str
+    actionItems: List[str]
+    followUpQuestions: List[str]
 
 
 def extract_text_from_pdf_bytes(content: bytes) -> str:
@@ -364,6 +427,253 @@ def generate_explanation(match_score: float, matched: List[str], missing: List[s
     return f"Candidate is a {verdict}. Matched skills: {', '.join(matched[:6]) or 'none'}. Missing focus areas: {missing_hint}."
 
 
+def _compact_context(context: Dict[str, Any]) -> Dict[str, Any]:
+    role = str(context.get("targetRole") or "").strip()
+    skills = [str(item).strip() for item in (context.get("skills") or []) if str(item).strip()]
+    missing_skills = [str(item).strip() for item in (context.get("missingSkills") or []) if str(item).strip()]
+    resume_summary = str(context.get("resumeSummary") or "").strip()
+    readiness = context.get("readinessScore")
+    role = role[:120]
+    resume_summary = resume_summary[:700]
+    skills = skills[:30]
+    missing_skills = missing_skills[:30]
+    return {
+        "targetRole": role,
+        "skills": skills,
+        "missingSkills": missing_skills,
+        "resumeSummary": resume_summary,
+        "readinessScore": readiness,
+    }
+
+
+def _assistant_cache_key(feature: str, prompt: str, context: Dict[str, Any]) -> str:
+    payload = {
+        "feature": feature,
+        "prompt": prompt.strip().lower(),
+        "context": _compact_context(context),
+    }
+    raw = json.dumps(payload, sort_keys=True, ensure_ascii=True)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _prune_assistant_cache() -> None:
+    now = time.time()
+    stale_keys = [key for key, entry in _assistant_cache.items() if entry.get("expiresAt", 0) <= now]
+    for key in stale_keys:
+        _assistant_cache.pop(key, None)
+
+
+def _extract_json_object(raw_text: str) -> Dict[str, Any]:
+    text = (raw_text or "").strip()
+    if not text:
+        return {}
+
+    try:
+        parsed = json.loads(text)
+        if isinstance(parsed, dict):
+            return parsed
+    except Exception:
+        pass
+
+    start = text.find("{")
+    end = text.rfind("}")
+    if start >= 0 and end > start:
+        candidate = text[start : end + 1]
+        try:
+            parsed = json.loads(candidate)
+            if isinstance(parsed, dict):
+                return parsed
+        except Exception:
+            return {}
+    return {}
+
+
+def _fallback_student_assistant(feature: str, prompt: str, context: Dict[str, Any]) -> Dict[str, Any]:
+    clean_context = _compact_context(context)
+    role = clean_context.get("targetRole") or "your target role"
+    missing = clean_context.get("missingSkills") or []
+    top_missing = ", ".join(missing[:3]) if missing else "core role skills"
+
+    if feature == "resume_improvement":
+        return {
+            "provider": "fallback",
+            "model": None,
+            "feature": feature,
+            "title": "Resume Upgrade Plan",
+            "summary": f"Improve your resume for {role} with stronger impact-based bullet points and clearer skill evidence.",
+            "actionItems": [
+                "Rewrite top 3 project bullets using action + outcome + metric format.",
+                "Place role-relevant skills in a focused skills section near the top.",
+                "Add one quantified achievement for internship or project work.",
+                "Keep resume length to one page with consistent section headings.",
+            ],
+            "followUpQuestions": [
+                "Do you want bullet-point rewrites for one project?",
+                "Should I generate ATS keywords for your target role?",
+            ],
+        }
+
+    if feature == "interview_prep":
+        return {
+            "provider": "fallback",
+            "model": None,
+            "feature": feature,
+            "title": "Interview Prep Sprint",
+            "summary": f"Prepare for {role} interviews with focused technical practice and concise storytelling.",
+            "actionItems": [
+                "Practice 5 role-specific technical questions and time each answer to 90 seconds.",
+                "Prepare 3 STAR-format stories for teamwork, failure, and ownership.",
+                "Review one project deeply: architecture, tradeoffs, and performance decisions.",
+                "Run one mock interview this week and note weak areas.",
+            ],
+            "followUpQuestions": [
+                "Need 10 likely interview questions for your role?",
+                "Want a mock interviewer checklist?",
+            ],
+        }
+
+    if feature == "project_ideas":
+        return {
+            "provider": "fallback",
+            "model": None,
+            "feature": feature,
+            "title": "Portfolio Project Ideas",
+            "summary": f"Build role-aligned projects that close gaps in {top_missing}.",
+            "actionItems": [
+                f"Project 1: Build a mini app focused on {missing[0] if missing else 'core backend/frontend'} with deployment.",
+                "Project 2: Add analytics, testing, and monitoring to show production readiness.",
+                "Project 3: Publish architecture notes and demo video in your portfolio.",
+                "Track measurable outcomes: performance, uptime, or user interactions.",
+            ],
+            "followUpQuestions": [
+                "Should I break one project into weekly milestones?",
+                "Need project ideas tailored to your current skill stack?",
+            ],
+        }
+
+    if feature == "study_plan":
+        return {
+            "provider": "fallback",
+            "model": None,
+            "feature": feature,
+            "title": "4-Week Learning Plan",
+            "summary": f"Structured plan for {role} with focus on {top_missing}.",
+            "actionItems": [
+                "Week 1: Strengthen one missing core skill and finish 6-8 guided lessons.",
+                "Week 2: Build a small feature project using that skill.",
+                "Week 3: Add tests, edge-case handling, and deployment.",
+                "Week 4: Revise resume + portfolio and do one mock interview.",
+            ],
+            "followUpQuestions": [
+                "Want this converted to a daily checklist?",
+                "Need free learning resources mapped to each week?",
+            ],
+        }
+
+    return {
+        "provider": "fallback",
+        "model": None,
+        "feature": "skill_gap",
+        "title": "Skill Gap Action Plan",
+        "summary": f"Prioritize the highest-impact missing skills for {role}: {top_missing}.",
+        "actionItems": [
+            "Pick one missing skill and complete a guided learning module this week.",
+            "Implement that skill in a mini project section and document outcomes.",
+            "Update resume skills and project bullets after completion.",
+            "Measure progress by weekly mock interview or coding challenge.",
+        ],
+        "followUpQuestions": [
+            "Should I rank missing skills by hiring impact?",
+            "Want a beginner-to-advanced resource path?",
+        ],
+    }
+
+
+def _call_groq_assistant(feature: str, prompt: str, context: Dict[str, Any]) -> Dict[str, Any]:
+    api_key = os.getenv("GROQ_API_KEY", "").strip()
+    model = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant").strip() or "llama-3.1-8b-instant"
+    if not api_key:
+        return _fallback_student_assistant(feature, prompt, context)
+
+    feature_hint = STUDENT_ASSISTANT_PROMPTS.get(feature, STUDENT_ASSISTANT_PROMPTS["skill_gap"])
+    clean_context = _compact_context(context)
+    safe_prompt = prompt.strip()[:1200]
+    system_prompt = (
+        "You are an AI career coach for students. "
+        "Return strict JSON only with keys: title, summary, actionItems, followUpQuestions. "
+        "actionItems and followUpQuestions must be arrays of short strings. "
+        "No markdown, no extra keys."
+    )
+    user_payload = {
+        "task": feature_hint,
+        "feature": feature,
+        "studentContext": clean_context,
+        "studentPrompt": safe_prompt or "Provide concise actionable guidance.",
+    }
+
+    body = {
+        "model": model,
+        "temperature": 0.2,
+        "max_tokens": 700,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": json.dumps(user_payload, ensure_ascii=True)},
+        ],
+        "response_format": {"type": "json_object"},
+    }
+
+    req = urllib.request.Request(
+        "https://api.groq.com/openai/v1/chat/completions",
+        data=json.dumps(body).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+            "Accept": "application/json",
+            "User-Agent": "EsenceLab-AI/1.0",
+        },
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=18) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+            content = (
+                payload.get("choices", [{}])[0]
+                .get("message", {})
+                .get("content", "")
+            )
+            parsed = _extract_json_object(content)
+            title = str(parsed.get("title") or "").strip() or "AI Career Guidance"
+            summary = str(parsed.get("summary") or "").strip()
+            action_items = [
+                str(item).strip()
+                for item in (parsed.get("actionItems") or [])
+                if str(item).strip()
+            ][:8]
+            follow_ups = [
+                str(item).strip()
+                for item in (parsed.get("followUpQuestions") or [])
+                if str(item).strip()
+            ][:5]
+
+            if not summary or not action_items:
+                return _fallback_student_assistant(feature, prompt, context)
+
+            return {
+                "provider": "groq",
+                "model": model,
+                "feature": feature,
+                "title": title[:120],
+                "summary": summary[:900],
+                "actionItems": action_items,
+                "followUpQuestions": follow_ups or [
+                    "Do you want a more advanced version of this plan?"
+                ],
+            }
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError):
+        return _fallback_student_assistant(feature, prompt, context)
+
+
 @app.get("/")
 async def root():
     return {"message": "EsenceLab AI Service is running"}
@@ -437,6 +747,48 @@ async def extract_skills_endpoint(text: str = Form(...)):
         return {"skills": extract_skills(preprocess_text(text))}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Error extracting skills: {str(exc)}")
+
+
+@app.post("/ai/student-assistant", response_model=StudentAssistantResponse)
+async def student_assistant_endpoint(request: StudentAssistantRequest):
+    feature = str(request.feature or "").strip().lower()
+    if feature not in SUPPORTED_STUDENT_FEATURES:
+        feature = "skill_gap"
+
+    prompt = str(request.prompt or "").strip()
+    context = request.context or {}
+    cache_key = _assistant_cache_key(feature, prompt, context)
+    _prune_assistant_cache()
+    cached = _assistant_cache.get(cache_key)
+    if cached and cached.get("expiresAt", 0) > time.time():
+        return StudentAssistantResponse(**cached["data"])
+
+    result = _call_groq_assistant(feature, prompt, context)
+    # Ensure response safety and shape
+    safe_result = {
+        "provider": str(result.get("provider") or "fallback"),
+        "model": result.get("model"),
+        "feature": feature,
+        "title": str(result.get("title") or "AI Career Guidance")[:120],
+        "summary": str(result.get("summary") or "No guidance generated right now.")[:900],
+        "actionItems": [
+            str(item).strip()
+            for item in (result.get("actionItems") or [])
+            if str(item).strip()
+        ][:8]
+        or ["Try again with a more specific question."],
+        "followUpQuestions": [
+            str(item).strip()
+            for item in (result.get("followUpQuestions") or [])
+            if str(item).strip()
+        ][:5],
+    }
+
+    _assistant_cache[cache_key] = {
+        "expiresAt": time.time() + max(30, ASSISTANT_CACHE_TTL_SEC),
+        "data": safe_result,
+    }
+    return StudentAssistantResponse(**safe_result)
 
 
 if __name__ == "__main__":

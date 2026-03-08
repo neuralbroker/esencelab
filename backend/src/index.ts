@@ -2,6 +2,7 @@ import express, { NextFunction, Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import compression from 'compression';
 import dotenv from 'dotenv';
 import { v4 as uuidv4 } from 'uuid';
 import multer from 'multer';
@@ -29,14 +30,45 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || 'esencelab-demo-secret';
+const SERVER_STARTED_AT = Date.now();
+const SLOW_ENDPOINT_THRESHOLD_MS = Number(process.env.SLOW_ENDPOINT_THRESHOLD_MS || 1200);
 
 app.use(helmet());
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:3000',
   credentials: true,
 }));
+app.use(
+  compression({
+    threshold: 1024,
+  })
+);
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
+app.set('etag', 'strong');
+
+app.use((req, res, next) => {
+  if (req.method !== 'GET') {
+    res.setHeader('Cache-Control', 'no-store');
+    return next();
+  }
+
+  const routePath = req.path || '';
+  if (routePath === '/api/health' || routePath === '/api/career/roles') {
+    res.setHeader('Cache-Control', 'public, max-age=60');
+  } else if (
+    routePath.startsWith('/api/jobs') ||
+    routePath.startsWith('/api/recruiter/overview') ||
+    routePath.startsWith('/api/admin/monitoring') ||
+    routePath.startsWith('/api/jobs/') ||
+    routePath.startsWith('/api/dashboard/stats')
+  ) {
+    res.setHeader('Cache-Control', 'private, max-age=8, stale-while-revalidate=20');
+  } else {
+    res.setHeader('Cache-Control', 'private, max-age=0, must-revalidate');
+  }
+  return next();
+});
 
 // Rate limiter for auth routes (max 15 attempts per 15 minutes)
 const authLimiter = rateLimit({
@@ -45,6 +77,14 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: 'Too many attempts, please try again later' },
+});
+
+const adminLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 400,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many admin requests, please retry shortly.' },
 });
 
 // Setup multer for file uploads
@@ -138,6 +178,14 @@ const db: any = {
   mockInterviewSessions: [] as any[],
   savedJobs: [] as any[],
   careerPreferences: [{ userId: '1', roleId: 'backend_developer', updatedAt: new Date() }] as any[],
+  adminLogs: [] as any[],
+  requestMetrics: {
+    totalRequests: 0,
+    totalErrors: 0,
+    authFailures: 0,
+    slowRequests: 0,
+    endpoints: {} as Record<string, any>,
+  },
 };
 
 const supabaseStore = new SupabaseStore();
@@ -181,6 +229,56 @@ db.careerPreferences = (db.careerPreferences || []).map((entry: any) => ({
   ...entry,
   updatedAt: entry.updatedAt || new Date(),
 }));
+db.adminLogs = (db.adminLogs || []).map((entry: any) => ({
+  ...entry,
+  createdAt: entry.createdAt || new Date(),
+}));
+
+const normalizeMetricPath = (value: string) => {
+  return value
+    .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/gi, ':id')
+    .replace(/\/\d+(?=\/|$)/g, '/:id');
+};
+
+app.use((req, res, next) => {
+  const start = Date.now();
+  db.requestMetrics.totalRequests += 1;
+
+  res.on('finish', () => {
+    const durationMs = Date.now() - start;
+    const pathPart = normalizeMetricPath((req.originalUrl || req.url || '/').split('?')[0] || '/');
+    const key = `${req.method.toUpperCase()} ${pathPart}`;
+    const current = db.requestMetrics.endpoints[key] || {
+      count: 0,
+      errors: 0,
+      totalDurationMs: 0,
+      maxDurationMs: 0,
+      slowCount: 0,
+      lastStatusCode: 200,
+      lastSeenAt: null,
+    };
+
+    current.count += 1;
+    current.totalDurationMs += durationMs;
+    current.maxDurationMs = Math.max(current.maxDurationMs, durationMs);
+    current.lastStatusCode = res.statusCode;
+    current.lastSeenAt = new Date();
+    if (res.statusCode >= 400) {
+      current.errors += 1;
+      db.requestMetrics.totalErrors += 1;
+    }
+    if (res.statusCode === 401 || res.statusCode === 403) {
+      db.requestMetrics.authFailures += 1;
+    }
+    if (durationMs >= SLOW_ENDPOINT_THRESHOLD_MS) {
+      current.slowCount += 1;
+      db.requestMetrics.slowRequests += 1;
+    }
+    db.requestMetrics.endpoints[key] = current;
+  });
+
+  next();
+});
 
 type CanonicalRole = 'student' | 'recruiter' | 'admin';
 type SupportedRole = CanonicalRole | 'employer';
@@ -344,6 +442,93 @@ const withApplicationDetails = (applications: any[]) => {
   });
 };
 
+const toPositiveInt = (value: unknown, fallback: number, max: number) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  const normalized = Math.floor(parsed);
+  if (normalized <= 0) return fallback;
+  return Math.min(normalized, max);
+};
+
+const getPagination = (
+  query: Record<string, any>,
+  defaults: { page?: number; limit?: number; maxLimit?: number } = {}
+) => {
+  const page = toPositiveInt(query?.page, defaults.page || 1, 100000);
+  const limit = toPositiveInt(query?.limit, defaults.limit || 20, defaults.maxLimit || 100);
+  const offset = (page - 1) * limit;
+  return { page, limit, offset };
+};
+
+const paginateData = <T>(items: T[], page: number, limit: number) => {
+  const total = items.length;
+  const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
+  const start = (page - 1) * limit;
+  return {
+    data: items.slice(start, start + limit),
+    meta: {
+      page,
+      limit,
+      total,
+      totalPages,
+    },
+  };
+};
+
+const average = (items: number[]) => {
+  if (items.length === 0) return 0;
+  const sum = items.reduce((acc, value) => acc + Number(value || 0), 0);
+  return Math.round((sum / items.length) * 100) / 100;
+};
+
+const summarizeUserForAdmin = (profile: any) => {
+  const canonicalRole = toCanonicalRole(profile.role);
+  const resume = db.resumes.find((entry: any) => entry.userId === profile.id) || null;
+  const latestResumeScore = getLatestResumeScore(profile.id);
+  const applications = db.applications.filter((entry: any) => entry.candidateId === profile.id);
+  const jobsPosted = db.jobs.filter((entry: any) => entry.employerId === profile.id);
+
+  return {
+    ...sanitizeUser(profile),
+    canonicalRole,
+    resumeUploaded: !!resume,
+    resumeId: resume?.id || null,
+    latestResumeScore: latestResumeScore?.score || 0,
+    totalApplications: applications.length,
+    totalJobsPosted: jobsPosted.length,
+    lastActivityAt:
+      resume?.updatedAt ||
+      latestResumeScore?.createdAt ||
+      applications[applications.length - 1]?.updatedAt ||
+      profile.updatedAt ||
+      profile.createdAt,
+  };
+};
+
+const appendAdminLog = async (
+  adminProfile: any,
+  actionType: string,
+  targetType: string,
+  targetId: string,
+  details: Record<string, any> = {}
+) => {
+  const record = {
+    id: uuidv4(),
+    adminId: adminProfile?.id || null,
+    adminName: adminProfile?.name || 'Admin',
+    actionType,
+    targetType,
+    targetId,
+    details,
+    createdAt: new Date(),
+  };
+  db.adminLogs.unshift(record);
+  if (db.adminLogs.length > 5000) db.adminLogs.length = 5000;
+
+  await (supabaseStore as any).insertAdminLog?.(record);
+  return record;
+};
+
 const toSkillList = (value: any): string[] => {
   if (Array.isArray(value)) return value.map((entry) => String(entry)).filter(Boolean);
   if (typeof value === 'string') {
@@ -491,6 +676,365 @@ const ensureResumeScoreHistory = async (userId: string) => {
 
 const toHumanReadableImpact = (impact: number) => Math.max(3, Math.min(30, Math.round(impact)));
 
+const buildStudentAICoachFallback = (payload: {
+  feature: string;
+  prompt: string;
+  context: Record<string, any>;
+}) => {
+  const feature = String(payload.feature || 'skill_gap');
+  const roleName = String(payload.context?.targetRole || 'your target role');
+  const missingSkills = normalizeSkillList(payload.context?.missingSkills || []).slice(0, 3);
+  const missingText = missingSkills.length > 0 ? missingSkills.join(', ') : 'core role skills';
+
+  if (feature === 'resume_improvement') {
+    return {
+      provider: 'fallback',
+      model: null,
+      feature,
+      title: 'Resume Improvement Checklist',
+      summary: `Improve your resume for ${roleName} by emphasizing measurable outcomes and relevant skill evidence.`,
+      actionItems: [
+        'Rewrite top 3 bullets with action + outcome + metric format.',
+        'Move role-relevant skills to top section and trim unrelated tools.',
+        'Add one project impact metric (performance, users, accuracy, etc.).',
+        'Keep layout simple and ATS friendly.',
+      ],
+      followUpQuestions: [
+        'Want ATS keywords for your target role?',
+        'Need help rewriting one project bullet?',
+      ],
+    };
+  }
+
+  if (feature === 'interview_prep') {
+    return {
+      provider: 'fallback',
+      model: null,
+      feature,
+      title: 'Interview Prep Focus',
+      summary: `Prepare for ${roleName} interviews with targeted technical practice and concise behavioral stories.`,
+      actionItems: [
+        'Practice 5 technical questions and keep answers under 2 minutes.',
+        'Prepare 3 STAR-format stories (ownership, teamwork, failure).',
+        'Review one project deeply: architecture, tradeoffs, and testing.',
+        'Run one mock interview this week and capture improvement points.',
+      ],
+      followUpQuestions: [
+        'Need likely interview questions for your role?',
+        'Want a mock interview rubric?',
+      ],
+    };
+  }
+
+  if (feature === 'project_ideas') {
+    return {
+      provider: 'fallback',
+      model: null,
+      feature,
+      title: 'Portfolio Project Plan',
+      summary: `Build role-aligned projects that close key gaps in ${missingText}.`,
+      actionItems: [
+        `Create one mini project centered on ${missingSkills[0] || 'a core skill'} and deploy it.`,
+        'Add testing, error handling, and logging to show production quality.',
+        'Write concise architecture notes and attach a short demo video.',
+        'Highlight measurable outcomes in your resume.',
+      ],
+      followUpQuestions: [
+        'Want weekly milestones for one project?',
+        'Need project ideas based on your current skills?',
+      ],
+    };
+  }
+
+  if (feature === 'study_plan') {
+    return {
+      provider: 'fallback',
+      model: null,
+      feature,
+      title: '4-Week Study Plan',
+      summary: `Structured study plan for ${roleName} with focus on ${missingText}.`,
+      actionItems: [
+        'Week 1: learn one missing core skill and finish foundational lessons.',
+        'Week 2: build a small project feature using that skill.',
+        'Week 3: improve quality with tests, documentation, and deployment.',
+        'Week 4: update portfolio, resume, and do one mock interview.',
+      ],
+      followUpQuestions: [
+        'Need this split into daily tasks?',
+        'Want free resources for each week?',
+      ],
+    };
+  }
+
+  return {
+    provider: 'fallback',
+    model: null,
+    feature: 'skill_gap',
+    title: 'Skill Gap Guidance',
+    summary: `Prioritize missing skills for ${roleName}. Start with ${missingText}.`,
+    actionItems: [
+      'Pick one missing skill and finish a focused learning track.',
+      'Apply it in a small practical project and document outcomes.',
+      'Update resume bullets with impact and metrics.',
+      'Re-check role match after one week.',
+    ],
+    followUpQuestions: [
+      'Want your missing skills ranked by impact?',
+      'Need a beginner-to-advanced resource path?',
+    ],
+  };
+};
+
+const callStudentAICoach = async (payload: {
+  feature: string;
+  prompt: string;
+  context: Record<string, any>;
+}) => {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12000);
+    const response = await (async () => {
+      try {
+        return await fetch(`${AI_SERVICE_URL}/ai/student-assistant`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
+    })();
+    if (!response.ok) {
+      throw new Error(`AI service request failed with status ${response.status}`);
+    }
+    const data: any = await response.json();
+    if (!data || typeof data !== 'object') throw new Error('Invalid AI response');
+    return data;
+  } catch {
+    return buildStudentAICoachFallback(payload);
+  }
+};
+
+const buildResumeMonitoringRecord = (resume: any) => {
+  const student = db.profiles.find((entry: any) => entry.id === resume.userId) || null;
+  const latestScore = getLatestResumeScore(resume.userId);
+  const parsedData = resume?.parsedData && typeof resume.parsedData === 'object' ? resume.parsedData : {};
+  const extractedSkills = normalizeSkillList(parsedData.skills || resume.skills || []);
+  const hasStructuredData =
+    extractedSkills.length > 0 ||
+    (Array.isArray(parsedData.education) && parsedData.education.length > 0) ||
+    (Array.isArray(parsedData.experience) && parsedData.experience.length > 0) ||
+    (Array.isArray(parsedData.projects) && parsedData.projects.length > 0);
+  const parseStatus = hasStructuredData ? 'success' : 'failed';
+
+  const flags: string[] = [];
+  if (!resume.fileName || !String(resume.fileName).toLowerCase().endsWith('.pdf')) flags.push('invalid_filename');
+  if (extractedSkills.length === 0) flags.push('no_skills_extracted');
+  if (!parsedData || Object.keys(parsedData).length === 0) flags.push('empty_parsed_data');
+  if (resume.moderationStatus === 'flagged') flags.push('flagged_by_admin');
+
+  return {
+    id: resume.id,
+    userId: resume.userId,
+    student: student ? sanitizeUser(student) : null,
+    fileName: resume.fileName,
+    fileUrl: resume.fileUrl,
+    skills: extractedSkills,
+    parseStatus,
+    flags,
+    resumeScore: latestScore?.score || 0,
+    parsedData,
+    moderationStatus: resume.moderationStatus || 'clean',
+    moderationNotes: resume.moderationNotes || '',
+    moderationUpdatedAt: resume.moderationUpdatedAt || null,
+    moderationUpdatedBy: resume.moderationUpdatedBy || null,
+    createdAt: resume.createdAt,
+    updatedAt: resume.updatedAt,
+  };
+};
+
+const buildAdminApplicationSummary = (days = 30) => {
+  const totalApplications = db.applications.length;
+  const byStatus = db.applications.reduce(
+    (acc: Record<string, number>, entry: any) => {
+      const key = toStorageApplicationStatus(entry.status);
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    },
+    { pending: 0, shortlisted: 0, interview: 0, rejected: 0 }
+  );
+
+  const perJobMap = new Map<string, { jobId: string; title: string; company: string; applications: number }>();
+  for (const application of db.applications) {
+    const job = db.jobs.find((entry: any) => entry.id === application.jobId);
+    if (!job) continue;
+    const current = perJobMap.get(job.id) || {
+      jobId: job.id,
+      title: job.title,
+      company: job.company,
+      applications: 0,
+    };
+    current.applications += 1;
+    perJobMap.set(job.id, current);
+  }
+
+  const perStudentMap = new Map<
+    string,
+    {
+      userId: string;
+      name: string;
+      email: string;
+      applications: number;
+    }
+  >();
+  for (const application of db.applications) {
+    const student = db.profiles.find((entry: any) => entry.id === application.candidateId);
+    if (!student) continue;
+    const current = perStudentMap.get(student.id) || {
+      userId: student.id,
+      name: student.name,
+      email: student.email,
+      applications: 0,
+    };
+    current.applications += 1;
+    perStudentMap.set(student.id, current);
+  }
+
+  const today = new Date();
+  const dailyMap = new Map<string, number>();
+  for (let i = days - 1; i >= 0; i -= 1) {
+    const d = new Date(today);
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    dailyMap.set(key, 0);
+  }
+  for (const application of db.applications) {
+    const date = new Date(application.appliedAt || application.createdAt || Date.now());
+    const dayKey = date.toISOString().slice(0, 10);
+    if (dailyMap.has(dayKey)) {
+      dailyMap.set(dayKey, (dailyMap.get(dayKey) || 0) + 1);
+    }
+  }
+
+  const matchScores = db.applications
+    .map((entry: any) => Number(entry.matchScore || 0))
+    .filter((entry: number) => Number.isFinite(entry) && entry > 0);
+
+  return {
+    totalApplications,
+    averageMatchPercentage: Math.round(average(matchScores)),
+    byStatus,
+    applicationsPerJob: Array.from(perJobMap.values())
+      .sort((left, right) => right.applications - left.applications)
+      .slice(0, 10),
+    applicationsPerStudent: Array.from(perStudentMap.values())
+      .sort((left, right) => right.applications - left.applications)
+      .slice(0, 10),
+    trendLastDays: Array.from(dailyMap.entries()).map(([date, count]) => ({ date, count })),
+  };
+};
+
+const PLATFORM_HEALTH_CACHE_TTL_MS = 8000;
+let platformHealthCache:
+  | {
+      expiresAt: number;
+      key: string;
+      data: any;
+    }
+  | null = null;
+
+const getPlatformHealthSnapshot = async () => {
+  const cacheKey = [
+    Number(db.requestMetrics.totalRequests || 0),
+    Number(db.requestMetrics.totalErrors || 0),
+    Number(db.requestMetrics.authFailures || 0),
+    Number(db.requestMetrics.slowRequests || 0),
+    Object.keys(db.requestMetrics.endpoints || {}).length,
+  ].join(':');
+  if (platformHealthCache && platformHealthCache.expiresAt > Date.now() && platformHealthCache.key === cacheKey) {
+    return platformHealthCache.data;
+  }
+
+  const totalRequests = Number(db.requestMetrics.totalRequests || 0);
+  const totalErrors = Number(db.requestMetrics.totalErrors || 0);
+  const authFailures = Number(db.requestMetrics.authFailures || 0);
+  const endpoints = db.requestMetrics.endpoints || {};
+
+  const endpointStats = Object.entries(endpoints).map(([name, entry]: [string, any]) => {
+    const count = Number(entry?.count || 0);
+    const totalDurationMs = Number(entry?.totalDurationMs || 0);
+    const avgDurationMs = count > 0 ? totalDurationMs / count : 0;
+    return {
+      endpoint: name,
+      count,
+      errors: Number(entry?.errors || 0),
+      avgDurationMs: Math.round(avgDurationMs),
+      maxDurationMs: Number(entry?.maxDurationMs || 0),
+      slowCount: Number(entry?.slowCount || 0),
+      errorRate: count > 0 ? Math.round((Number(entry?.errors || 0) / count) * 10000) / 100 : 0,
+      lastStatusCode: Number(entry?.lastStatusCode || 0),
+      lastSeenAt: entry?.lastSeenAt || null,
+    };
+  });
+
+  const slowEndpoints = [...endpointStats]
+    .filter((entry) => entry.avgDurationMs >= SLOW_ENDPOINT_THRESHOLD_MS || entry.slowCount > 0)
+    .sort((left, right) => right.avgDurationMs - left.avgDurationMs)
+    .slice(0, 6);
+
+  const aiHealth = {
+    status: 'unknown',
+    statusCode: null as number | null,
+    latencyMs: null as number | null,
+  };
+  const started = Date.now();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 3500);
+  try {
+    const aiResponse = await fetch(`${AI_SERVICE_URL}/health`, {
+      method: 'GET',
+      signal: controller.signal,
+    });
+    aiHealth.status = aiResponse.ok ? 'up' : 'degraded';
+    aiHealth.statusCode = aiResponse.status;
+    aiHealth.latencyMs = Date.now() - started;
+  } catch {
+    aiHealth.status = 'down';
+    aiHealth.latencyMs = Date.now() - started;
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  const uptimeSeconds = Math.floor((Date.now() - SERVER_STARTED_AT) / 1000);
+  const apiErrorRate = totalRequests > 0 ? Math.round((totalErrors / totalRequests) * 10000) / 100 : 0;
+
+  const snapshot = {
+    uptimeSeconds,
+    totalRequests,
+    totalErrors,
+    apiErrorRate,
+    authFailures,
+    slowRequests: Number(db.requestMetrics.slowRequests || 0),
+    slowThresholdMs: SLOW_ENDPOINT_THRESHOLD_MS,
+    avgResponseMs:
+      endpointStats.length > 0
+        ? Math.round(average(endpointStats.map((entry) => Number(entry.avgDurationMs || 0))))
+        : 0,
+    slowEndpoints,
+    aiService: aiHealth,
+  };
+  platformHealthCache = {
+    expiresAt: Date.now() + PLATFORM_HEALTH_CACHE_TTL_MS,
+    key: cacheKey,
+    data: snapshot,
+  };
+  return snapshot;
+};
+
 const jobRequirementText = (job: any) => {
   const requirements = Array.isArray(job.requirements) ? job.requirements.join(', ') : String(job.requirements || '');
   const skills = Array.isArray(job.skills) ? job.skills.join(', ') : String(job.skills || '');
@@ -616,6 +1160,340 @@ const getMatchInsights = async (resumeSkills: string[], job: any) => {
   }
 };
 
+type CandidateMatchSortBy = 'match' | 'resume' | 'experience';
+type CandidateMatchSortOrder = 'asc' | 'desc';
+
+interface CandidateMatchOptions {
+  sortBy?: CandidateMatchSortBy;
+  order?: CandidateMatchSortOrder;
+  limit?: number;
+  appliedOnly?: boolean;
+}
+
+const CANDIDATE_MATCH_CACHE_TTL_MS = 60 * 1000;
+const candidateMatchCache = new Map<
+  string,
+  {
+    expiresAt: number;
+    data: any[];
+    meta: {
+      totalCandidates: number;
+      candidatesWithResume: number;
+      candidatesWithoutResume: number;
+      generatedAt: string;
+      source: 'computed' | 'cache';
+    };
+  }
+>();
+
+const STUDENT_RECOMMENDATIONS_CACHE_TTL_MS = 20 * 1000;
+const studentRecommendationCache = new Map<
+  string,
+  {
+    expiresAt: number;
+    data: any;
+  }
+>();
+
+const RECRUITER_OVERVIEW_CACHE_TTL_MS = 10 * 1000;
+const recruiterOverviewCache = new Map<
+  string,
+  {
+    expiresAt: number;
+    data: any;
+  }
+>();
+
+const getCollectionVersion = (collection: any[], updatedField = 'updatedAt', createdField = 'createdAt') =>
+  collection.reduce((acc: number, entry: any) => {
+    const ts = new Date(entry?.[updatedField] || entry?.[createdField] || 0).getTime();
+    return Math.max(acc, Number.isFinite(ts) ? ts : 0);
+  }, 0);
+
+const pruneRecruiterOverviewCache = () => {
+  const now = Date.now();
+  for (const [key, entry] of recruiterOverviewCache.entries()) {
+    if (entry.expiresAt <= now) recruiterOverviewCache.delete(key);
+  }
+};
+
+const buildRecruiterOverviewCacheKey = (profile: any) => {
+  const scope = roleMatches(profile.role, 'admin') ? 'admin' : `recruiter:${profile.id}`;
+  const jobs = roleMatches(profile.role, 'admin')
+    ? db.jobs
+    : db.jobs.filter((entry: any) => entry.employerId === profile.id);
+  const jobIds = new Set(jobs.map((entry: any) => entry.id));
+  const scopedApplications = db.applications.filter((entry: any) => jobIds.has(entry.jobId));
+
+  return [
+    scope,
+    jobs.length,
+    getCollectionVersion(jobs),
+    scopedApplications.length,
+    getCollectionVersion(scopedApplications, 'updatedAt', 'appliedAt'),
+    db.candidates.length,
+    getCollectionVersion(db.candidates),
+    db.resumes.length,
+    getCollectionVersion(db.resumes),
+  ].join(':');
+};
+
+const parseYearRangeFromText = (text: string) => {
+  const normalized = text.toLowerCase().replace(/\s+/g, ' ');
+  const explicitYears = [...normalized.matchAll(/(\d{1,2}(?:\.\d+)?)\s*\+?\s*(?:years?|yrs?|yr)\b/g)];
+  if (explicitYears.length > 0) {
+    const sum = explicitYears.reduce((acc, match) => acc + Number(match[1] || 0), 0);
+    return Number.isFinite(sum) ? Math.round(sum * 10) / 10 : 0;
+  }
+
+  const explicitMonths = [...normalized.matchAll(/(\d{1,2}(?:\.\d+)?)\s*(?:months?|mos?)\b/g)];
+  if (explicitMonths.length > 0) {
+    const months = explicitMonths.reduce((acc, match) => acc + Number(match[1] || 0), 0);
+    const years = months / 12;
+    return Number.isFinite(years) ? Math.round(years * 10) / 10 : 0;
+  }
+
+  const years = [...normalized.matchAll(/\b(19|20)\d{2}\b/g)].map((match) => Number(match[0]));
+  if (years.length >= 2) {
+    const minYear = Math.min(...years);
+    const maxYear = Math.max(...years);
+    return Math.max(0, Math.min(30, maxYear - minYear));
+  }
+  return 0;
+};
+
+const estimateExperienceYears = (candidate: any, resume: any) => {
+  const candidateEntries = (() => {
+    try {
+      const parsed = JSON.parse(candidate?.experience || '[]');
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  })();
+  const resumeEntries = Array.isArray(resume?.parsedData?.experience) ? resume.parsedData.experience : [];
+  const allEntries = [...candidateEntries, ...resumeEntries];
+
+  if (allEntries.length === 0) return 0;
+
+  let years = 0;
+  for (const entry of allEntries) {
+    const text = [
+      String(entry?.duration || ''),
+      String(entry?.description || ''),
+      String(entry?.title || ''),
+      String(entry?.company || ''),
+    ]
+      .join(' ')
+      .trim();
+    years += parseYearRangeFromText(text);
+  }
+
+  if (years <= 0) {
+    years = Math.min(12, allEntries.length * 0.5);
+  }
+  return Math.round(Math.min(30, years) * 10) / 10;
+};
+
+const buildCandidateMatchCacheKey = (job: any, options: CandidateMatchOptions) => {
+  const candidatesVersion = db.candidates.reduce((acc: number, entry: any) => {
+    const ts = new Date(entry?.updatedAt || entry?.createdAt || 0).getTime();
+    return Math.max(acc, ts || 0);
+  }, 0);
+  const resumesVersion = db.resumes.reduce((acc: number, entry: any) => {
+    const ts = new Date(entry?.updatedAt || entry?.createdAt || 0).getTime();
+    return Math.max(acc, ts || 0);
+  }, 0);
+  const applicationsVersion = db.applications.reduce((acc: number, entry: any) => {
+    const ts = new Date(entry?.updatedAt || entry?.appliedAt || 0).getTime();
+    return Math.max(acc, ts || 0);
+  }, 0);
+
+  return [
+    job.id,
+    new Date(job.updatedAt || job.createdAt || 0).getTime(),
+    db.candidates.length,
+    candidatesVersion,
+    db.resumes.length,
+    resumesVersion,
+    db.applications.length,
+    applicationsVersion,
+    options.sortBy || 'match',
+    options.order || 'desc',
+    options.limit || 100,
+    options.appliedOnly ? 'applied' : 'all',
+  ].join(':');
+};
+
+const pruneCandidateMatchCache = () => {
+  const now = Date.now();
+  for (const [key, value] of candidateMatchCache.entries()) {
+    if (value.expiresAt <= now) candidateMatchCache.delete(key);
+  }
+};
+
+const pruneStudentRecommendationCache = () => {
+  const now = Date.now();
+  for (const [key, value] of studentRecommendationCache.entries()) {
+    if (value.expiresAt <= now) studentRecommendationCache.delete(key);
+  }
+};
+
+const toSortDirection = (value: unknown): CandidateMatchSortOrder => {
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized === 'asc' ? 'asc' : 'desc';
+};
+
+const toSortKey = (value: unknown): CandidateMatchSortBy => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'resume') return 'resume';
+  if (normalized === 'experience') return 'experience';
+  return 'match';
+};
+
+const sortCandidateMatches = (matches: any[], options: CandidateMatchOptions) => {
+  const sortBy = options.sortBy || 'match';
+  const direction = options.order === 'asc' ? 1 : -1;
+  const sorted = [...matches].sort((left, right) => {
+    if (sortBy === 'resume') {
+      const resumeDiff = (left.resumeScore || 0) - (right.resumeScore || 0);
+      if (resumeDiff !== 0) return resumeDiff * direction;
+    } else if (sortBy === 'experience') {
+      const experienceDiff = (left.experienceYears || 0) - (right.experienceYears || 0);
+      if (experienceDiff !== 0) return experienceDiff * direction;
+    } else {
+      const matchDiff = (left.matchScore || 0) - (right.matchScore || 0);
+      if (matchDiff !== 0) return matchDiff * direction;
+    }
+
+    const fallbackMatchDiff = (left.matchScore || 0) - (right.matchScore || 0);
+    if (fallbackMatchDiff !== 0) return fallbackMatchDiff * direction;
+    return String(left.name || '').localeCompare(String(right.name || ''));
+  });
+
+  const safeLimit =
+    Number.isFinite(options.limit) && Number(options.limit) > 0
+      ? Math.min(200, Number(options.limit))
+      : 100;
+  return sorted.slice(0, safeLimit);
+};
+
+const getCandidateMatchesForJob = async (job: any, options: CandidateMatchOptions = {}) => {
+  pruneCandidateMatchCache();
+  const cacheKey = buildCandidateMatchCacheKey(job, options);
+  const cached = candidateMatchCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return {
+      matches: cached.data,
+      meta: {
+        ...cached.meta,
+        source: 'cache' as const,
+      },
+    };
+  }
+
+  const allMatches = await Promise.all(
+    db.candidates.map(async (candidate: any) => {
+      const candidateSkills = normalizeSkillList(candidate.skills);
+      const insights = await getMatchInsights(candidateSkills, job);
+      const student = db.profiles.find((entry: any) => entry.id === candidate.userId);
+      const application = db.applications.find(
+        (entry: any) => entry.jobId === job.id && entry.candidateId === candidate.userId
+      );
+      const resume = db.resumes.find((entry: any) => entry.userId === candidate.userId) || null;
+      const latestResumeScore = getLatestResumeScore(candidate.userId);
+      const resumeScore = latestResumeScore ? Number(latestResumeScore.score || 0) : 0;
+      const experienceYears = estimateExperienceYears(candidate, resume);
+      const topSkills = insights.matchedSkills.slice(0, 3);
+
+      return {
+        candidateId: candidate.id,
+        studentId: candidate.userId,
+        name: candidate.name,
+        email: candidate.email,
+        role: candidate.role,
+        skills: candidateSkills,
+        matchScore: insights.matchScore,
+        matchedSkills: insights.matchedSkills,
+        missingSkills: insights.missingSkills,
+        explanation: insights.explanation,
+        hasApplied: !!application,
+        applicationStatus: application?.status || null,
+        resumeScore: Math.max(0, Math.min(100, Math.round(resumeScore))),
+        experienceYears,
+        topSkills,
+        latestResumeAt: resume?.updatedAt || resume?.createdAt || null,
+        student,
+      };
+    })
+  );
+
+  const candidatesWithResume = allMatches.filter((entry) => entry.resumeScore > 0).length;
+  const filtered = options.appliedOnly ? allMatches.filter((entry) => entry.hasApplied) : allMatches;
+  const sorted = sortCandidateMatches(filtered, options);
+  const meta = {
+    totalCandidates: db.candidates.length,
+    candidatesWithResume,
+    candidatesWithoutResume: Math.max(0, db.candidates.length - candidatesWithResume),
+    generatedAt: new Date().toISOString(),
+    source: 'computed' as const,
+  };
+
+  candidateMatchCache.set(cacheKey, {
+    expiresAt: Date.now() + CANDIDATE_MATCH_CACHE_TTL_MS,
+    data: sorted,
+    meta,
+  });
+
+  return {
+    matches: sorted,
+    meta,
+  };
+};
+
+const getRecruiterJobAnalytics = (job: any, matches: any[]) => {
+  const applicants = matches.filter((entry) => entry.hasApplied);
+  const avgMatch = matches.length
+    ? Math.round(matches.reduce((sum, entry) => sum + Number(entry.matchScore || 0), 0) / matches.length)
+    : 0;
+  const avgApplicantMatch = applicants.length
+    ? Math.round(applicants.reduce((sum, entry) => sum + Number(entry.matchScore || 0), 0) / applicants.length)
+    : 0;
+  const highest = matches[0] || null;
+  const missingSkillCount = new Map<string, number>();
+  for (const match of matches) {
+    for (const skill of match.missingSkills || []) {
+      const key = String(skill).trim();
+      if (!key) continue;
+      missingSkillCount.set(key, (missingSkillCount.get(key) || 0) + 1);
+    }
+  }
+  const mostMissingSkill = Array.from(missingSkillCount.entries()).sort((a, b) => b[1] - a[1])[0] || null;
+
+  return {
+    jobId: job.id,
+    title: job.title,
+    totalCandidatesRanked: matches.length,
+    totalApplicants: applicants.length,
+    averageMatch: avgMatch,
+    averageApplicantMatch: avgApplicantMatch,
+    highestMatchCandidate: highest
+      ? {
+          candidateId: highest.candidateId,
+          name: highest.name,
+          matchScore: highest.matchScore,
+          resumeScore: highest.resumeScore,
+        }
+      : null,
+    mostMissingSkill: mostMissingSkill
+      ? {
+          skill: mostMissingSkill[0],
+          count: mostMissingSkill[1],
+        }
+      : null,
+  };
+};
+
 const pruneExpiredResetTokens = () => {
   const now = Date.now();
   for (const [token, value] of resetTokens.entries()) {
@@ -630,7 +1508,8 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     .toLowerCase();
   const password = String(req.body?.password || '');
   const name = String(req.body?.name || '').trim();
-  const safeRole = toStorageRole(req.body?.role);
+  // Public signup is intentionally student-only; recruiter/admin accounts are managed internally.
+  const safeRole: SupportedRole = 'student';
 
   if (!email || !password || !name) {
     return res.status(400).json({ message: 'Name, email and password are required' });
@@ -791,10 +1670,13 @@ app.post('/api/auth/password/reset', authLimiter, async (req, res) => {
 });
 
 // Users Routes (admin only)
-app.get('/api/users', requireAuth, requireRoles('admin'), (req, res) => {
+app.get('/api/users', requireAuth, requireRoles('admin'), adminLimiter, (req, res) => {
+  const { search, role, sortBy, order } = req.query;
+  const { page, limit } = getPagination(req.query as any, { page: 1, limit: 20, maxLimit: 100 });
+  const direction = String(order || 'desc').toLowerCase() === 'asc' ? 1 : -1;
+  const sortKey = String(sortBy || 'createdAt').toLowerCase();
 
-  const { search, role } = req.query;
-  let users = [...db.profiles];
+  let users = db.profiles.map((entry: any) => summarizeUserForAdmin(entry));
 
   if (search) {
     const searchText = String(search).toLowerCase();
@@ -809,10 +1691,50 @@ app.get('/api/users', requireAuth, requireRoles('admin'), (req, res) => {
     users = users.filter((entry: any) => roleFilterMatches(entry.role, String(role)));
   }
 
-  res.json({ data: users.map((entry: any) => sanitizeUser(entry)) });
+  users.sort((left: any, right: any) => {
+    if (sortKey === 'name') return String(left.name || '').localeCompare(String(right.name || '')) * direction;
+    if (sortKey === 'email') return String(left.email || '').localeCompare(String(right.email || '')) * direction;
+    if (sortKey === 'role') return String(left.canonicalRole || '').localeCompare(String(right.canonicalRole || '')) * direction;
+    if (sortKey === 'applications') return (Number(left.totalApplications || 0) - Number(right.totalApplications || 0)) * direction;
+    if (sortKey === 'jobs') return (Number(left.totalJobsPosted || 0) - Number(right.totalJobsPosted || 0)) * direction;
+    if (sortKey === 'resumescore') return (Number(left.latestResumeScore || 0) - Number(right.latestResumeScore || 0)) * direction;
+    return (
+      (new Date(left.createdAt || 0).getTime() - new Date(right.createdAt || 0).getTime()) * direction
+    );
+  });
+
+  const paginated = paginateData(users, page, limit);
+  res.json({ data: paginated.data, meta: paginated.meta });
 });
 
-app.put('/api/users/:id', requireAuth, requireRoles('admin'), async (req: RequestWithAuth, res) => {
+app.get('/api/users/:id', requireAuth, requireRoles('admin'), adminLimiter, (req, res) => {
+  const target = db.profiles.find((entry: any) => entry.id === req.params.id);
+  if (!target) return res.status(404).json({ message: 'User not found' });
+
+  const summary = summarizeUserForAdmin(target);
+  const resume = db.resumes.find((entry: any) => entry.userId === target.id) || null;
+  const recentApplications = withApplicationDetails(
+    db.applications
+      .filter((entry: any) => entry.candidateId === target.id)
+      .sort((left: any, right: any) => new Date(right.appliedAt || 0).getTime() - new Date(left.appliedAt || 0).getTime())
+      .slice(0, 10)
+  );
+  const jobsPosted = db.jobs
+    .filter((entry: any) => entry.employerId === target.id)
+    .sort((left: any, right: any) => new Date(right.createdAt || 0).getTime() - new Date(left.createdAt || 0).getTime())
+    .slice(0, 10);
+
+  res.json({
+    data: {
+      ...summary,
+      resume,
+      recentApplications,
+      jobsPosted,
+    },
+  });
+});
+
+app.put('/api/users/:id', requireAuth, requireRoles('admin'), adminLimiter, async (req: RequestWithAuth, res) => {
   const profile = req.profile;
   if (!profile) return res.status(401).json({ message: 'Not authenticated' });
 
@@ -823,17 +1745,34 @@ app.put('/api/users/:id', requireAuth, requireRoles('admin'), async (req: Reques
     return res.status(400).json({ message: 'You cannot deactivate your own account' });
   }
 
-  const updates = { ...req.body };
-  if (updates.role) {
-    updates.role = toStorageRole(updates.role);
+  const current = db.profiles[idx];
+  const updates: Record<string, any> = {};
+  if (typeof req.body?.name === 'string') updates.name = req.body.name.trim();
+  if (typeof req.body?.email === 'string') updates.email = req.body.email.trim().toLowerCase();
+  if (typeof req.body?.avatarUrl === 'string' || req.body?.avatarUrl === null) {
+    updates.avatarUrl = req.body.avatarUrl;
+  }
+  if (typeof req.body?.isActive === 'boolean') updates.isActive = req.body.isActive;
+  if (req.body?.role) updates.role = toStorageRole(req.body.role);
+
+  const next = { ...current, ...updates, updatedAt: new Date() };
+  db.profiles[idx] = next;
+  await supabaseStore.upsertUser(next);
+
+  const changedFields: Record<string, any> = {};
+  for (const key of ['name', 'email', 'role', 'isActive'] as const) {
+    if (current[key] !== next[key]) {
+      changedFields[key] = { from: current[key], to: next[key] };
+    }
+  }
+  if (Object.keys(changedFields).length > 0) {
+    await appendAdminLog(profile, 'user_updated', 'user', next.id, { changedFields });
   }
 
-  db.profiles[idx] = { ...db.profiles[idx], ...updates, updatedAt: new Date() };
-  await supabaseStore.upsertUser(db.profiles[idx]);
-  res.json({ data: sanitizeUser(db.profiles[idx]) });
+  res.json({ data: summarizeUserForAdmin(next) });
 });
 
-app.delete('/api/users/:id', requireAuth, requireRoles('admin'), async (req: RequestWithAuth, res) => {
+app.delete('/api/users/:id', requireAuth, requireRoles('admin'), adminLimiter, async (req: RequestWithAuth, res) => {
   const profile = req.profile;
   if (!profile) return res.status(401).json({ message: 'Not authenticated' });
   if (req.params.id === profile.id) return res.status(400).json({ message: 'You cannot delete your own account' });
@@ -841,10 +1780,35 @@ app.delete('/api/users/:id', requireAuth, requireRoles('admin'), async (req: Req
   const idx = db.profiles.findIndex((entry: any) => entry.id === req.params.id);
   if (idx === -1) return res.status(404).json({ message: 'User not found' });
 
+  const target = db.profiles[idx];
+  const softDelete = String(req.query?.soft || '').toLowerCase() === 'true';
+  const activeAdminCount = db.profiles.filter((entry: any) => roleMatches(entry.role, 'admin') && entry.isActive !== false).length;
+  if (roleMatches(target.role, 'admin') && activeAdminCount <= 1) {
+    return res.status(400).json({ message: 'Cannot delete the last active admin account' });
+  }
+
+  if (softDelete) {
+    db.profiles[idx] = {
+      ...target,
+      isActive: false,
+      updatedAt: new Date(),
+    };
+    await supabaseStore.upsertUser(db.profiles[idx]);
+    await appendAdminLog(profile, 'user_deactivated', 'user', target.id, { softDelete: true });
+    return res.json({ message: 'User deactivated', data: summarizeUserForAdmin(db.profiles[idx]) });
+  }
+
+  const recruiterJobIds = db.jobs
+    .filter((entry: any) => entry.employerId === target.id)
+    .map((entry: any) => entry.id);
+
   db.profiles.splice(idx, 1);
   db.candidates = db.candidates.filter((entry: any) => entry.userId !== req.params.id);
   db.resumes = db.resumes.filter((entry: any) => entry.userId !== req.params.id);
-  db.applications = db.applications.filter((entry: any) => entry.candidateId !== req.params.id);
+  db.applications = db.applications.filter(
+    (entry: any) => entry.candidateId !== req.params.id && !recruiterJobIds.includes(entry.jobId)
+  );
+  db.jobs = db.jobs.filter((entry: any) => entry.employerId !== req.params.id);
   db.recommendations = db.recommendations.filter((entry: any) => entry.userId !== req.params.id);
   db.resumeScores = db.resumeScores.filter((entry: any) => entry.userId !== req.params.id);
   db.skillProgress = db.skillProgress.filter((entry: any) => entry.userId !== req.params.id);
@@ -852,6 +1816,7 @@ app.delete('/api/users/:id', requireAuth, requireRoles('admin'), async (req: Req
   db.mockInterviewSessions = db.mockInterviewSessions.filter((entry: any) => entry.userId !== req.params.id);
   db.savedJobs = db.savedJobs.filter((entry: any) => entry.userId !== req.params.id);
   db.careerPreferences = db.careerPreferences.filter((entry: any) => entry.userId !== req.params.id);
+
   await supabaseStore.deleteUser(req.params.id);
   await supabaseStore.deleteCandidatesByUser(req.params.id);
   await supabaseStore.deleteResumesByUser(req.params.id);
@@ -863,7 +1828,16 @@ app.delete('/api/users/:id', requireAuth, requireRoles('admin'), async (req: Req
   await supabaseStore.deleteMockInterviewSessionsByUser(req.params.id);
   await supabaseStore.deleteSavedJobsByUser(req.params.id);
   await supabaseStore.deleteCareerPreference(req.params.id);
+  for (const jobId of recruiterJobIds) {
+    await supabaseStore.deleteApplicationsByJob(jobId);
+    await supabaseStore.deleteJob(jobId);
+  }
 
+  await appendAdminLog(profile, 'user_deleted', 'user', target.id, {
+    cascade: {
+      recruiterJobsRemoved: recruiterJobIds.length,
+    },
+  });
   res.json({ message: 'User deleted' });
 });
 
@@ -1018,10 +1992,127 @@ app.delete('/api/resume/:id', requireAuth, requireRoles('student'), async (req: 
   res.json({ message: 'Resume deleted' });
 });
 
+// Resume moderation routes (admin)
+app.get('/api/admin/resumes', requireAuth, requireRoles('admin'), adminLimiter, (req: RequestWithAuth, res) => {
+  const { search, parseStatus, flaggedOnly, sortBy, order } = req.query;
+  const pagination = getPagination(req.query as any, { page: 1, limit: 20, maxLimit: 100 });
+  const direction = String(order || 'desc').toLowerCase() === 'asc' ? 1 : -1;
+  const sortKey = String(sortBy || 'updatedAt').toLowerCase();
+
+  let resumes = db.resumes.map((entry: any) => buildResumeMonitoringRecord(entry));
+  if (search) {
+    const searchText = String(search).toLowerCase();
+    resumes = resumes.filter((entry: any) => {
+      const haystack = [
+        entry.fileName,
+        entry.student?.name,
+        entry.student?.email,
+        ...(entry.skills || []),
+      ]
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(searchText);
+    });
+  }
+
+  if (parseStatus && ['success', 'failed'].includes(String(parseStatus))) {
+    resumes = resumes.filter((entry: any) => entry.parseStatus === String(parseStatus));
+  }
+
+  if (String(flaggedOnly || '').toLowerCase() === 'true') {
+    resumes = resumes.filter((entry: any) => entry.moderationStatus === 'flagged' || entry.flags.length > 0);
+  }
+
+  resumes.sort((left: any, right: any) => {
+    if (sortKey === 'score') return (Number(left.resumeScore || 0) - Number(right.resumeScore || 0)) * direction;
+    if (sortKey === 'student') {
+      return String(left.student?.name || '').localeCompare(String(right.student?.name || '')) * direction;
+    }
+    if (sortKey === 'createdat') {
+      return (new Date(left.createdAt || 0).getTime() - new Date(right.createdAt || 0).getTime()) * direction;
+    }
+    return (new Date(left.updatedAt || 0).getTime() - new Date(right.updatedAt || 0).getTime()) * direction;
+  });
+
+  const summary = {
+    total: resumes.length,
+    success: resumes.filter((entry: any) => entry.parseStatus === 'success').length,
+    failed: resumes.filter((entry: any) => entry.parseStatus === 'failed').length,
+    flagged: resumes.filter((entry: any) => entry.moderationStatus === 'flagged').length,
+  };
+  const paginated = paginateData(resumes, pagination.page, pagination.limit);
+  res.json({ data: paginated.data, meta: paginated.meta, summary });
+});
+
+app.get('/api/admin/resumes/:id', requireAuth, requireRoles('admin'), adminLimiter, (req, res) => {
+  const resume = db.resumes.find((entry: any) => entry.id === req.params.id);
+  if (!resume) return res.status(404).json({ message: 'Resume not found' });
+  return res.json({ data: buildResumeMonitoringRecord(resume) });
+});
+
+app.put('/api/admin/resumes/:id/moderation', requireAuth, requireRoles('admin'), adminLimiter, async (req: RequestWithAuth, res) => {
+  const profile = req.profile;
+  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
+
+  const idx = db.resumes.findIndex((entry: any) => entry.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ message: 'Resume not found' });
+
+  const status = String(req.body?.status || '').trim().toLowerCase();
+  if (!['clean', 'flagged', 'review'].includes(status)) {
+    return res.status(400).json({ message: 'status must be one of clean, flagged, or review' });
+  }
+
+  db.resumes[idx] = {
+    ...db.resumes[idx],
+    moderationStatus: status,
+    moderationNotes: typeof req.body?.notes === 'string' ? req.body.notes.trim() : '',
+    moderationUpdatedBy: profile.id,
+    moderationUpdatedAt: new Date(),
+    updatedAt: new Date(),
+  };
+  await supabaseStore.upsertResume(db.resumes[idx]);
+  await appendAdminLog(profile, 'resume_moderated', 'resume', db.resumes[idx].id, {
+    status,
+    notes: db.resumes[idx].moderationNotes,
+  });
+
+  return res.json({ data: buildResumeMonitoringRecord(db.resumes[idx]) });
+});
+
+app.delete('/api/admin/resumes/:id', requireAuth, requireRoles('admin'), adminLimiter, async (req: RequestWithAuth, res) => {
+  const profile = req.profile;
+  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
+
+  const idx = db.resumes.findIndex((entry: any) => entry.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ message: 'Resume not found' });
+
+  const removed = db.resumes[idx];
+  db.resumes.splice(idx, 1);
+  await supabaseStore.deleteResume(removed.id);
+
+  const candidateIdx = db.candidates.findIndex((entry: any) => entry.userId === removed.userId);
+  if (candidateIdx >= 0) {
+    db.candidates[candidateIdx] = {
+      ...db.candidates[candidateIdx],
+      skills: JSON.stringify([]),
+      parsedData: null,
+      updatedAt: new Date(),
+    };
+    await supabaseStore.upsertCandidate(db.candidates[candidateIdx]);
+  }
+
+  await appendAdminLog(profile, 'resume_deleted', 'resume', removed.id, {
+    userId: removed.userId,
+    fileName: removed.fileName,
+  });
+  return res.json({ message: 'Resume deleted' });
+});
+
 // Jobs Routes
 app.get('/api/jobs', (req, res) => {
-  const { search, jobType, location, status, limit, my } = req.query;
+  const { search, jobType, location, status, limit, my, recruiterId, page } = req.query;
   let jobs = [...db.jobs];
+  const profile = getProfileFromAuth(req);
 
   if (search) {
     const s = (search as string).toLowerCase();
@@ -1033,19 +2124,40 @@ app.get('/api/jobs', (req, res) => {
   else if (!status) jobs = jobs.filter((j: any) => j.status === 'active');
 
   if (my === 'true') {
-    const profile = getProfileFromAuth(req);
     if (profile && roleMatches(profile.role, 'recruiter')) {
       jobs = jobs.filter((j: any) => j.employerId === profile.id);
     }
   }
 
-  jobs.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  if (limit) {
-    const n = Number(limit);
-    if (!Number.isNaN(n) && n > 0) jobs = jobs.slice(0, n);
+  if (recruiterId && profile && roleMatches(profile.role, 'admin')) {
+    jobs = jobs.filter((j: any) => j.employerId === String(recruiterId));
   }
 
-  res.json({ data: { jobs } });
+  jobs.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const hasPage = page !== undefined && page !== null && String(page).trim() !== '';
+  if (hasPage) {
+    const pagination = getPagination(req.query as any, { page: 1, limit: 20, maxLimit: 100 });
+    const paginated = paginateData(jobs, pagination.page, pagination.limit);
+    return res.json({
+      data: { jobs: paginated.data },
+      meta: paginated.meta,
+    });
+  }
+
+  if (limit) {
+    const n = toPositiveInt(limit, jobs.length, 1000);
+    jobs = jobs.slice(0, n);
+  }
+
+  res.json({
+    data: { jobs },
+    meta: {
+      page: 1,
+      limit: jobs.length,
+      total: jobs.length,
+      totalPages: jobs.length > 0 ? 1 : 0,
+    },
+  });
 });
 
 app.get('/api/jobs/:id', (req, res) => {
@@ -1106,6 +2218,12 @@ app.post('/api/jobs', async (req, res) => {
   };
   db.jobs.push(job);
   await supabaseStore.upsertJob(job);
+  if (roleMatches(profile.role, 'admin')) {
+    await appendAdminLog(profile, 'job_created', 'job', job.id, {
+      title: job.title,
+      recruiterId: job.employerId,
+    });
+  }
   res.status(201).json({ data: job });
 });
 
@@ -1182,6 +2300,12 @@ app.put('/api/jobs/:id', async (req, res) => {
     updatedAt: new Date(),
   };
   await supabaseStore.upsertJob(db.jobs[idx]);
+  if (roleMatches(profile.role, 'admin')) {
+    await appendAdminLog(profile, 'job_updated', 'job', db.jobs[idx].id, {
+      title: db.jobs[idx].title,
+      status: db.jobs[idx].status,
+    });
+  }
   res.json({ data: db.jobs[idx] });
 });
 
@@ -1196,10 +2320,18 @@ app.delete('/api/jobs/:id', async (req, res) => {
     return res.status(403).json({ message: 'Not authorized' });
   }
 
+  const removedJob = db.jobs[idx];
+  const removedApplications = db.applications.filter((entry: any) => entry.jobId === req.params.id).length;
   db.jobs.splice(idx, 1);
   db.applications = db.applications.filter((entry: any) => entry.jobId !== req.params.id);
   await supabaseStore.deleteJob(req.params.id);
   await supabaseStore.deleteApplicationsByJob(req.params.id);
+  if (roleMatches(profile.role, 'admin')) {
+    await appendAdminLog(profile, 'job_deleted', 'job', req.params.id, {
+      title: removedJob?.title || '',
+      removedApplications,
+    });
+  }
   res.json({ message: 'Job deleted' });
 });
 
@@ -1219,24 +2351,89 @@ app.get('/api/candidates', (req, res) => {
   res.json({ data: candidates });
 });
 
-app.get('/api/candidates/:id', (req, res) => {
+app.get('/api/candidates/:id', async (req, res) => {
   const profile = getProfileFromAuth(req);
   if (!profile) return res.status(401).json({ message: 'Not authenticated' });
   if (!(roleMatches(profile.role, 'recruiter') || roleMatches(profile.role, 'admin'))) {
     return res.status(403).json({ message: 'Not authorized' });
   }
 
-  const candidate = db.candidates.find((c: any) => c.id === req.params.id);
+  const candidate = db.candidates.find(
+    (c: any) => c.id === req.params.id || c.userId === req.params.id
+  );
   if (!candidate) return res.status(404).json({ message: 'Candidate not found' });
+  const selectedJobId = String(req.query?.jobId || '').trim();
+  const selectedJob = selectedJobId ? db.jobs.find((entry: any) => entry.id === selectedJobId) : null;
+
+  if (roleMatches(profile.role, 'recruiter')) {
+    const myJobIds = db.jobs
+      .filter((entry: any) => entry.employerId === profile.id)
+      .map((entry: any) => entry.id);
+    if (selectedJob && !myJobIds.includes(selectedJob.id)) {
+      return res.status(403).json({ message: 'Not authorized' });
+    }
+    const hasCandidateRelationship = db.applications.some(
+      (entry: any) => entry.candidateId === candidate.userId && myJobIds.includes(entry.jobId)
+    );
+    if (!selectedJob && !hasCandidateRelationship) {
+      return res.status(403).json({ message: 'Not authorized' });
+    }
+  }
+
   const latestResumeScore = getLatestResumeScore(candidate.userId);
   const resume = db.resumes.find((entry: any) => entry.userId === candidate.userId) || null;
+  const parsedSkills = normalizeSkillList(candidate.skills);
+  const parsedEducation = (() => {
+    try {
+      const parsed = JSON.parse(candidate.education || '[]');
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  })();
+  const parsedExperience = (() => {
+    try {
+      const parsed = JSON.parse(candidate.experience || '[]');
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  })();
+  const parsedProjects = Array.isArray(resume?.parsedData?.projects)
+    ? resume?.parsedData?.projects
+    : [];
+
+  let matchBreakdown = null as any;
+  if (selectedJob) {
+    const match = await getMatchInsights(parsedSkills, selectedJob);
+    const explanationMeta = buildRecommendationExplanation(
+      parsedSkills,
+      toSkillList(selectedJob.skills?.length ? selectedJob.skills : selectedJob.requirements)
+    );
+    const improvementSuggestions = (explanationMeta.improvementImpacts || []).map((entry) => {
+      return `Learning ${entry.skill} can increase fit by about ${toHumanReadableImpact(entry.impact)}%.`;
+    });
+    matchBreakdown = {
+      jobId: selectedJob.id,
+      title: selectedJob.title,
+      matchScore: match.matchScore,
+      matchedSkills: match.matchedSkills,
+      missingSkills: match.missingSkills,
+      explanation: match.explanation,
+      improvementSuggestions,
+    };
+  }
+
   res.json({
     data: {
       ...candidate,
-      skills: JSON.parse(candidate.skills || '[]'),
-      education: JSON.parse(candidate.education || '[]'),
-      experience: JSON.parse(candidate.experience || '[]'),
+      skills: parsedSkills,
+      education: parsedEducation,
+      experience: parsedExperience,
+      projects: parsedProjects,
+      parsedData: resume?.parsedData || candidate?.parsedData || null,
       latestResumeScore,
+      matchBreakdown,
       resume,
     },
   });
@@ -1263,7 +2460,8 @@ app.get('/api/applications', (req, res) => {
   if (!profile) return res.status(401).json({ message: 'Not authenticated' });
   if (!(roleMatches(profile.role, 'recruiter') || roleMatches(profile.role, 'admin'))) return res.status(403).json({ message: 'Not authorized' });
 
-  const { status } = req.query;
+  const { status, jobId, studentId } = req.query;
+  const pagination = getPagination(req.query as any, { page: 1, limit: 25, maxLimit: 100 });
   let applications = [...db.applications];
 
   if (roleMatches(profile.role, 'recruiter')) {
@@ -1274,9 +2472,17 @@ app.get('/api/applications', (req, res) => {
   if (status) {
     applications = applications.filter((entry: any) => entry.status === status);
   }
+  if (jobId) {
+    applications = applications.filter((entry: any) => entry.jobId === String(jobId));
+  }
+  if (studentId && roleMatches(profile.role, 'admin')) {
+    applications = applications.filter((entry: any) => entry.candidateId === String(studentId));
+  }
 
   applications.sort((a: any, b: any) => new Date(b.appliedAt).getTime() - new Date(a.appliedAt).getTime());
-  res.json({ data: withApplicationDetails(applications) });
+  const detailed = withApplicationDetails(applications);
+  const paginated = paginateData(detailed, pagination.page, pagination.limit);
+  res.json({ data: paginated.data, meta: paginated.meta });
 });
 
 app.get('/api/applications/my', (req, res) => {
@@ -1363,6 +2569,12 @@ app.put('/api/applications/:id/status', async (req, res) => {
     updatedAt: new Date(),
   };
   await supabaseStore.upsertApplication(db.applications[idx]);
+  if (roleMatches(profile.role, 'admin')) {
+    await appendAdminLog(profile, 'application_status_updated', 'application', db.applications[idx].id, {
+      from: record.status,
+      to: db.applications[idx].status,
+    });
+  }
   res.json({ data: withApplicationDetails([db.applications[idx]])[0] });
 });
 
@@ -1376,8 +2588,23 @@ app.get('/api/recommendations', async (req, res) => {
     ? Math.max(1, Math.min(10, Math.floor(requestedLimit)))
     : 3;
 
+  pruneStudentRecommendationCache();
   const candidate = db.candidates.find((entry: any) => entry.userId === profile.id);
   const resume = db.resumes.find((entry: any) => entry.userId === profile.id);
+  const recommendationCacheKey = [
+    profile.id,
+    recommendationLimit,
+    new Date(resume?.updatedAt || resume?.createdAt || 0).getTime(),
+    new Date(candidate?.updatedAt || candidate?.createdAt || 0).getTime(),
+    db.jobs.length,
+    getCollectionVersion(db.jobs),
+    db.courses.length,
+    getCollectionVersion(db.courses),
+  ].join(':');
+  const cachedRecommendations = studentRecommendationCache.get(recommendationCacheKey);
+  if (cachedRecommendations && cachedRecommendations.expiresAt > Date.now()) {
+    return res.json({ data: cachedRecommendations.data });
+  }
   const resumeSkills = Array.from(
     new Set([
       ...toSkillList(candidate?.skills),
@@ -1387,14 +2614,17 @@ app.get('/api/recommendations', async (req, res) => {
   );
 
   if (resumeSkills.length === 0) {
-    return res.json({
-      data: {
-        generatedAt: new Date(),
-        recommendedJobs: [],
-        missingSkills: [],
-        recommendedCourses: [],
-      },
+    const emptyPayload = {
+      generatedAt: new Date(),
+      recommendedJobs: [],
+      missingSkills: [],
+      recommendedCourses: [],
+    };
+    studentRecommendationCache.set(recommendationCacheKey, {
+      expiresAt: Date.now() + STUDENT_RECOMMENDATIONS_CACHE_TTL_MS,
+      data: emptyPayload,
     });
+    return res.json({ data: emptyPayload });
   }
 
   const activeJobs = db.jobs.filter((job: any) => job.status === 'active');
@@ -1470,18 +2700,23 @@ app.get('/api/recommendations', async (req, res) => {
     await supabaseStore.upsertRecommendation(recommendationRecord);
   }
 
-  res.json({
-    data: {
-      generatedAt: now,
-      recommendedJobs,
-      missingSkills,
-      recommendedCourses,
-      summary: recommendedJobs.length
-        ? `You are matching ${recommendedJobs[0].explanationMeta?.matchedCount || 0} out of ${recommendedJobs[0].explanationMeta?.totalRequired || 0
+  const responsePayload = {
+    generatedAt: now,
+    recommendedJobs,
+    missingSkills,
+    recommendedCourses,
+    summary: recommendedJobs.length
+      ? `You are matching ${recommendedJobs[0].explanationMeta?.matchedCount || 0} out of ${
+          recommendedJobs[0].explanationMeta?.totalRequired || 0
         } key skills for your top role.`
-        : 'Upload your resume to start receiving recommendations.',
-    },
+      : 'Upload your resume to start receiving recommendations.',
+  };
+  studentRecommendationCache.set(recommendationCacheKey, {
+    expiresAt: Date.now() + STUDENT_RECOMMENDATIONS_CACHE_TTL_MS,
+    data: responsePayload,
   });
+
+  res.json({ data: responsePayload });
 });
 
 // Career Growth Routes (student-focused)
@@ -1576,6 +2811,54 @@ app.get('/api/career/roadmap', (req, res) => {
   const roadmap = getStudentRoadmap(profile.id, roleId);
   const role = CAREER_ROLES.find((entry) => entry.id === roleId) || CAREER_ROLES[0];
   res.json({ data: { role, roadmap } });
+});
+
+app.post('/api/career/ai-coach', async (req, res) => {
+  const profile = getProfileFromAuth(req);
+  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
+  if (profile.role !== 'student') return res.status(403).json({ message: 'Not authorized' });
+
+  const feature = String(req.body?.feature || 'skill_gap')
+    .trim()
+    .toLowerCase();
+  const supported = new Set([
+    'skill_gap',
+    'resume_improvement',
+    'interview_prep',
+    'project_ideas',
+    'study_plan',
+  ]);
+  const safeFeature = supported.has(feature) ? feature : 'skill_gap';
+  const prompt = String(req.body?.prompt || '').trim().slice(0, 1200);
+
+  const roleId = getCareerPreference(profile.id);
+  const role = CAREER_ROLES.find((entry) => entry.id === roleId) || CAREER_ROLES[0];
+  const resume = db.resumes.find((entry: any) => entry.userId === profile.id) || null;
+  const latestScore = await ensureResumeScoreHistory(profile.id);
+  const roadmap = getStudentRoadmap(profile.id, roleId);
+  const missingSkills = roadmap
+    .filter((entry) => entry.status !== 'completed')
+    .map((entry) => entry.skill)
+    .slice(0, 8);
+  const skills = normalizeSkillList([
+    ...toSkillList(resume?.skills || []),
+    ...toSkillList(resume?.parsedData?.skills || []),
+  ]).slice(0, 30);
+  const resumeSummary = String(resume?.parsedData?.summary || '').trim();
+
+  const aiPayload = {
+    feature: safeFeature,
+    prompt,
+    context: {
+      targetRole: role.name,
+      skills,
+      missingSkills,
+      resumeSummary,
+      readinessScore: latestScore?.score || 0,
+    },
+  };
+  const response = await callStudentAICoach(aiPayload);
+  res.json({ data: response });
 });
 
 app.put('/api/career/roadmap/skill', async (req, res) => {
@@ -1860,35 +3143,165 @@ app.get('/api/jobs/:id/candidate-matches', async (req, res) => {
     return res.status(403).json({ message: 'Not authorized' });
   }
 
-  const matches = await Promise.all(
-    db.candidates.map(async (candidate: any) => {
-      const candidateSkills = toSkillList(candidate.skills);
-      const insights = await getMatchInsights(candidateSkills, job);
-      const student = db.profiles.find((entry: any) => entry.id === candidate.userId);
-      const application = db.applications.find(
-        (entry: any) => entry.jobId === job.id && entry.candidateId === candidate.userId
-      );
+  const sortBy = toSortKey(req.query?.sortBy);
+  const order = toSortDirection(req.query?.order);
+  const appliedOnly = String(req.query?.appliedOnly || '').toLowerCase() === 'true';
+  const requestedLimit = Number(req.query?.limit);
+  const limit = Number.isFinite(requestedLimit) && requestedLimit > 0 ? requestedLimit : 100;
 
-      return {
-        candidateId: candidate.id,
-        studentId: candidate.userId,
-        name: candidate.name,
-        email: candidate.email,
-        role: candidate.role,
-        skills: candidateSkills,
-        matchScore: insights.matchScore,
-        matchedSkills: insights.matchedSkills,
-        missingSkills: insights.missingSkills,
-        explanation: insights.explanation,
-        hasApplied: !!application,
-        applicationStatus: application?.status || null,
-        student,
-      };
+  const { matches, meta } = await getCandidateMatchesForJob(job, {
+    sortBy,
+    order,
+    appliedOnly,
+    limit,
+  });
+
+  res.json({
+    data: matches,
+    meta: {
+      ...meta,
+      sortBy,
+      order,
+      appliedOnly,
+      limit: Math.min(limit, 200),
+    },
+  });
+});
+
+app.get('/api/recruiter/overview', async (req, res) => {
+  const profile = getProfileFromAuth(req);
+  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
+  if (!(roleMatches(profile.role, 'recruiter') || roleMatches(profile.role, 'admin'))) {
+    return res.status(403).json({ message: 'Not authorized' });
+  }
+
+  pruneRecruiterOverviewCache();
+  const overviewCacheKey = buildRecruiterOverviewCacheKey(profile);
+  const cachedOverview = recruiterOverviewCache.get(overviewCacheKey);
+  if (cachedOverview && cachedOverview.expiresAt > Date.now()) {
+    return res.json({ data: cachedOverview.data });
+  }
+
+  const recruiterJobs = roleMatches(profile.role, 'admin')
+    ? [...db.jobs]
+    : db.jobs.filter((entry: any) => entry.employerId === profile.id);
+  const recentJobs = [...recruiterJobs]
+    .sort((left: any, right: any) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
+    .slice(0, 6);
+  const allJobIds = recruiterJobs.map((entry: any) => entry.id);
+  const applications = db.applications.filter((entry: any) => allJobIds.includes(entry.jobId));
+  const appliedCandidates = new Set(applications.map((entry: any) => entry.candidateId));
+
+  const perJobAnalytics = await Promise.all(
+    recentJobs.map(async (job: any) => {
+      const { matches } = await getCandidateMatchesForJob(job, {
+        sortBy: 'match',
+        order: 'desc',
+        limit: 50,
+      });
+      return getRecruiterJobAnalytics(job, matches);
     })
   );
 
-  matches.sort((left, right) => right.matchScore - left.matchScore);
-  res.json({ data: matches });
+  const topCandidateMap = new Map<string, any>();
+  for (const job of recentJobs) {
+    const { matches } = await getCandidateMatchesForJob(job, {
+      sortBy: 'match',
+      order: 'desc',
+      limit: 5,
+      appliedOnly: true,
+    });
+    for (const candidate of matches) {
+      const existing = topCandidateMap.get(candidate.studentId);
+      if (!existing || candidate.matchScore > existing.matchScore) {
+        topCandidateMap.set(candidate.studentId, {
+          ...candidate,
+          jobId: job.id,
+          jobTitle: job.title,
+        });
+      }
+    }
+  }
+
+  const rankedTopCandidates = Array.from(topCandidateMap.values())
+    .sort((left, right) => Number(right.matchScore || 0) - Number(left.matchScore || 0))
+    .slice(0, 5);
+
+  const missingSkillFrequency = new Map<string, number>();
+  for (const job of recentJobs) {
+    const { matches } = await getCandidateMatchesForJob(job, {
+      sortBy: 'match',
+      order: 'desc',
+      limit: 50,
+      appliedOnly: true,
+    });
+    for (const match of matches) {
+      for (const skill of match.missingSkills || []) {
+        const key = String(skill).trim();
+        if (!key) continue;
+        missingSkillFrequency.set(key, (missingSkillFrequency.get(key) || 0) + 1);
+      }
+    }
+  }
+
+  const skillDemandInsights = Array.from(missingSkillFrequency.entries())
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 5)
+    .map(([skill, count]) => ({ skill, count }));
+
+  const averageMatchAcrossJobs =
+    perJobAnalytics.length > 0
+      ? Math.round(
+          perJobAnalytics.reduce((sum: number, entry: any) => sum + Number(entry.averageMatch || 0), 0) /
+            perJobAnalytics.length
+        )
+      : 0;
+
+  const responsePayload = {
+    postedJobs: recruiterJobs.length,
+    activeJobs: recruiterJobs.filter((entry: any) => entry.status === 'active').length,
+    totalApplicants: applications.length,
+    uniqueApplicants: appliedCandidates.size,
+    averageMatchAcrossJobs,
+    perJobAnalytics,
+    topCandidates: rankedTopCandidates,
+    skillDemandInsights,
+  };
+
+  recruiterOverviewCache.set(overviewCacheKey, {
+    expiresAt: Date.now() + RECRUITER_OVERVIEW_CACHE_TTL_MS,
+    data: responsePayload,
+  });
+
+  res.json({ data: responsePayload });
+});
+
+app.get('/api/recruiter/jobs/:id/analytics', async (req, res) => {
+  const profile = getProfileFromAuth(req);
+  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
+  if (!(roleMatches(profile.role, 'recruiter') || roleMatches(profile.role, 'admin'))) {
+    return res.status(403).json({ message: 'Not authorized' });
+  }
+
+  const job = db.jobs.find((entry: any) => entry.id === req.params.id);
+  if (!job) return res.status(404).json({ message: 'Job not found' });
+  if (roleMatches(profile.role, 'recruiter') && job.employerId !== profile.id) {
+    return res.status(403).json({ message: 'Not authorized' });
+  }
+
+  const { matches, meta } = await getCandidateMatchesForJob(job, {
+    sortBy: 'match',
+    order: 'desc',
+    limit: 100,
+  });
+  const analytics = getRecruiterJobAnalytics(job, matches);
+  res.json({
+    data: {
+      ...analytics,
+      matches,
+    },
+    meta,
+  });
 });
 
 // Courses Routes
@@ -1985,7 +3398,44 @@ app.get('/api/dashboard/stats', (req, res) => {
   }
 });
 
-app.get('/api/admin/monitoring', requireAuth, requireRoles('admin'), (req: RequestWithAuth, res) => {
+app.get('/api/admin/applications/summary', requireAuth, requireRoles('admin'), adminLimiter, (req, res) => {
+  const days = toPositiveInt(req.query?.days, 30, 365);
+  const summary = buildAdminApplicationSummary(days);
+  res.json({ data: summary });
+});
+
+app.get('/api/admin/logs', requireAuth, requireRoles('admin'), adminLimiter, (req, res) => {
+  const { actionType, targetType } = req.query;
+  const pagination = getPagination(req.query as any, { page: 1, limit: 30, maxLimit: 100 });
+
+  let logs = [...db.adminLogs];
+  if (actionType) {
+    const normalized = String(actionType).toLowerCase();
+    logs = logs.filter((entry: any) => String(entry.actionType || '').toLowerCase() === normalized);
+  }
+  if (targetType) {
+    const normalized = String(targetType).toLowerCase();
+    logs = logs.filter((entry: any) => String(entry.targetType || '').toLowerCase() === normalized);
+  }
+
+  logs.sort((left: any, right: any) => new Date(right.createdAt || 0).getTime() - new Date(left.createdAt || 0).getTime());
+  const paginated = paginateData(logs, pagination.page, pagination.limit);
+  res.json({ data: paginated.data, meta: paginated.meta });
+});
+
+app.get('/api/admin/monitoring', requireAuth, requireRoles('admin'), adminLimiter, async (req: RequestWithAuth, res) => {
+  const days = toPositiveInt(req.query?.days, 30, 365);
+  const resumes = db.resumes.map((entry: any) => buildResumeMonitoringRecord(entry));
+  const appSummary = buildAdminApplicationSummary(days);
+  const platformHealth = await getPlatformHealthSnapshot();
+  const averageResumeScore = Math.round(
+    average(
+      db.resumeScores
+        .map((entry: any) => Number(entry.score || 0))
+        .filter((entry: number) => Number.isFinite(entry) && entry > 0)
+    )
+  );
+
   const totals = {
     totalUsers: db.profiles.length,
     totalStudents: db.profiles.filter((entry: any) => roleMatches(entry.role, 'student')).length,
@@ -1996,6 +3446,17 @@ app.get('/api/admin/monitoring', requireAuth, requireRoles('admin'), (req: Reque
     activeJobs: db.jobs.filter((entry: any) => entry.status === 'active').length,
     closedJobs: db.jobs.filter((entry: any) => entry.status === 'closed').length,
     totalApplications: db.applications.length,
+    averageResumeScore,
+    averageMatchPercentage: appSummary.averageMatchPercentage,
+    resumeMonitoring: {
+      successfulParses: resumes.filter((entry: any) => entry.parseStatus === 'success').length,
+      failedParses: resumes.filter((entry: any) => entry.parseStatus === 'failed').length,
+      flaggedResumes: resumes.filter((entry: any) => entry.moderationStatus === 'flagged').length,
+    },
+    applicationSummary: appSummary,
+    mostAppliedJob: appSummary.applicationsPerJob[0] || null,
+    recentAdminActions: db.adminLogs.slice(0, 12),
+    platformHealth,
   };
 
   res.json({ data: totals });

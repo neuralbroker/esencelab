@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -175,12 +175,12 @@ export default function ApplicationsPage() {
       </section>
 
       {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 flex items-center gap-2">
+        <div className="rounded-xl border border-gray-300 bg-gray-100 px-4 py-3 text-sm text-gray-800 flex items-center gap-2">
           <AlertCircle className="h-4 w-4" />
           {error}
         </div>
       )}
-      {success && <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</div>}
+      {success && <div className="rounded-xl border border-gray-300 bg-gray-100 px-4 py-3 text-sm text-gray-800">{success}</div>}
 
       <section className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <Card hoverable className="text-center py-6 px-4">
@@ -344,4 +344,5 @@ export default function ApplicationsPage() {
     </div>
   );
 }
+
 

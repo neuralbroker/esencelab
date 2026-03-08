@@ -115,6 +115,12 @@ Step "career_overview" {
   @($response.data.PSObject.Properties.Name)
 }
 
+Step "career_ai_coach" {
+  $body = @{ feature = "skill_gap"; prompt = "Help me prioritize skills for backend role" } | ConvertTo-Json
+  $response = Invoke-RestMethod -Uri "http://localhost:3001/api/career/ai-coach" -Method POST -ContentType "application/json" -Headers @{ Authorization = "Bearer $studentToken" } -Body $body
+  @($response.data.PSObject.Properties.Name)
+}
+
 Step "career_roadmap_update" {
   $roadmapResponse = Invoke-RestMethod -Uri "http://localhost:3001/api/career/roadmap" -Method GET -Headers @{ Authorization = "Bearer $studentToken" }
   $roadmap = @($roadmapResponse.data.roadmap)

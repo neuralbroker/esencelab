@@ -198,8 +198,8 @@ export default function JobDetailPage() {
             <Card hoverable={false} className="border-2 border-border shadow-sm">
               {hasApplied ? (
                 <div className="text-center py-6">
-                  <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <CheckCircle className="w-8 h-8 text-emerald-500" />
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <CheckCircle className="w-8 h-8 text-gray-600" />
                   </div>
                   <p className="font-bold text-primary text-xl mb-2">Application Submitted</p>
                   <p className="text-sm text-secondary">Track your application status in your dashboard.</p>

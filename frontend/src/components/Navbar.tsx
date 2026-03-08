@@ -6,16 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { LogOut, Menu, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-
-function Logo({ className }: { className?: string }) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
-      <path d="M2 17l10 5 10-5"></path>
-      <path d="M2 12l10 5 10-5"></path>
-    </svg>
-  );
-}
+import EsencelabLogo from '@/components/EsencelabLogo';
 
 export default function Navbar() {
   const { user, isAuthenticated, logout } = useAuth();
@@ -25,7 +16,6 @@ export default function Navbar() {
   const pathname = usePathname();
   const profileRef = useRef<HTMLDivElement>(null);
 
-  // Close profile dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
@@ -36,7 +26,6 @@ export default function Navbar() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Close mobile menu on route change
   useEffect(() => {
     setIsMenuOpen(false);
     setIsProfileOpen(false);
@@ -68,6 +57,7 @@ export default function Navbar() {
       case 'admin':
         return [
           { href: '/dashboard', label: 'Overview' },
+          { href: '/admin/resumes', label: 'Resumes' },
           { href: '/jobs', label: 'Jobs' },
           { href: '/users', label: 'Users' },
           { href: '/applicants', label: 'Applicants' },
@@ -82,27 +72,23 @@ export default function Navbar() {
   if (!isAuthenticated) return null;
 
   return (
-    <nav className="sticky top-0 z-50 bg-white/70 backdrop-blur-[20px] border-b border-border transition-colors">
+    <nav className="sticky top-0 z-50 border-b border-white/72 bg-white/62 backdrop-blur-xl">
       <div className="layout-container">
-        <div className="flex items-center justify-between h-16">
-          {/* Logo */}
-          <Link href="/dashboard" className="flex items-center space-x-3 group flex-shrink-0">
-            <div className="w-9 h-9 bg-primary rounded-xl flex items-center justify-center transition-transform group-hover:scale-105">
-              <Logo className="w-4 h-4 text-white" />
-            </div>
-            <span className="font-bold text-lg tracking-tight text-primary">Esencelab</span>
+        <div className="flex h-16 items-center justify-between">
+          <Link href="/dashboard" className="inline-flex">
+            <EsencelabLogo />
           </Link>
 
-          {/* Center Links */}
-          <div className="hidden md:flex items-center space-x-1">
+          <div className="hidden items-center gap-1 rounded-full border border-white/72 bg-white/64 px-2 py-1 text-[0.72rem] font-semibold text-[#111111] shadow-[0_14px_28px_-22px_rgba(20,20,20,0.65)] md:flex">
             {navLinks.map((link) => {
               const isActive = pathname === link.href || pathname.startsWith(link.href + '/');
               return (
                 <Link
                   key={link.href}
                   href={link.href}
-                  className={`px-4 py-2 text-sm font-medium transition-colors rounded-lg relative
-                    ${isActive ? 'text-primary bg-black/5' : 'text-secondary hover:text-primary hover:bg-black/[0.03]'}`}
+                  className={`rounded-full px-3 py-1.5 transition ${
+                    isActive ? 'bg-white/84 text-primary' : 'text-secondary hover:bg-white/74 hover:text-primary'
+                  }`}
                 >
                   {link.label}
                 </Link>
@@ -110,19 +96,18 @@ export default function Navbar() {
             })}
           </div>
 
-          {/* Right Profile */}
-          <div className="hidden md:flex items-center" ref={profileRef}>
+          <div className="hidden items-center md:flex" ref={profileRef}>
             <div className="relative">
               <button
                 onClick={() => setIsProfileOpen(!isProfileOpen)}
-                className="flex items-center space-x-2.5 rounded-full pl-1.5 pr-3 py-1 transition-colors hover:bg-black/5"
+                className="flex items-center space-x-2.5 rounded-full border border-white/72 bg-white/64 pl-1.5 pr-3 py-1 transition-colors hover:bg-white/78"
                 aria-expanded={isProfileOpen}
                 aria-haspopup="true"
               >
-                <div className="w-8 h-8 rounded-full bg-accent/10 text-accent flex items-center justify-center text-sm font-semibold">
+                <div className="h-8 w-8 rounded-full bg-[#f0f0f0] text-[#111111] flex items-center justify-center text-sm font-semibold">
                   {user?.name?.charAt(0).toUpperCase()}
                 </div>
-                <span className="font-medium text-sm text-primary max-w-[120px] truncate">{user?.name}</span>
+                <span className="max-w-[120px] truncate text-sm font-medium text-primary">{user?.name}</span>
               </button>
 
               <AnimatePresence>
@@ -132,17 +117,17 @@ export default function Navbar() {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 8, scale: 0.95 }}
                     transition={{ duration: 0.15 }}
-                    className="absolute right-0 z-50 mt-2 w-56 rounded-2xl border border-border bg-white py-2 text-primary shadow-lg shadow-black/5"
+                    className="absolute right-0 z-50 mt-2 w-56 rounded-2xl border border-white/72 bg-white/82 py-2 text-primary shadow-[0_18px_34px_-28px_rgba(22,22,22,0.7)] backdrop-blur-md"
                   >
-                    <div className="border-b border-border px-4 py-3 mb-1">
-                      <p className="font-medium truncate text-sm">{user?.name}</p>
-                      <p className="text-xs text-secondary capitalize mt-0.5">{user?.role}</p>
+                    <div className="mb-1 border-b border-border px-4 py-3">
+                      <p className="truncate text-sm font-medium">{user?.name}</p>
+                      <p className="mt-0.5 text-xs capitalize text-secondary">{user?.role}</p>
                     </div>
                     <button
                       onClick={handleLogout}
-                      className="w-full text-left px-4 py-2.5 hover:bg-red-50 flex items-center space-x-3 text-red-500 transition-colors text-sm"
+                      className="flex w-full items-center space-x-3 px-4 py-2.5 text-left text-sm text-gray-600 transition-colors hover:bg-gray-100"
                     >
-                      <LogOut className="w-4 h-4" />
+                      <LogOut className="h-4 w-4" />
                       <span>Logout</span>
                     </button>
                   </motion.div>
@@ -151,46 +136,45 @@ export default function Navbar() {
             </div>
           </div>
 
-          {/* Mobile Menu Button */}
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="md:hidden p-2 text-primary rounded-lg hover:bg-black/5 transition-colors"
+            className="rounded-lg p-2 text-primary transition-colors hover:bg-white/70 md:hidden"
             aria-label="Toggle menu"
           >
-            {isMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
         </div>
       </div>
 
-      {/* Mobile Menu */}
       <AnimatePresence>
         {isMenuOpen && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="md:hidden border-b border-border bg-white/95 backdrop-blur-xl overflow-hidden"
+            className="md:hidden border-b border-white/72 bg-white/82 backdrop-blur-md overflow-hidden"
           >
-            <div className="px-4 pt-2 pb-4 space-y-1">
+            <div className="space-y-1 px-4 pb-4 pt-2">
               {navLinks.map((link) => {
                 const isActive = pathname === link.href || pathname.startsWith(link.href + '/');
                 return (
                   <Link
                     key={link.href}
                     href={link.href}
-                    className={`block px-4 py-3 rounded-xl font-medium transition-colors text-sm
-                      ${isActive ? 'text-primary bg-black/5' : 'text-secondary hover:bg-black/5 hover:text-primary'}`}
+                    className={`block rounded-xl px-4 py-3 text-sm font-medium transition-colors ${
+                      isActive ? 'bg-white/84 text-primary' : 'text-secondary hover:bg-white/74 hover:text-primary'
+                    }`}
                   >
                     {link.label}
                   </Link>
                 );
               })}
-              <div className="border-t border-border my-2 pt-2"></div>
+              <div className="my-2 border-t border-white/72 pt-2"></div>
               <button
                 onClick={handleLogout}
-                className="w-full text-left px-4 py-3 text-red-500 hover:bg-red-50 rounded-xl font-medium flex items-center space-x-3 transition-colors text-sm"
+                className="flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100"
               >
-                <LogOut className="w-4 h-4" />
+                <LogOut className="h-4 w-4" />
                 <span>Logout</span>
               </button>
             </div>
@@ -200,3 +184,4 @@ export default function Navbar() {
     </nav>
   );
 }
+

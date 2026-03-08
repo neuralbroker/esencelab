@@ -8,12 +8,12 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        background: "#FDFCF8", // Sacred Ivory
-        primary: "#0A0A0A", // Deep Obsidian
-        secondary: "rgba(10,10,10,0.6)",
-        accent: "#D4AF37", // Champagne Gold
-        "accent-soft": "rgba(212,175,55,0.08)",
-        border: "rgba(10,10,10,0.08)",
+        background: "#f2f2f2",
+        primary: "#111111",
+        secondary: "rgba(17,17,17,0.72)",
+        accent: "#111111",
+        "accent-soft": "rgba(17,17,17,0.12)",
+        border: "rgba(17,17,17,0.16)",
       },
       fontFamily: {
         sans: ["var(--font-plus-jakarta)", "sans-serif"],
@@ -26,3 +26,4 @@ module.exports = {
   },
   plugins: [],
 };
+

@@ -16,7 +16,7 @@ const Select = forwardRef<HTMLSelectElement, SelectProps>(
       <div className="w-full relative pt-2">
         <label
           htmlFor={inputId}
-          className="absolute left-4 transition-all duration-200 pointer-events-none text-xs px-1 bg-background text-secondary z-10 -top-1"
+          className="absolute left-4 transition-all duration-200 pointer-events-none text-xs px-1 bg-white/80 text-secondary z-10 -top-1 rounded"
         >
           {label}
         </label>
@@ -29,8 +29,8 @@ const Select = forwardRef<HTMLSelectElement, SelectProps>(
           onBlur={(e) => {
             onBlur?.(e);
           }}
-          className={`w-full rounded-xl border bg-transparent px-4 py-3.5 text-primary text-base transition-colors focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary relative z-0 appearance-none
-            ${error ? 'border-red-500' : 'border-border'} ${className}`}
+          className={`w-full rounded-xl border bg-white/68 px-4 py-3.5 text-primary text-base transition-colors focus:outline-none focus:border-[#4b4b4b] focus:ring-2 focus:ring-[#4b4b4b]/25 relative z-0 appearance-none
+            ${error ? 'border-gray-600' : 'border-border'} ${className}`}
           {...rest}
         >
           {options.map((option) => (
@@ -45,7 +45,7 @@ const Select = forwardRef<HTMLSelectElement, SelectProps>(
           </svg>
         </div>
         {error && (
-          <p className="mt-1.5 text-sm text-red-500 px-1">
+          <p className="mt-1.5 text-sm text-gray-600 px-1">
             {error}
           </p>
         )}
@@ -57,3 +57,4 @@ const Select = forwardRef<HTMLSelectElement, SelectProps>(
 Select.displayName = 'Select';
 
 export default Select;
+

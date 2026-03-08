@@ -21,7 +21,7 @@ export default function DashboardLayout({
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="dashboard-shell min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-accent"></div>
       </div>
     );
@@ -32,9 +32,9 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="dashboard-shell min-h-screen">
       <Navbar />
-      <main className="w-full">
+      <main className="w-full pb-10">
         {children}
       </main>
     </div>

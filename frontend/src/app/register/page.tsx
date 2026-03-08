@@ -4,26 +4,26 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { ArrowRight, ShieldCheck, Sparkles } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { UserRole } from '@/types';
-import Button from '@/components/Button';
-import Card from '@/components/Card';
+import EsencelabLogo from '@/components/EsencelabLogo';
 
-function Logo({ className }: { className?: string }) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
-      <path d="M2 17l10 5 10-5"></path>
-      <path d="M2 12l10 5 10-5"></path>
-    </svg>
-  );
-}
+const onboardingPoints = [
+  'Upload and parse resumes quickly',
+  'Check role-fit and missing skills',
+  'Track roadmap progress and applications',
+];
+
+const panelClass =
+  'rounded-[30px] border border-white/72 bg-white/72 shadow-[0_26px_58px_-46px_rgba(24,24,24,0.45)] backdrop-blur-md';
+const ghostButtonClass =
+  'rounded-full border border-white/72 bg-white/64 px-4 py-2 text-sm font-semibold text-[#111111] transition hover:bg-white/78';
+const inputClass =
+  'w-full rounded-2xl border border-white/78 bg-white/74 px-4 py-3 text-base text-[#111111] outline-none transition focus:border-[#4b4b4b] focus:ring-2 focus:ring-[#4b4b4b]/20';
 
 export default function RegisterPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<UserRole>('student');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
@@ -63,7 +63,12 @@ export default function RegisterPage() {
     setIsLoading(true);
 
     try {
-      await register({ name: trimmedName, email: normalizedEmail, password: normalizedPassword, role });
+      await register({
+        name: trimmedName,
+        email: normalizedEmail,
+        password: normalizedPassword,
+        role: 'student',
+      });
       router.replace('/dashboard');
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Registration failed. Please try again.');
@@ -74,59 +79,67 @@ export default function RegisterPage() {
 
   if (authLoading || isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="h-10 w-10 rounded-full border-2 border-black/15 border-t-primary animate-spin" />
+      <div className="flex min-h-screen items-center justify-center bg-[#f2f2f2]">
+        <div className="h-10 w-10 animate-spin rounded-full border-2 border-black/20 border-t-primary" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#f2f2ef] px-4 py-10 selection:bg-accent selection:text-white sm:py-14">
-      <motion.div
+    <div className="min-h-screen bg-[#f2f2f2] text-[#111111]">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_0%_0%,rgba(200,200,200,0.33),transparent_38%),radial-gradient(circle_at_100%_5%,rgba(245,245,245,0.88),transparent_32%),linear-gradient(180deg,#f2f2f2_0%,#f5f5f5_52%,#fafafa_100%)]" />
+
+      <header className="relative z-10 mx-auto flex w-full max-w-5xl items-center justify-between px-4 pt-8 sm:px-6">
+        <Link href="/" className="inline-flex">
+          <EsencelabLogo />
+        </Link>
+        <Link href="/" className={ghostButtonClass}>
+          Back to home
+        </Link>
+      </header>
+
+      <motion.main
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45 }}
-        className="mx-auto grid w-full max-w-5xl gap-6 md:grid-cols-[0.95fr,1.05fr]"
+        className="relative z-10 mx-auto mt-6 grid w-full max-w-5xl gap-4 px-4 pb-12 sm:px-6 lg:grid-cols-[0.95fr,1.05fr]"
       >
-        <Card hoverable={false} className="relative overflow-hidden border border-black/10 bg-[linear-gradient(180deg,#f7f2e5_0%,#efe6d2_100%)] p-8 md:p-10">
-          <div className="absolute -left-16 -top-16 h-44 w-44 rounded-full bg-accent/20 blur-3xl" />
-          <div className="relative z-10">
-            <Link href="/" className="inline-flex items-center gap-3 group">
-              <div className="grid h-11 w-11 place-items-center rounded-xl bg-primary text-white transition-transform group-hover:scale-105">
-                <Logo className="h-5 w-5" />
-              </div>
-              <span className="text-2xl font-bold tracking-tight text-primary">Esencelab</span>
-            </Link>
+        <section className={`${panelClass} p-8 sm:p-10`}>
+          <span className="inline-flex rounded-full border border-white/72 bg-white/64 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-[#4a4a4a]">
+            Create account
+          </span>
+          <h1 className="mt-4 text-4xl font-semibold tracking-tight text-[#111111] sm:text-5xl">
+            Start with Esencelab.
+          </h1>
+          <p className="mt-3 max-w-md text-sm leading-relaxed text-[#4a4a4a]/88">
+            Set up your account and access the project dashboard in a few steps.
+          </p>
 
-            <h1 className="mt-10 font-serif text-4xl leading-tight text-primary">Create your account.</h1>
-            <p className="mt-4 text-sm leading-relaxed text-secondary">
-              Start building a structured, AI-driven view of resumes, skill gaps, and career readiness.
-            </p>
+          <ul className="mt-7 space-y-2 text-sm text-[#4a4a4a]/88">
+            {onboardingPoints.map((point) => (
+              <li key={point} className="flex items-start gap-2">
+                <span className="mt-[6px] h-1.5 w-1.5 rounded-full bg-[#111111]" />
+                <span>{point}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
 
-            <div className="mt-8 space-y-3 text-sm">
-              <div className="inline-flex items-center gap-2 rounded-lg border border-black/10 bg-white px-3 py-2 text-secondary">
-                <ShieldCheck className="h-4 w-4" /> Secure JWT authentication
-              </div>
-              <div className="inline-flex items-center gap-2 rounded-lg border border-black/10 bg-white px-3 py-2 text-secondary">
-                <Sparkles className="h-4 w-4" /> Personalized career roadmaps
-              </div>
-            </div>
-          </div>
-        </Card>
+        <section className={`${panelClass} p-8 sm:p-10`}>
+          <h2 className="text-2xl font-semibold tracking-tight text-[#111111]">Account setup</h2>
+          <p className="mt-2 text-sm text-[#4a4a4a]/88">Fill in the details below.</p>
 
-        <Card hoverable={false} className="border border-black/10 bg-white p-8 md:p-10">
-          <h2 className="text-2xl font-semibold text-primary">Create account</h2>
-          <p className="mt-2 text-sm text-secondary">Fill in the details below to get started.</p>
-
-          <form onSubmit={handleSubmit} className="mt-6 space-y-5">
+          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
             {error && (
-              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <div className="rounded-xl border border-gray-300 bg-gray-100 px-4 py-3 text-sm text-gray-800">
                 {error}
               </div>
             )}
 
             <div>
-              <label htmlFor="register-name" className="mb-2 block text-sm font-medium text-secondary">Full Name</label>
+              <label htmlFor="register-name" className="mb-2 block text-sm font-medium text-[#4a4a4a]/88">
+                Full name
+              </label>
               <input
                 id="register-name"
                 type="text"
@@ -135,12 +148,14 @@ export default function RegisterPage() {
                 placeholder="Your name"
                 autoComplete="name"
                 required
-                className="w-full rounded-xl border border-border bg-white px-4 py-3 text-base text-primary outline-none transition focus:border-primary focus:ring-1 focus:ring-primary"
+                className={inputClass}
               />
             </div>
 
             <div>
-              <label htmlFor="register-email" className="mb-2 block text-sm font-medium text-secondary">Email</label>
+              <label htmlFor="register-email" className="mb-2 block text-sm font-medium text-[#4a4a4a]/88">
+                Email
+              </label>
               <input
                 id="register-email"
                 type="email"
@@ -149,25 +164,14 @@ export default function RegisterPage() {
                 placeholder="you@example.com"
                 autoComplete="email"
                 required
-                className="w-full rounded-xl border border-border bg-white px-4 py-3 text-base text-primary outline-none transition focus:border-primary focus:ring-1 focus:ring-primary"
+                className={inputClass}
               />
             </div>
 
             <div>
-              <label htmlFor="register-role" className="mb-2 block text-sm font-medium text-secondary">Role</label>
-              <select
-                id="register-role"
-                value={role}
-                onChange={(event) => setRole(event.target.value as UserRole)}
-                className="w-full rounded-xl border border-border bg-white px-4 py-3 text-base text-primary outline-none transition focus:border-primary focus:ring-1 focus:ring-primary"
-              >
-                <option value="student">Student / Job Seeker</option>
-                <option value="employer">Recruiter / Employer</option>
-              </select>
-            </div>
-
-            <div>
-              <label htmlFor="register-password" className="mb-2 block text-sm font-medium text-secondary">Password</label>
+              <label htmlFor="register-password" className="mb-2 block text-sm font-medium text-[#4a4a4a]/88">
+                Password
+              </label>
               <input
                 id="register-password"
                 type="password"
@@ -176,12 +180,14 @@ export default function RegisterPage() {
                 placeholder="********"
                 autoComplete="new-password"
                 required
-                className="w-full rounded-xl border border-border bg-white px-4 py-3 text-base text-primary outline-none transition focus:border-primary focus:ring-1 focus:ring-primary"
+                className={inputClass}
               />
             </div>
 
             <div>
-              <label htmlFor="register-confirm" className="mb-2 block text-sm font-medium text-secondary">Confirm Password</label>
+              <label htmlFor="register-confirm" className="mb-2 block text-sm font-medium text-[#4a4a4a]/88">
+                Confirm password
+              </label>
               <input
                 id="register-confirm"
                 type="password"
@@ -190,23 +196,29 @@ export default function RegisterPage() {
                 placeholder="********"
                 autoComplete="new-password"
                 required
-                className="w-full rounded-xl border border-border bg-white px-4 py-3 text-base text-primary outline-none transition focus:border-primary focus:ring-1 focus:ring-primary"
+                className={inputClass}
               />
             </div>
 
-            <Button type="submit" className="w-full" isLoading={isLoading}>
-              Create Account <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#111111] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#2a2a2a] disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {isLoading ? 'Creating account...' : 'Create account'}
+              {!isLoading && <ArrowRight className="h-4 w-4" />}
+            </button>
           </form>
 
-          <div className="mt-7 text-sm text-secondary">
+          <div className="mt-6 text-sm text-[#4a4a4a]/88">
             Already have an account?{' '}
-            <Link href="/login" className="font-medium text-accent transition-colors hover:text-primary">
+            <Link href="/login" className="font-semibold text-[#111111] transition hover:text-[#111111]">
               Sign in
             </Link>
           </div>
-        </Card>
-      </motion.div>
+        </section>
+      </motion.main>
     </div>
   );
 }
+

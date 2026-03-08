@@ -554,4 +554,32 @@ export class SupabaseStore {
   async deleteCareerPreference(userId: string) {
     await this.delete('career_preferences', 'user_id', userId);
   }
+
+  async insertAdminLog(log: AnyRecord) {
+    if (!this.isActive() || !this.client) return;
+    try {
+      const { error } = await this.client.from('admin_logs').insert({
+        id: log.id,
+        admin_id: log.adminId,
+        action_type: log.actionType,
+        target_type: log.targetType,
+        target_id: log.targetId,
+        details: log.details || {},
+        created_at: toIso(log.createdAt),
+      });
+      if (error) {
+        const message = String(error.message || '').toLowerCase();
+        if (
+          message.includes('relation') ||
+          message.includes('does not exist') ||
+          message.includes('schema cache')
+        ) {
+          return;
+        }
+        console.warn('Supabase admin_logs insert warning:', error.message || error);
+      }
+    } catch (error: any) {
+      console.warn('Supabase admin_logs insert failed:', error?.message || error);
+    }
+  }
 }

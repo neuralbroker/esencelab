@@ -130,7 +130,7 @@ export default function JobsPage() {
       </div>
 
       {actionError && (
-        <Card hoverable={false} className="border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        <Card hoverable={false} className="border border-gray-300 bg-gray-100 p-4 text-sm text-gray-800">
           {actionError}
         </Card>
       )}
@@ -248,7 +248,7 @@ export default function JobsPage() {
                         variant="ghost"
                         onClick={() => handleDeleteJob(job)}
                         isLoading={actionJobId === job.id}
-                        className="w-full justify-center text-red-600 hover:bg-red-50"
+                        className="w-full justify-center text-gray-700 hover:bg-gray-100"
                       >
                         <Trash2 className="mr-1 h-4 w-4" />
                         Delete
@@ -272,3 +272,4 @@ export default function JobsPage() {
     </div>
   );
 }
+

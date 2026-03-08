@@ -106,7 +106,7 @@ export default function CoursesPage() {
                     <span className="line-clamp-1">{course.provider}</span>
                   </div>
                   <div className="flex items-center font-medium">
-                    <Star className="w-4 h-4 mr-1 text-yellow-500 fill-current" />
+                    <Star className="w-4 h-4 mr-1 text-gray-600 fill-current" />
                     {course.rating || '4.5'}
                   </div>
                 </div>
@@ -138,3 +138,4 @@ export default function CoursesPage() {
     </div>
   );
 }
+

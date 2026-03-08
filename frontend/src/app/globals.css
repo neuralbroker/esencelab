@@ -12,22 +12,35 @@
   }
 
   .glass-card {
-    @apply rounded-2xl bg-white/70 backdrop-blur-[20px] border border-black/5 p-[3%] transition-all duration-300 hover:scale-[1.02] hover:shadow-lg hover:shadow-black/5;
+    @apply rounded-2xl border p-[3%] backdrop-blur-md transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_20px_42px_-34px_rgba(20,20,20,0.55)];
+    border-color: rgba(255, 255, 255, 0.72);
+    background: rgba(255, 255, 255, 0.72);
   }
 
   .glass-card-no-hover {
-    @apply rounded-2xl bg-white/70 backdrop-blur-[20px] border border-black/5 p-[3%] transition-all duration-300;
+    @apply rounded-2xl border p-[3%] backdrop-blur-md transition-all duration-300;
+    border-color: rgba(255, 255, 255, 0.72);
+    background: rgba(255, 255, 255, 0.72);
   }
 
   .glass-panel {
-    @apply bg-white/40 backdrop-blur-2xl border-[0.5px] border-white/60 shadow-2xl shadow-black/5;
+    @apply border shadow-[0_26px_58px_-46px_rgba(24,24,24,0.45)] backdrop-blur-md;
+    border-color: rgba(255, 255, 255, 0.72);
+    background: rgba(255, 255, 255, 0.72);
+  }
+
+  .dashboard-shell {
+    background:
+      radial-gradient(circle at 0% 0%, rgba(200, 200, 200, 0.33), transparent 38%),
+      radial-gradient(circle at 100% 5%, rgba(245, 245, 245, 0.88), transparent 32%),
+      linear-gradient(180deg, #f2f2f2 0%, #f5f5f5 52%, #fafafa 100%);
   }
 
   .notion-surface {
     background:
-      radial-gradient(circle at 12% -8%, rgba(212, 175, 55, 0.1), transparent 35%),
+      radial-gradient(circle at 12% -8%, rgba(172, 172, 172, 0.1), transparent 35%),
       radial-gradient(circle at 85% 0%, rgba(10, 10, 10, 0.05), transparent 30%),
-      #fbfbfa;
+      #fafafa;
   }
 
   .notion-grid {
@@ -48,9 +61,9 @@
 
   .landing-shell {
     background:
-      radial-gradient(circle at 8% -6%, rgba(212, 175, 55, 0.12), transparent 34%),
+      radial-gradient(circle at 8% -6%, rgba(172, 172, 172, 0.12), transparent 34%),
       radial-gradient(circle at 95% 0%, rgba(10, 10, 10, 0.08), transparent 30%),
-      #f8f8f6;
+      #f7f7f7;
   }
 
   .landing-grid {
@@ -63,7 +76,7 @@
 
   .landing-aura {
     @apply absolute h-[340px] w-[340px] rounded-full;
-    background: radial-gradient(circle, rgba(212, 175, 55, 0.2) 0%, rgba(212, 175, 55, 0) 70%);
+    background: radial-gradient(circle, rgba(172, 172, 172, 0.2) 0%, rgba(172, 172, 172, 0) 70%);
     filter: blur(6px);
     animation: drift 11s ease-in-out infinite;
   }
@@ -83,21 +96,21 @@
 
   .velocity-shell {
     background:
-      radial-gradient(circle at 8% 12%, rgba(132, 216, 191, 0.24), transparent 36%),
-      radial-gradient(circle at 90% -4%, rgba(158, 201, 255, 0.2), transparent 34%),
-      linear-gradient(180deg, #f4f8f7 0%, #f9fbfc 46%, #f2f7fb 100%);
+      radial-gradient(circle at 8% 12%, rgba(184, 184, 184, 0.24), transparent 36%),
+      radial-gradient(circle at 90% -4%, rgba(196, 196, 196, 0.2), transparent 34%),
+      linear-gradient(180deg, #f8f8f8 0%, #fbfbfb 46%, #f7f7f7 100%);
   }
 
   .velocity-grid {
     background-image:
-      linear-gradient(to right, rgba(17, 34, 56, 0.06) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(17, 34, 56, 0.06) 1px, transparent 1px);
+      linear-gradient(to right, rgba(17, 17, 17, 0.06) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(17, 17, 17, 0.06) 1px, transparent 1px);
     background-size: 46px 46px;
     mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.85), rgba(0, 0, 0, 0.12));
   }
 
   .velocity-card {
-    @apply rounded-3xl border border-white/70 bg-white/80 shadow-[0_24px_52px_-34px_rgba(17,34,56,0.42)] backdrop-blur-xl;
+    @apply rounded-3xl border border-white/70 bg-white/80 shadow-[0_24px_52px_-34px_rgba(17,17,17,0.42)] backdrop-blur-xl;
   }
 
   .velocity-chip {
@@ -105,14 +118,14 @@
     align-items: center;
     gap: 0.45rem;
     border-radius: 999px;
-    border: 1px solid rgba(17, 34, 56, 0.14);
+    border: 1px solid rgba(17, 17, 17, 0.14);
     background: rgba(255, 255, 255, 0.74);
     padding: 0.33rem 0.76rem;
     font-size: 0.72rem;
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: rgba(17, 34, 56, 0.78);
+    color: rgba(17, 17, 17, 0.78);
   }
 
   .velocity-orb {
@@ -123,36 +136,36 @@
   .velocity-orb-mint {
     height: 320px;
     width: 320px;
-    background: radial-gradient(circle, rgba(132, 216, 191, 0.32) 0%, rgba(132, 216, 191, 0) 74%);
+    background: radial-gradient(circle, rgba(184, 184, 184, 0.32) 0%, rgba(184, 184, 184, 0) 74%);
     animation: float-soft 13s ease-in-out infinite;
   }
 
   .velocity-orb-sky {
     height: 340px;
     width: 340px;
-    background: radial-gradient(circle, rgba(158, 201, 255, 0.28) 0%, rgba(158, 201, 255, 0) 72%);
+    background: radial-gradient(circle, rgba(196, 196, 196, 0.28) 0%, rgba(196, 196, 196, 0) 72%);
     animation: float-soft-reverse 15s ease-in-out infinite;
   }
 
   .velocity-orb-coral {
     height: 280px;
     width: 280px;
-    background: radial-gradient(circle, rgba(242, 178, 141, 0.24) 0%, rgba(242, 178, 141, 0) 74%);
+    background: radial-gradient(circle, rgba(208, 208, 208, 0.24) 0%, rgba(208, 208, 208, 0) 74%);
     animation: float-soft 11s ease-in-out infinite;
   }
 }
 
 :root {
-  --background: #FDFCF8;
-  --landing-ink: #112238;
-  --landing-mint: #84d8bf;
-  --landing-sky: #9ec9ff;
-  --landing-coral: #f2b28d;
+  --background: #f2f2f2;
+  --landing-ink: #111111;
+  --landing-mint: #111111;
+  --landing-sky: #bfbfbf;
+  --landing-coral: #c4c4c4;
 }
 
 body {
   background-color: var(--background);
-  color: #0A0A0A;
+  color: #111111;
 }
 
 ::-webkit-scrollbar {
@@ -165,12 +178,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(10, 10, 10, 0.1);
+  background: rgba(24, 24, 24, 0.2);
   border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(10, 10, 10, 0.3);
+  background: rgba(24, 24, 24, 0.42);
 }
 
 @keyframes drift {
@@ -212,3 +225,4 @@ body {
     transform: translate3d(-24px, 16px, 0) scale(1.03);
   }
 }
+

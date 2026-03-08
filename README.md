@@ -38,10 +38,37 @@ Smoke test only:
 powershell -ExecutionPolicy Bypass -File .\scripts\local-smoke.ps1
 ```
 
+## Full Readiness Check
+Run complete static + runtime validation before rebuilding or continued coding:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\full-check.ps1
+```
+
+Install dependencies first, then run full check:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\full-check.ps1 -InstallDeps
+```
+
+Keep services running after checks:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\full-check.ps1 -KeepRunning
+```
+
 ## Local URLs
 - Frontend: `http://localhost:3000`
 - Backend: `http://localhost:3001/api`
 - AI Service: `http://localhost:3002`
+
+## Optional AI Provider (Student AI Coach)
+The student dashboard includes an AI Career Coach that can use Groq free API.
+
+Set environment variables before starting services:
+```powershell
+$env:GROQ_API_KEY="your_groq_api_key"
+$env:GROQ_MODEL="llama-3.1-8b-instant"
+```
+
+Without `GROQ_API_KEY`, the app automatically falls back to local guidance.
 
 ## Demo Credentials
 - Student: `student@esencelab.com` / `demo123`
@@ -51,6 +78,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\local-smoke.ps1
 ## Project Docs
 - Master spec: [docs/MASTER_BUILD_SPEC.md](docs/MASTER_BUILD_SPEC.md)
 - Chunked plan: [docs/CHUNKED_IMPLEMENTATION_PLAN.md](docs/CHUNKED_IMPLEMENTATION_PLAN.md)
+- Student AI model plan: [docs/STUDENT_AI_MODEL_PLAN.md](docs/STUDENT_AI_MODEL_PLAN.md)
 
 ## Team and Credits
 ### Team Members

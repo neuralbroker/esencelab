@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -142,13 +142,13 @@ export default function MockInterviewPage() {
       </section>
 
       {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 flex items-center gap-2">
+        <div className="rounded-xl border border-gray-300 bg-gray-100 px-4 py-3 text-sm text-gray-800 flex items-center gap-2">
           <AlertCircle className="h-4 w-4" />
           {error}
         </div>
       )}
       {feedback && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 flex items-center gap-2">
+        <div className="rounded-xl border border-gray-300 bg-gray-100 px-4 py-3 text-sm text-gray-800 flex items-center gap-2">
           <CheckCircle2 className="h-4 w-4" />
           {feedback}
         </div>
@@ -275,4 +275,5 @@ export default function MockInterviewPage() {
     </div>
   );
 }
+
 

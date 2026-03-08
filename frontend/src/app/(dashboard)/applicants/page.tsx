@@ -4,25 +4,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import api from '@/lib/api';
-import { Application, Job } from '@/types';
+import { Application, Job, RecruiterCandidateMatch } from '@/types';
 import Card from '@/components/Card';
 import Badge from '@/components/Badge';
 import { Users, Briefcase, CheckCircle, XCircle, Clock, Search } from 'lucide-react';
-
-interface CandidateMatch {
-  candidateId: string;
-  studentId: string;
-  name: string;
-  email: string;
-  role: string;
-  skills: string[];
-  matchScore: number;
-  matchedSkills: string[];
-  missingSkills: string[];
-  explanation?: string | null;
-  hasApplied: boolean;
-  applicationStatus?: string | null;
-}
+import { getCandidateMatches, getEmployerJobs, getReadableErrorMessage } from '@/lib/dashboardApi';
 
 export default function ApplicantsPage() {
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -32,16 +18,21 @@ export default function ApplicantsPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [jobs, setJobs] = useState<Job[]>([]);
   const [selectedJobId, setSelectedJobId] = useState('');
-  const [candidateMatches, setCandidateMatches] = useState<CandidateMatch[]>([]);
+  const [candidateMatches, setCandidateMatches] = useState<RecruiterCandidateMatch[]>([]);
+  const [sortBy, setSortBy] = useState<'match' | 'resume' | 'experience'>('match');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [loadingMatches, setLoadingMatches] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchApplications = useCallback(async () => {
     try {
+      setError(null);
       const params = statusFilter ? `?status=${statusFilter}` : '';
       const res = await api.get(`/applications${params}`);
       setApplications(res.data.data || []);
-    } catch {
+    } catch (err: any) {
       setApplications([]);
+      setError(getReadableErrorMessage(err, 'Failed to load applications.'));
     } finally {
       setLoading(false);
     }
@@ -49,27 +40,40 @@ export default function ApplicantsPage() {
 
   const fetchJobs = useCallback(async () => {
     try {
-      const endpoint = user?.role === 'employer' ? '/jobs?my=true&status=active' : '/jobs?status=active';
-      const res = await api.get(endpoint);
-      const fetchedJobs = res.data.data?.jobs || [];
+      setError(null);
+      const fetchedJobs =
+        user?.role === 'employer'
+          ? await getEmployerJobs()
+          : ((await api.get('/jobs?status=active')).data.data?.jobs || []);
       setJobs(fetchedJobs);
       setSelectedJobId((current) => current || fetchedJobs[0]?.id || '');
-    } catch {
+    } catch (err: any) {
       setJobs([]);
+      setError(getReadableErrorMessage(err, 'Failed to load jobs.'));
     }
   }, [user?.role]);
 
   const fetchCandidateMatches = useCallback(async (jobId: string) => {
+    if (!jobId) {
+      setCandidateMatches([]);
+      return;
+    }
     setLoadingMatches(true);
     try {
-      const res = await api.get(`/jobs/${jobId}/candidate-matches`);
-      setCandidateMatches(res.data.data || []);
-    } catch {
+      setError(null);
+      const matches = await getCandidateMatches(jobId, {
+        sortBy,
+        order: sortOrder,
+        limit: 20,
+      });
+      setCandidateMatches(matches);
+    } catch (err: any) {
       setCandidateMatches([]);
+      setError(getReadableErrorMessage(err, 'Failed to load candidate rankings.'));
     } finally {
       setLoadingMatches(false);
     }
-  }, []);
+  }, [sortBy, sortOrder]);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -95,14 +99,15 @@ export default function ApplicantsPage() {
       return;
     }
     setCandidateMatches([]);
-  }, [fetchCandidateMatches, selectedJobId]);
+  }, [fetchCandidateMatches, selectedJobId, sortBy, sortOrder]);
 
   const handleStatusUpdate = async (appId: string, newStatus: string) => {
     try {
+      setError(null);
       await api.put(`/applications/${appId}/status`, { status: newStatus });
       void fetchApplications();
-    } catch {
-      alert('Failed to update status');
+    } catch (err: any) {
+      setError(getReadableErrorMessage(err, 'Failed to update status.'));
     }
   };
 
@@ -150,13 +155,13 @@ export default function ApplicantsPage() {
           <p className="text-sm text-secondary">Total</p>
         </Card>
         <Card className="text-center">
-          <Clock className="w-6 h-6 text-amber-500 mx-auto mb-2" />
-          <p className="text-2xl font-bold text-amber-600">{stats.pending}</p>
+          <Clock className="w-6 h-6 text-gray-600 mx-auto mb-2" />
+          <p className="text-2xl font-bold text-gray-700">{stats.pending}</p>
           <p className="text-sm text-secondary">Pending</p>
         </Card>
         <Card className="text-center">
-          <CheckCircle className="w-6 h-6 text-green-500 mx-auto mb-2" />
-          <p className="text-2xl font-bold text-green-600">{stats.shortlisted}</p>
+          <CheckCircle className="w-6 h-6 text-gray-600 mx-auto mb-2" />
+          <p className="text-2xl font-bold text-gray-700">{stats.shortlisted}</p>
           <p className="text-sm text-secondary">Shortlisted</p>
         </Card>
         <Card className="text-center">
@@ -168,21 +173,52 @@ export default function ApplicantsPage() {
 
       <Card title="AI Candidate Ranking" subtitle="Similarity score based on job skills and resume skills">
         <div className="space-y-4">
-          <div className="max-w-md">
-            <label className="block text-sm font-medium text-secondary/70 mb-1">Select Job</label>
-            <select
-              value={selectedJobId}
-              onChange={(event) => setSelectedJobId(event.target.value)}
-              className="field-3d w-full rounded-xl px-4 py-2.5 focus:outline-none"
-            >
-              {jobs.length === 0 && <option value="">No active jobs</option>}
-              {jobs.map((job) => (
-                <option key={job.id} value={job.id}>
-                  {job.title} - {job.company}
-                </option>
-              ))}
-            </select>
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-secondary/70 mb-1">Select Job</label>
+              <select
+                value={selectedJobId}
+                onChange={(event) => setSelectedJobId(event.target.value)}
+                className="field-3d w-full rounded-xl px-4 py-2.5 focus:outline-none"
+              >
+                {jobs.length === 0 && <option value="">No active jobs</option>}
+                {jobs.map((job) => (
+                  <option key={job.id} value={job.id}>
+                    {job.title} - {job.company}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-secondary/70 mb-1">Sort By</label>
+              <select
+                value={sortBy}
+                onChange={(event) => setSortBy(event.target.value as 'match' | 'resume' | 'experience')}
+                className="field-3d w-full rounded-xl px-4 py-2.5 focus:outline-none"
+              >
+                <option value="match">Highest Match %</option>
+                <option value="resume">Resume Score</option>
+                <option value="experience">Experience</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-secondary/70 mb-1">Order</label>
+              <select
+                value={sortOrder}
+                onChange={(event) => setSortOrder(event.target.value as 'asc' | 'desc')}
+                className="field-3d w-full rounded-xl px-4 py-2.5 focus:outline-none"
+              >
+                <option value="desc">High to Low</option>
+                <option value="asc">Low to High</option>
+              </select>
+            </div>
           </div>
+
+          {error && (
+            <div className="rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-gray-800">
+              {error}
+            </div>
+          )}
 
           {loadingMatches ? (
             <div className="text-sm text-secondary py-8 text-center">Loading AI candidate rankings...</div>
@@ -194,11 +230,19 @@ export default function ApplicantsPage() {
                     <div>
                       <p className="font-medium text-black">{match.name}</p>
                       <p className="text-sm text-secondary">{match.email}</p>
+                      <p className="text-xs text-secondary mt-1">
+                        Resume: {Math.round(match.resumeScore || 0)}% • Experience: {match.experienceYears || 0} yrs
+                      </p>
                     </div>
                     <Badge variant={match.matchScore >= 70 ? 'success' : match.matchScore >= 50 ? 'warning' : 'secondary'}>
                       {match.matchScore}% Match
                     </Badge>
                   </div>
+                  {match.topSkills?.length ? (
+                    <p className="mt-2 text-xs text-secondary">
+                      Top Skills: {match.topSkills.slice(0, 3).join(', ')}
+                    </p>
+                  ) : null}
                   {match.missingSkills.length > 0 && (
                     <p className="mt-2 text-xs text-secondary">
                       Missing: {match.missingSkills.slice(0, 5).join(', ')}
@@ -210,7 +254,7 @@ export default function ApplicantsPage() {
                     </p>
                   )}
                   <button
-                    onClick={() => router.push(`/applicants/${match.candidateId}`)}
+                    onClick={() => router.push(`/applicants/${match.candidateId}?jobId=${selectedJobId}`)}
                     className="mt-3 rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium text-primary hover:bg-black/5"
                   >
                     View Profile
@@ -278,7 +322,7 @@ export default function ApplicantsPage() {
                   {getStatusBadge(app.status)}
                   <div className="flex space-x-2">
                     <button
-                      onClick={() => router.push(`/applicants/${app.candidateId}`)}
+                      onClick={() => router.push(`/applicants/${app.candidateId}?jobId=${app.jobId}`)}
                       className="px-3 py-1 border border-border rounded-lg text-sm hover:bg-black/5"
                     >
                       View Profile
@@ -287,14 +331,14 @@ export default function ApplicantsPage() {
                       <>
                         <button
                           onClick={() => handleStatusUpdate(app.id, 'shortlisted')}
-                          className="p-2 hover:bg-green-100 rounded-lg text-green-600"
+                          className="p-2 hover:bg-gray-200 rounded-lg text-gray-700"
                           title="Shortlist"
                         >
                           <CheckCircle className="w-5 h-5" />
                         </button>
                         <button
                           onClick={() => handleStatusUpdate(app.id, 'rejected')}
-                          className="p-2 hover:bg-red-100 rounded-lg text-red-500"
+                          className="p-2 hover:bg-gray-200 rounded-lg text-gray-600"
                           title="Reject"
                         >
                           <XCircle className="w-5 h-5" />
@@ -325,3 +369,4 @@ export default function ApplicantsPage() {
     </div>
   );
 }
+

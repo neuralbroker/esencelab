@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, AuthState, LoginCredentials, RegisterData } from '@/types';
-import api from '@/lib/api';
+import api, { invalidateApiCache } from '@/lib/api';
 
 interface AuthContextType extends AuthState {
   login: (credentials: LoginCredentials) => Promise<void>;
@@ -64,6 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(normalizedUser));
+    invalidateApiCache();
     
     setState({
       token,
@@ -80,6 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(normalizedUser));
+    invalidateApiCache();
     
     setState({
       token,
@@ -93,6 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void api.post('/auth/logout').catch(() => undefined);
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    invalidateApiCache();
     setState({
       user: null,
       token: null,

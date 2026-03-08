@@ -152,9 +152,9 @@ export default function ResumeUploadPage() {
 
   const feedbackClass =
     feedback?.tone === 'success'
-      ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+      ? 'border-gray-300 bg-gray-100 text-gray-800'
       : feedback?.tone === 'error'
-        ? 'border-red-200 bg-red-50 text-red-700'
+        ? 'border-gray-300 bg-gray-100 text-gray-800'
         : 'border-accent-soft text-accent';
 
   if (loading) {
@@ -300,7 +300,7 @@ export default function ResumeUploadPage() {
           className="relative z-10 pt-16"
         >
           {/* Golden Timeline Line */}
-          <div className="absolute left-[39px] md:left-[50%] top-24 bottom-0 w-[1px] bg-accent/40 shadow-[0_0_10px_rgba(212,175,55,0.3)] hidden sm:block" />
+          <div className="absolute left-[39px] md:left-[50%] top-24 bottom-0 w-[1px] bg-accent/40 shadow-[0_0_10px_rgba(172,172,172,0.3)] hidden sm:block" />
 
           <div className="space-y-16">
 
@@ -315,7 +315,7 @@ export default function ResumeUploadPage() {
                   <span className="text-[10px] font-sans uppercase tracking-widest text-secondary font-bold">Data Successfully Mapped</span>
                 </div>
               </div>
-              <Button variant="outline" size="sm" onClick={handleDelete} className="text-red-500 border-red-200 hover:text-red-700 hover:bg-red-50 rounded-full h-10 px-6 mt-4 md:mt-0 font-sans font-medium">
+              <Button variant="outline" size="sm" onClick={handleDelete} className="text-gray-600 border-gray-300 hover:text-gray-800 hover:bg-gray-100 rounded-full h-10 px-6 mt-4 md:mt-0 font-sans font-medium">
                 <Trash2 className="mr-2 w-4 h-4" /> Purge
               </Button>
             </div>
@@ -370,7 +370,7 @@ export default function ResumeUploadPage() {
                     <motion.div
                       initial={{ opacity: 0 }}
                       whileInView={{ opacity: 1 }}
-                      className="px-5 py-2.5 rounded-none font-sans font-bold text-xs uppercase tracking-widest border border-accent/40 bg-transparent text-accent shadow-[0_0_15px_rgba(212,175,55,0.2)]"
+                      className="px-5 py-2.5 rounded-none font-sans font-bold text-xs uppercase tracking-widest border border-accent/40 bg-transparent text-accent shadow-[0_0_15px_rgba(172,172,172,0.2)]"
                     >
                       SYSTEM ARCHITECTURE (missing)
                     </motion.div>
@@ -384,5 +384,6 @@ export default function ResumeUploadPage() {
     </div>
   );
 }
+
 
 

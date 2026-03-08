@@ -9,6 +9,7 @@ $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $frontendDir = Join-Path $repoRoot "frontend"
 $backendDir = Join-Path $repoRoot "backend"
 $aiDir = Join-Path $repoRoot "ai-service"
+$aiEnvPath = Join-Path $aiDir ".env"
 $backendEnvPath = Join-Path $backendDir ".env"
 $backendEnvExamplePath = Join-Path $backendDir ".env.example"
 $smokeScript = Join-Path $PSScriptRoot "local-smoke.ps1"
@@ -107,6 +108,32 @@ function Ensure-BackendEnv {
   Set-Content -Path $backendEnvPath -Value $content
 }
 
+function Load-AiEnv {
+  if (-not (Test-Path $aiEnvPath)) {
+    return
+  }
+
+  $lines = Get-Content $aiEnvPath
+  foreach ($line in $lines) {
+    $trimmed = $line.Trim()
+    if (-not $trimmed -or $trimmed.StartsWith('#')) {
+      continue
+    }
+    $parts = $trimmed -split '=', 2
+    if ($parts.Count -ne 2) {
+      continue
+    }
+    $name = $parts[0].Trim()
+    $value = $parts[1].Trim()
+    if ($value.StartsWith('"') -and $value.EndsWith('"') -and $value.Length -ge 2) {
+      $value = $value.Substring(1, $value.Length - 2)
+    }
+    if ($name) {
+      [Environment]::SetEnvironmentVariable($name, $value, "Process")
+    }
+  }
+}
+
 Ensure-Command "node"
 Ensure-Command "npm"
 Ensure-Command "python"
@@ -120,6 +147,7 @@ if ($InstallDeps) {
 
 Write-Section "Configuring backend for local demo DB"
 Ensure-BackendEnv
+Load-AiEnv
 
 Write-Section "Stopping existing services on ports 3000, 3001, 3002"
 Stop-ProcessByPattern "uvicorn app\.main:app"

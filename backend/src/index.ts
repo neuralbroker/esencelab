@@ -32,12 +32,36 @@ const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || 'esencelab-demo-secret';
 const SERVER_STARTED_AT = Date.now();
 const SLOW_ENDPOINT_THRESHOLD_MS = Number(process.env.SLOW_ENDPOINT_THRESHOLD_MS || 1200);
+const FRONTEND_ORIGINS = (() => {
+  const rawOrigins = process.env.FRONTEND_URLS || process.env.FRONTEND_URL || 'http://localhost:3000';
+  return rawOrigins
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+})();
+const ALLOW_ALL_FRONTEND_ORIGINS = FRONTEND_ORIGINS.includes('*');
+const TRUST_PROXY_RAW = String(process.env.TRUST_PROXY || '').trim().toLowerCase();
+
+if (TRUST_PROXY_RAW) {
+  if (TRUST_PROXY_RAW === 'true') app.set('trust proxy', 1);
+  else if (TRUST_PROXY_RAW === 'false') app.set('trust proxy', false);
+  else if (!Number.isNaN(Number(TRUST_PROXY_RAW))) app.set('trust proxy', Number(TRUST_PROXY_RAW));
+  else app.set('trust proxy', TRUST_PROXY_RAW);
+}
 
 app.use(helmet());
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-  credentials: true,
-}));
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || ALLOW_ALL_FRONTEND_ORIGINS || FRONTEND_ORIGINS.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error('Origin not allowed by CORS'));
+    },
+    credentials: true,
+  })
+);
 app.use(
   compression({
     threshold: 1024,

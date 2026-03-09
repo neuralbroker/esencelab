@@ -114,6 +114,59 @@ powershell -ExecutionPolicy Bypass -File .\scripts\local-demo.ps1 -SmokeTest
 - Recruiter: `recruiter@esencelab.com` / `demo123`
 - Admin: `admin@esencelab.com` / `demo123`
 
+## Live Deployment
+
+The repository now includes two production-ready deployment paths:
+
+- Direct process-based deployment without Docker
+- Container-based deployment with Docker Compose
+
+### Direct run
+
+Build and run the stack directly on the host machine:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\direct-deploy.ps1 -EnvFile .env.production.example -SmokeTest
+```
+
+That command:
+
+- builds frontend and backend in production mode
+- syntax-checks the AI service
+- starts `next start`, `node dist/index.js`, and `uvicorn`
+- runs the end-to-end smoke suite against the production-like stack
+
+### Docker path
+
+The container deployment assets are also included:
+
+- [docker-compose.production.yml](C:/Dev/Projects/Esencelab/docker-compose.production.yml)
+- [frontend/Dockerfile](C:/Dev/Projects/Esencelab/frontend/Dockerfile)
+- [backend/Dockerfile](C:/Dev/Projects/Esencelab/backend/Dockerfile)
+- [ai-service/Dockerfile](C:/Dev/Projects/Esencelab/ai-service/Dockerfile)
+- [.env.production.example](C:/Dev/Projects/Esencelab/.env.production.example)
+- [LIVE_DEPLOYMENT.md](C:/Dev/Projects/Esencelab/docs/LIVE_DEPLOYMENT.md)
+
+Quick production flow:
+
+```powershell
+Copy-Item .\.env.production.example .\.env.production
+docker compose --env-file .env.production -f .\docker-compose.production.yml up --build -d
+```
+
+Validate the production compose file before deploying:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\deployment-check.ps1 -EnvFile .env.production
+```
+
+Before deploying publicly:
+
+- Replace `JWT_SECRET`
+- Set `FRONTEND_URLS` to your real frontend domain
+- Set `AI_ALLOWED_ORIGINS` to your real frontend domain
+- Switch `DATA_PROVIDER=supabase` if you want persistent data
+
 ## Manual Development Setup
 
 ### 1. Install dependencies
@@ -185,6 +238,8 @@ Use [backend/.env.example](C:/Dev/Projects/Esencelab/backend/.env.example) as th
 | `JWT_SECRET` | Yes for non-demo use | JWT signing secret |
 | `AI_SERVICE_URL` | No | FastAPI base URL |
 | `FRONTEND_URL` | No | Allowed frontend origin |
+| `FRONTEND_URLS` | Recommended for production | Comma-separated allowed frontend origins |
+| `TRUST_PROXY` | Recommended behind ingress | Enables correct proxy-aware request handling |
 | `DATA_PROVIDER` | Yes | `memory` for local demo, `supabase` for persistent mode |
 | `SUPABASE_URL` | Only for Supabase mode | Supabase project URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | Only for Supabase mode | Server-side Supabase key |
@@ -193,11 +248,24 @@ Use [backend/.env.example](C:/Dev/Projects/Esencelab/backend/.env.example) as th
 
 ### AI service
 
+Use [ai-service/.env.example](C:/Dev/Projects/Esencelab/ai-service/.env.example) for AI-specific deployment values.
+
 | Variable | Required | Purpose |
 | --- | --- | --- |
+| `AI_ALLOWED_ORIGINS` | Recommended for production | Comma-separated origins allowed to call the AI service |
 | `GROQ_API_KEY` | Optional | Enables the student AI coach using Groq |
 | `GROQ_MODEL` | Optional | Groq model name, defaults to `llama-3.1-8b-instant` |
 | `STUDENT_ASSISTANT_CACHE_TTL_SEC` | Optional | Cache TTL for assistant responses |
+
+### Frontend
+
+Use [frontend/.env.example](C:/Dev/Projects/Esencelab/frontend/.env.example) for build-time frontend settings.
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `NEXT_PUBLIC_API_URL` | No | Public API base URL used by the browser |
+| `BACKEND_PROXY_TARGET` | If using same-domain proxy mode | Internal backend target for Next.js rewrites |
+| `AI_PROXY_TARGET` | If using same-domain proxy mode | Internal AI target for Next.js rewrites |
 
 Example PowerShell session variables:
 
@@ -317,6 +385,7 @@ The frontend app router lives under [frontend/src/app](C:/Dev/Projects/Esencelab
 - [MASTER_BUILD_SPEC.md](C:/Dev/Projects/Esencelab/docs/MASTER_BUILD_SPEC.md)
 - [CHUNKED_IMPLEMENTATION_PLAN.md](C:/Dev/Projects/Esencelab/docs/CHUNKED_IMPLEMENTATION_PLAN.md)
 - [STUDENT_AI_MODEL_PLAN.md](C:/Dev/Projects/Esencelab/docs/STUDENT_AI_MODEL_PLAN.md)
+- [LIVE_DEPLOYMENT.md](C:/Dev/Projects/Esencelab/docs/LIVE_DEPLOYMENT.md)
 - [SPEC.md](C:/Dev/Projects/Esencelab/SPEC.md)
 
 ## Operational Notes

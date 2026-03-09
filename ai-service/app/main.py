@@ -66,10 +66,21 @@ def _load_local_env() -> None:
 
 _load_local_env()
 
+
+def _parse_allowed_origins() -> List[str]:
+    raw = os.getenv("AI_ALLOWED_ORIGINS", "*").strip()
+    if not raw or raw == "*":
+        return ["*"]
+    return [entry.strip() for entry in raw.split(",") if entry.strip()]
+
+
+ALLOWED_ORIGINS = _parse_allowed_origins()
+ALLOW_CREDENTIALS = ALLOWED_ORIGINS != ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=ALLOW_CREDENTIALS,
     allow_methods=["*"],
     allow_headers=["*"],
 )

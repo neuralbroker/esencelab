@@ -1,3 +1,10 @@
+/**
+ * Main backend server.
+ *
+ * This file sets up the Express app, seeds demo data, applies middleware,
+ * connects optional persistence, and defines the student, recruiter, admin,
+ * and health routes used by the whole platform.
+ */
 import express, { NextFunction, Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';

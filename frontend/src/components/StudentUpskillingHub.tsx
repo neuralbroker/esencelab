@@ -1,13 +1,21 @@
 'use client';
 
+/**
+ * Student upskilling workspace.
+ *
+ * This component groups roadmap progress, learning plans, AI coach output,
+ * recommendations, and interview prep into one student-focused panel.
+ */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   AlertCircle,
   ArrowUpRight,
+  BookOpen,
   Bot,
   BookmarkPlus,
   CheckCircle2,
+  Compass,
   LineChart,
   Lightbulb,
   Loader2,
@@ -20,7 +28,14 @@ import Button from '@/components/Button';
 import Badge from '@/components/Badge';
 import { CircularProgress, ProgressBar } from '@/components/Progress';
 import { Skeleton } from '@/components/Skeleton';
-import { CareerOverview, LearningPlan, Resume, StudentAICoachResponse, StudentRecommendations } from '@/types';
+import {
+  CareerOverview,
+  LearningPlan,
+  Resume,
+  StudentAICoachResponse,
+  StudentRecommendations,
+  StudentResource,
+} from '@/types';
 import {
   askStudentAICoach,
   clearRecommendationCache,
@@ -33,6 +48,11 @@ import {
   updateRoadmapSkill,
   uploadResume,
 } from '@/lib/dashboardApi';
+import {
+  getRoleStarterResources,
+  getSkillGapResources,
+  getTopResourceRecommendation,
+} from '@/lib/studentResources';
 import { useAuth } from '@/contexts/AuthContext';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -183,6 +203,21 @@ export default function StudentUpskillingHub({
     return (overview?.missingSkills || []).slice(0, 8);
   }, [overview?.missingSkills, recommendations?.missingSkills]);
 
+  const roleStarterResources = useMemo(() => {
+    if (!overview?.roleId) return [] as StudentResource[];
+    return getRoleStarterResources(overview.roleId, 4);
+  }, [overview?.roleId]);
+
+  const skillGapResources = useMemo(() => {
+    if (!overview?.roleId) return [] as StudentResource[];
+    return getSkillGapResources(overview.roleId, topMissingSkills, 8);
+  }, [overview?.roleId, topMissingSkills]);
+
+  const topResourceRecommendation = useMemo(() => {
+    if (!overview?.roleId) return null;
+    return getTopResourceRecommendation(overview.roleId, topMissingSkills);
+  }, [overview?.roleId, topMissingSkills]);
+
   const readiness = useMemo(() => {
     if (overview?.latestScore) return scoreToPercent(overview.latestScore.score);
     if (topRecommendedJobs.length > 0) {
@@ -285,6 +320,53 @@ export default function StudentUpskillingHub({
   const firstScoreEntry = overview?.scoreHistory?.[0] || null;
   const lastScoreEntry =
     overview?.scoreHistory?.[overview.scoreHistory.length - 1] || null;
+
+  const nextStepCards = useMemo(() => {
+    const cards: Array<{
+      id: string;
+      eyebrow: string;
+      title: string;
+      detail: string;
+      href?: string;
+      external?: boolean;
+      cta: string;
+    }> = [];
+
+    if (topMissingSkills[0]) {
+      cards.push({
+        id: 'gap',
+        eyebrow: 'Close this gap first',
+        title: topMissingSkills[0],
+        detail: `This skill appears in your current roadmap and role-fit gaps. Marking it in progress will improve the rest of your plan.`,
+        cta: 'Update roadmap below',
+      });
+    }
+
+    if (topResourceRecommendation) {
+      cards.push({
+        id: 'resource',
+        eyebrow: 'Study this next',
+        title: topResourceRecommendation.title,
+        detail: topResourceRecommendation.whyItHelps,
+        href: topResourceRecommendation.url,
+        external: true,
+        cta: 'Open resource',
+      });
+    }
+
+    if (topRecommendedJobs[0]) {
+      cards.push({
+        id: 'job',
+        eyebrow: 'Best current opportunity',
+        title: topRecommendedJobs[0].job.title,
+        detail: `${scoreToPercent(topRecommendedJobs[0].matchScore)}% match at ${topRecommendedJobs[0].job.company}.`,
+        href: `/jobs/${topRecommendedJobs[0].job.id}`,
+        cta: 'View job',
+      });
+    }
+
+    return cards.slice(0, 3);
+  }, [topMissingSkills, topRecommendedJobs, topResourceRecommendation]);
 
   const handleRoadmapStatusCycle = async (skillName: string, current: RoadmapStatus) => {
     if (!overview || updatingSkill) return;
@@ -750,6 +832,44 @@ export default function StudentUpskillingHub({
         </div>
       </section>
 
+      {nextStepCards.length > 0 && (
+        <section className="space-y-6">
+          <div className="flex items-center gap-2">
+            <Compass className="h-5 w-5 text-accent" />
+            <h2 className="text-2xl font-serif text-primary">What To Do Next</h2>
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            {nextStepCards.map((card) => (
+              <Card key={card.id} hoverable={false} className="p-5 space-y-3">
+                <p className="text-xs uppercase tracking-[0.12em] text-secondary">{card.eyebrow}</p>
+                <h3 className="text-lg font-semibold text-primary">{card.title}</h3>
+                <p className="text-sm text-secondary">{card.detail}</p>
+                {card.href ? (
+                  card.external ? (
+                    <a
+                      href={card.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center text-sm font-semibold text-accent hover:underline"
+                    >
+                      {card.cta} <ArrowUpRight className="ml-1 h-4 w-4" />
+                    </a>
+                  ) : (
+                    <Link href={card.href} className="inline-flex items-center text-sm font-semibold text-accent hover:underline">
+                      {card.cta} <ArrowUpRight className="ml-1 h-4 w-4" />
+                    </Link>
+                  )
+                ) : (
+                  <span className="inline-flex items-center text-sm font-semibold text-accent">
+                    {card.cta}
+                  </span>
+                )}
+              </Card>
+            ))}
+          </div>
+        </section>
+      )}
+
       <section className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-2xl font-serif text-primary">Learning Plan</h2>
@@ -915,6 +1035,111 @@ export default function StudentUpskillingHub({
             </div>
           )}
         </Card>
+      </section>
+
+      <section className="space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <BookOpen className="h-5 w-5 text-accent" />
+            <h2 className="text-2xl font-serif text-primary">Student Resource Library</h2>
+          </div>
+          <Badge variant="secondary">Curated free resources from official and trusted sources</Badge>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-[1.2fr,0.8fr]">
+          <Card hoverable={false} className="p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.12em] text-secondary">Best matches for your gaps</p>
+                <h3 className="text-xl font-serif text-primary">Start with these resources</h3>
+              </div>
+              <Link href="/courses" className="text-sm font-semibold text-accent hover:underline">
+                Open courses page
+              </Link>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              {skillGapResources.length > 0 ? (
+                skillGapResources.map((resource) => (
+                  <div key={resource.id} className="rounded-2xl border border-border bg-white/70 p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h4 className="text-base font-semibold text-primary">{resource.title}</h4>
+                        <p className="text-xs uppercase tracking-[0.12em] text-secondary">{resource.provider}</p>
+                      </div>
+                      <Badge variant="secondary">{resource.level.replace('_', ' ')}</Badge>
+                    </div>
+                    <p className="text-sm text-secondary">{resource.description}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {resource.skills.slice(0, 4).map((skill) => (
+                        <span
+                          key={`${resource.id}-${skill}`}
+                          className="rounded-full border border-border bg-white px-2.5 py-1 text-[11px] text-secondary"
+                        >
+                          {skill}
+                        </span>
+                      ))}
+                    </div>
+                    <p className="text-sm text-secondary">
+                      <span className="font-semibold text-primary">Why this helps:</span> {resource.whyItHelps}
+                    </p>
+                    <a
+                      href={resource.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center text-sm font-semibold text-accent hover:underline"
+                    >
+                      Open resource <ArrowUpRight className="ml-1 h-4 w-4" />
+                    </a>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-secondary">No extra resources are needed right now. Your gaps are already narrow.</p>
+              )}
+            </div>
+          </Card>
+
+          <Card hoverable={false} className="p-6 space-y-5">
+            <div>
+              <p className="text-xs uppercase tracking-[0.12em] text-secondary">Role starter pack</p>
+              <h3 className="text-xl font-serif text-primary">Trusted resources for {targetRole}</h3>
+            </div>
+
+            <div className="space-y-3">
+              {roleStarterResources.map((resource) => (
+                <a
+                  key={resource.id}
+                  href={resource.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block rounded-2xl border border-border bg-white/70 p-4 transition hover:bg-white"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h4 className="text-sm font-semibold text-primary">{resource.title}</h4>
+                      <p className="mt-1 text-sm text-secondary">{resource.provider}</p>
+                    </div>
+                    <ArrowUpRight className="h-4 w-4 text-accent" />
+                  </div>
+                  <p className="mt-2 text-sm text-secondary">{resource.whyItHelps}</p>
+                </a>
+              ))}
+            </div>
+
+            {overview?.role?.suggestedTools?.length ? (
+              <div className="rounded-2xl border border-border bg-white/60 p-4">
+                <p className="mb-2 text-xs uppercase tracking-[0.12em] text-secondary">Tools to install or practice</p>
+                <div className="flex flex-wrap gap-2">
+                  {overview.role.suggestedTools.map((tool) => (
+                    <span key={tool} className="rounded-full border border-border bg-white px-2.5 py-1 text-[11px] text-secondary">
+                      {tool}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </Card>
+        </div>
       </section>
 
       <section className="space-y-6">

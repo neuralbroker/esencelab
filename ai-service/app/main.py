@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+"""
+Main AI service used by the backend.
+
+This module handles resume parsing, skill extraction, job matching, and the
+student AI coach. It is written to fail gracefully when optional NLP or ML
+libraries are missing so the API can keep working in reduced mode.
+"""
+
 import io
 import json
 import hashlib

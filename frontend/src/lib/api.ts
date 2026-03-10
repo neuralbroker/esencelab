@@ -1,5 +1,11 @@
 import axios from 'axios';
 
+/**
+ * Shared frontend HTTP client.
+ *
+ * This module decides the API base URL, adds the auth token to requests,
+ * caches selected GET calls, and handles 401 responses in one place.
+ */
 const getBaseUrl = () => {
   if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
   if (typeof window !== 'undefined') {

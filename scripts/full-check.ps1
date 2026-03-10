@@ -1,3 +1,12 @@
+<#
+Runs the main project validation suite.
+
+This script combines static checks and runtime checks:
+- frontend lint and build
+- backend TypeScript build
+- AI service syntax validation
+- local runtime smoke test
+#>
 param(
   [switch]$InstallDeps,
   [switch]$KeepRunning

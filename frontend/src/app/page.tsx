@@ -1,5 +1,11 @@
 'use client';
 
+/**
+ * Public landing page.
+ *
+ * This page introduces the product, highlights the core capabilities, and
+ * redirects authenticated users into the dashboard area.
+ */
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';

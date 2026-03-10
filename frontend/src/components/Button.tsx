@@ -1,5 +1,11 @@
 'use client';
 
+/**
+ * Shared button component.
+ *
+ * This wraps visual variants, loading state, and motion behavior so actions
+ * look and behave the same across the application.
+ */
 import { forwardRef, ReactNode } from 'react';
 import { motion, HTMLMotionProps } from 'framer-motion';
 import { Loader2 } from 'lucide-react';

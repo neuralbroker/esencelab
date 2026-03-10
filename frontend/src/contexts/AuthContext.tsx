@@ -1,5 +1,11 @@
 'use client';
 
+/**
+ * Frontend auth provider.
+ *
+ * This context stores the logged-in user, the JWT token, loading state, and
+ * the main login/register/logout actions used across the app.
+ */
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, AuthState, LoginCredentials, RegisterData } from '@/types';
 import api, { invalidateApiCache } from '@/lib/api';

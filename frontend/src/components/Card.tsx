@@ -1,3 +1,9 @@
+/**
+ * Shared card container.
+ *
+ * Most dashboard sections render inside this component so spacing, surfaces,
+ * and optional click behavior are reused consistently.
+ */
 import { ReactNode } from 'react';
 
 interface CardProps {

@@ -1,5 +1,11 @@
 'use client';
 
+/**
+ * Login page.
+ *
+ * This page signs users in, shows demo credentials for quick testing, and
+ * routes successful logins into the correct dashboard flow.
+ */
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';

@@ -1,5 +1,11 @@
 'use client';
 
+/**
+ * Admin resume monitoring page.
+ *
+ * This page helps admins inspect parsing results, find suspicious uploads,
+ * and apply moderation actions such as review, flag, or delete.
+ */
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';

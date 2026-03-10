@@ -1,3 +1,9 @@
+/**
+ * Reusable Esencelab logo component.
+ *
+ * This keeps the project icon and label in one place so branding stays
+ * consistent across the landing page, auth pages, and dashboard shell.
+ */
 interface EsencelabLogoProps {
   className?: string;
   iconClassName?: string;

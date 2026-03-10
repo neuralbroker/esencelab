@@ -1,5 +1,11 @@
 'use client';
 
+/**
+ * Shared input component.
+ *
+ * This keeps text fields visually consistent across forms by centralizing the
+ * label, border, spacing, and error-ready input styles.
+ */
 import { InputHTMLAttributes, forwardRef, useState } from 'react';
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {

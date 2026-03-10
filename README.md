@@ -136,6 +136,18 @@ That command:
 - starts `next start`, `node dist/index.js`, and `uvicorn`
 - runs the end-to-end smoke suite against the production-like stack
 
+### Direct run with live data
+
+For persistent data backed by Supabase:
+
+```powershell
+Copy-Item .\.env.live-data.example .\.env.live-data
+powershell -ExecutionPolicy Bypass -File .\scripts\direct-live-data.ps1 -EnvFile .env.live-data
+```
+
+Fill in real Supabase values before running. The wrapper will stop if the env
+file is still using placeholder values.
+
 ### Docker path
 
 The container deployment assets are also included:
@@ -319,6 +331,17 @@ The smoke suite covers:
 - Admin course and user management flows
 - Resume upload, retrieval, and deletion
 - Dashboard stats and AI skill extraction endpoints
+
+### Full feature check
+
+Runs a wider set of feature checks on top of a running local stack:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\full-feature-check.ps1
+```
+
+This goes beyond the normal smoke test and covers password reset, logout
+revocation, recruiter analytics, admin moderation, and deeper CRUD paths.
 
 ### Full readiness check
 

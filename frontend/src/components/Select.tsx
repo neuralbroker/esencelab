@@ -1,5 +1,11 @@
 'use client';
 
+/**
+ * Shared select component.
+ *
+ * This keeps dropdown styling and label placement aligned with the rest of the
+ * form system used throughout the app.
+ */
 import { SelectHTMLAttributes, forwardRef } from 'react';
 
 interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {

@@ -1,5 +1,11 @@
 'use client';
 
+/**
+ * Jobs list page.
+ *
+ * Students browse opportunities here, while recruiters and admins use the
+ * same page to manage jobs they own or oversee.
+ */
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';

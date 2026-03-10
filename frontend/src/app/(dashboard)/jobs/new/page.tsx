@@ -1,5 +1,11 @@
 'use client';
 
+/**
+ * New job creation page.
+ *
+ * Recruiters and admins use this page to create structured job posts that the
+ * ranking and candidate-matching features can work with later.
+ */
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';

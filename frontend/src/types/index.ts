@@ -1,3 +1,9 @@
+/**
+ * Shared frontend data models.
+ *
+ * These interfaces describe the shapes returned by the backend so pages,
+ * components, and API helpers all work from the same contract.
+ */
 export type UserRole = 'student' | 'employer' | 'admin';
 
 export interface User {
@@ -214,6 +220,19 @@ export interface StudentRecommendations {
   missingSkills: string[];
   recommendedCourses: CourseRecommendation[];
   summary?: string;
+}
+
+export interface StudentResource {
+  id: string;
+  title: string;
+  provider: string;
+  url: string;
+  description: string;
+  format: 'official_docs' | 'guided_course' | 'hands_on' | 'reference';
+  level: 'beginner' | 'intermediate' | 'all_levels';
+  skills: string[];
+  roleIds: string[];
+  whyItHelps: string;
 }
 
 export interface ResumeScoreEntry {

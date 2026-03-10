@@ -1,5 +1,11 @@
 'use client';
 
+/**
+ * Student resume page.
+ *
+ * This page handles resume upload, replacement, parsing results, and the
+ * latest stored resume insights for the signed-in student.
+ */
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AlertCircle, CheckCircle, FileText, Loader2, UploadCloud, X, Trash2 } from 'lucide-react';

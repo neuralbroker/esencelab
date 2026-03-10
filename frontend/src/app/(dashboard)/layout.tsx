@@ -1,5 +1,11 @@
 'use client';
 
+/**
+ * Shared dashboard layout.
+ *
+ * This wraps all authenticated pages with the common navbar and layout
+ * spacing so each role-based page starts from the same shell.
+ */
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';

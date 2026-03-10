@@ -1,3 +1,10 @@
+/**
+ * Dashboard API wrapper functions.
+ *
+ * Pages import these helpers instead of calling raw endpoint URLs directly.
+ * That keeps fetching, cache invalidation, and response parsing consistent
+ * across the student, recruiter, and admin interfaces.
+ */
 import api, { cachedGet, invalidateApiCache } from '@/lib/api';
 import {
   AdminMonitoringData,

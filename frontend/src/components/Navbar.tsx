@@ -1,5 +1,11 @@
 'use client';
 
+/**
+ * Main authenticated navbar.
+ *
+ * This component builds the dashboard navigation and changes the visible links
+ * based on the current user role.
+ */
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';

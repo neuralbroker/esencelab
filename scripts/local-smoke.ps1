@@ -1,3 +1,9 @@
+<#
+Runs a fast end-to-end smoke test against a locally running stack.
+
+The checks cover health endpoints, auth, key student flows, recruiter flows,
+admin flows, resume upload, and AI matching endpoints.
+#>
 param(
   [switch]$Json
 )

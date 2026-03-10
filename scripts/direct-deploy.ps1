@@ -1,3 +1,10 @@
+<#
+Runs the app directly in production-style mode without Docker.
+
+This script builds the frontend and backend, syntax-checks the AI service,
+starts all three services as background processes, and can run the smoke test
+against that production-like stack.
+#>
 param(
   [string]$EnvFile = ".env.production.example",
   [switch]$InstallDeps,

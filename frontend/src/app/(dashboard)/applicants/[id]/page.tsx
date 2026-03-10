@@ -1,5 +1,11 @@
 'use client';
 
+/**
+ * Applicant detail page.
+ *
+ * This page shows the structured profile for one candidate, including resume
+ * insights, match breakdowns, and recruiter-side review actions.
+ */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';

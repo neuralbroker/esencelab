@@ -1,5 +1,11 @@
 'use client';
 
+/**
+ * Mock interview page.
+ *
+ * This page shows generated interview questions and practice support for
+ * students preparing for technical and behavioral rounds.
+ */
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';

@@ -1,3 +1,10 @@
+/**
+ * Career-engine business logic.
+ *
+ * This file contains the student-focused calculations and generated content
+ * used by the backend, such as resume scoring, skill roadmaps, learning
+ * plans, weekly planners, and mock interview content.
+ */
 export type SkillStatus = 'completed' | 'in_progress' | 'missing';
 
 export interface CareerRoleDefinition {
@@ -102,30 +109,37 @@ export const CAREER_ROLES: CareerRoleDefinition[] = [
 const SKILL_RESOURCES: Record<string, LearningResource[]> = {
   'node.js': [
     {
-      title: 'Node.js Crash Course',
-      provider: 'Traversy Media',
-      url: 'https://www.youtube.com/watch?v=fBNz5xF-Kx4',
+      title: 'Introduction to Node.js',
+      provider: 'Node.js',
+      url: 'https://nodejs.org/en/learn/getting-started/introduction-to-nodejs',
     },
   ],
   express: [
     {
-      title: 'Express.js Official Guide',
+      title: 'Express Starter Guide',
       provider: 'Express',
-      url: 'https://expressjs.com/en/guide/routing.html',
+      url: 'https://expressjs.com/en/starter/installing.html',
     },
   ],
   sql: [
     {
-      title: 'SQL Tutorial',
-      provider: 'W3Schools',
-      url: 'https://www.w3schools.com/sql/',
+      title: 'PostgreSQL SQL Tutorial',
+      provider: 'PostgreSQL',
+      url: 'https://www.postgresql.org/docs/current/tutorial-sql.html',
     },
   ],
   postgresql: [
     {
-      title: 'PostgreSQL for Everybody',
-      provider: 'Coursera',
-      url: 'https://www.coursera.org/learn/postgresql',
+      title: 'PostgreSQL SQL Tutorial',
+      provider: 'PostgreSQL',
+      url: 'https://www.postgresql.org/docs/current/tutorial-sql.html',
+    },
+  ],
+  'rest api': [
+    {
+      title: 'MDN HTTP Overview',
+      provider: 'MDN',
+      url: 'https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Overview',
     },
   ],
   react: [
@@ -151,58 +165,70 @@ const SKILL_RESOURCES: Record<string, LearningResource[]> = {
   ],
   html: [
     {
-      title: 'HTML Basics',
+      title: 'MDN Learn HTML',
       provider: 'MDN',
-      url: 'https://developer.mozilla.org/en-US/docs/Learn/HTML',
+      url: 'https://developer.mozilla.org/en-US/docs/Learn_web_development',
     },
   ],
   css: [
     {
-      title: 'CSS Fundamentals',
+      title: 'web.dev Learn Design',
+      provider: 'Google web.dev',
+      url: 'https://web.dev/learn/design',
+    },
+    {
+      title: 'MDN Learn Web Development',
       provider: 'MDN',
-      url: 'https://developer.mozilla.org/en-US/docs/Learn/CSS',
+      url: 'https://developer.mozilla.org/en-US/docs/Learn_web_development',
+    },
+  ],
+  'responsive design': [
+    {
+      title: 'web.dev Learn Design',
+      provider: 'Google web.dev',
+      url: 'https://web.dev/learn/design',
     },
   ],
   python: [
     {
-      title: 'Python for Everybody',
-      provider: 'Coursera',
-      url: 'https://www.coursera.org/specializations/python',
+      title: 'Python Tutorial',
+      provider: 'Python',
+      url: 'https://docs.python.org/3/tutorial/',
     },
   ],
   pandas: [
     {
-      title: 'Pandas Getting Started',
+      title: 'Pandas Intro Tutorials',
       provider: 'Pandas',
-      url: 'https://pandas.pydata.org/docs/getting_started/index.html',
+      url: 'https://pandas.pydata.org/docs/getting_started/intro_tutorials/index.html',
     },
   ],
   excel: [
     {
-      title: 'Excel Skills for Business',
-      provider: 'Coursera',
-      url: 'https://www.coursera.org/specializations/excel',
+      title: 'Excel Video Training',
+      provider: 'Microsoft',
+      url: 'https://support.microsoft.com/en-us/excel',
     },
   ],
   docker: [
     {
-      title: 'Docker for Beginners',
+      title: 'Docker 101 Tutorial',
       provider: 'Docker',
       url: 'https://www.docker.com/101-tutorial/',
     },
   ],
   git: [
     {
-      title: 'Git Handbook',
-      provider: 'GitHub',
-      url: 'https://guides.github.com/introduction/git-handbook/',
+      title: 'Pro Git Book',
+      provider: 'Git',
+      url: 'https://git-scm.com/book/en/v2',
     },
   ],
   'data visualization': [
     {
-      title: 'Data Visualization with Python',
-      provider: 'IBM',
-      url: 'https://www.coursera.org/learn/python-for-data-visualization',
+      title: 'Power BI Learning Path',
+      provider: 'Microsoft Learn',
+      url: 'https://learn.microsoft.com/en-us/training/powerplatform/power-bi/',
     },
   ],
   statistics: [

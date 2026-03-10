@@ -1,3 +1,9 @@
+/**
+ * Small status badge.
+ *
+ * Use this for compact state labels such as success, warning, and error so
+ * those states stay visually consistent across pages.
+ */
 import { ReactNode } from 'react';
 
 interface BadgeProps {

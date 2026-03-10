@@ -1,5 +1,11 @@
 'use client';
 
+/**
+ * Courses page.
+ *
+ * This page lists learning resources and recommended courses that support the
+ * student skill-gap and roadmap workflows.
+ */
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';

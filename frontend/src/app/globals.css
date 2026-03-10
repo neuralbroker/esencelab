@@ -1,3 +1,9 @@
+/*
+ * Global styles and shared design tokens.
+ *
+ * This file defines the visual foundation of the app, including layout
+ * helpers, form surfaces, reusable glass-card styles, and animation helpers.
+ */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

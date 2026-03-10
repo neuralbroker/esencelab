@@ -1,5 +1,11 @@
 'use client';
 
+/**
+ * Applicants overview page.
+ *
+ * Recruiters and admins use this page to review ranked candidates, filter the
+ * list, and move into a detailed applicant view.
+ */
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';

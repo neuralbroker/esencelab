@@ -1,5 +1,11 @@
 'use client';
 
+/**
+ * Global click-sound listener.
+ *
+ * This component adds lightweight audio feedback for interactive UI elements
+ * so the app feels more responsive without wiring sound logic into each page.
+ */
 import { useEffect, useRef } from 'react';
 
 const MIN_INTERVAL_MS = 45;
@@ -85,4 +91,3 @@ export default function UISoundLayer() {
 
   return null;
 }
-

@@ -1,5 +1,11 @@
 'use client';
 
+/**
+ * Job detail page.
+ *
+ * This page shows a single job in more detail and exposes role-based actions
+ * such as applying, viewing match data, or managing the posting.
+ */
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';

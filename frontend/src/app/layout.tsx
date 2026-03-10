@@ -1,3 +1,9 @@
+/**
+ * Root layout for the full Next.js app.
+ *
+ * This file applies global fonts, global styles, auth state, and shared UI
+ * layers that should exist on every page.
+ */
 import type { Metadata } from 'next';
 import { Plus_Jakarta_Sans, Playfair_Display } from 'next/font/google';
 import './globals.css';

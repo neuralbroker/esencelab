@@ -26,6 +26,22 @@ This starts:
 - backend via `node dist/index.js`
 - AI service via `uvicorn`
 
+## Direct deployment with live data
+
+If you want local hosting with persistent data instead of memory-mode demo
+data, use Supabase-backed mode:
+
+```powershell
+Copy-Item .\.env.live-data.example .\.env.live-data
+powershell -ExecutionPolicy Bypass -File .\scripts\direct-live-data.ps1 -EnvFile .env.live-data
+```
+
+Before running this mode, set real values for:
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `JWT_SECRET`
+
 ## Docker deployment
 
 This path uses:

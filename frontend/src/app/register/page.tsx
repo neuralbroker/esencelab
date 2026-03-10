@@ -1,5 +1,11 @@
 'use client';
 
+/**
+ * Registration page.
+ *
+ * Public signup is student-focused, so this page collects the required
+ * account fields and delegates the actual auth work to the shared provider.
+ */
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';

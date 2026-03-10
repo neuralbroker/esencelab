@@ -1,4 +1,11 @@
 'use client';
+
+/**
+ * Shared progress components.
+ *
+ * These visual helpers render circular and bar-based progress indicators for
+ * scores, readiness, roadmap completion, and similar dashboard metrics.
+ */
 import { motion } from 'framer-motion';
 
 export function ProgressBar({ value, max = 100, className = '', barClassName = '' }: { value: number; max?: number; className?: string; barClassName?: string }) {

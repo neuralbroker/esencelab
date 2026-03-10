@@ -1,3 +1,9 @@
+<#
+Validates production deployment configuration.
+
+This script checks that the production compose file can be resolved from the
+selected env file and can optionally build images when Docker Engine is ready.
+#>
 param(
   [string]$EnvFile = ".env.production.example",
   [switch]$BuildImages

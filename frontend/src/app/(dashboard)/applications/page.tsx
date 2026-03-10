@@ -1,5 +1,11 @@
 'use client';
 
+/**
+ * Student application tracker page.
+ *
+ * This page combines saved jobs, submitted applications, notes, and status
+ * updates so students can manage their job pipeline in one place.
+ */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';

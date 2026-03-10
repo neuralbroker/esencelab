@@ -1,5 +1,11 @@
 'use client';
 
+/**
+ * Main role-aware dashboard page.
+ *
+ * This page is the primary control center after login and switches between
+ * student, recruiter, and admin summaries based on the current user role.
+ */
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';

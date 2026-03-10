@@ -1,5 +1,11 @@
 'use client';
 
+/**
+ * Admin users page.
+ *
+ * This page gives admins a searchable interface for viewing, updating,
+ * deactivating, and deleting user accounts.
+ */
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';

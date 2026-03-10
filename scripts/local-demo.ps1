@@ -1,3 +1,9 @@
+<#
+Starts the full stack in local demo mode.
+
+This script uses in-memory data, starts the frontend, backend, and AI service,
+and can optionally install dependencies and run the smoke test.
+#>
 param(
   [switch]$InstallDeps,
   [switch]$SmokeTest

@@ -69,6 +69,12 @@ interface FeedbackState {
   text: string;
 }
 
+const MAX_RESUME_FILE_SIZE_MB = Math.max(
+  1,
+  Math.min(4.4, Number(process.env.NEXT_PUBLIC_MAX_RESUME_FILE_SIZE_MB || 4))
+);
+const MAX_RESUME_FILE_SIZE_BYTES = Math.floor(MAX_RESUME_FILE_SIZE_MB * 1024 * 1024);
+
 const scoreToPercent = (score: number) => {
   if (!Number.isFinite(score)) return 0;
   return Math.max(0, Math.min(100, score <= 1 ? Math.round(score * 100) : Math.round(score)));
@@ -87,7 +93,9 @@ const shortDate = (value: string | Date) =>
 const validatePdf = (candidate: File) => {
   const isPdf = candidate.type === 'application/pdf' || candidate.name.toLowerCase().endsWith('.pdf');
   if (!isPdf) return 'Invalid PDF. Please upload a valid resume PDF file.';
-  if (candidate.size > 5 * 1024 * 1024) return 'File is too large. Maximum allowed size is 5MB.';
+  if (candidate.size > MAX_RESUME_FILE_SIZE_BYTES) {
+    return `File is too large. Maximum allowed size is ${MAX_RESUME_FILE_SIZE_MB}MB.`;
+  }
   return null;
 };
 
@@ -101,6 +109,32 @@ const aiCoachFeatures: Array<{
   { value: 'project_ideas', label: 'Project ideas' },
   { value: 'study_plan', label: 'Study plan' },
 ];
+
+const aiPromptExamples: Record<
+  'skill_gap' | 'resume_improvement' | 'interview_prep' | 'project_ideas' | 'study_plan',
+  string[]
+> = {
+  skill_gap: [
+    'Rank my missing skills by hiring impact for backend roles.',
+    'Tell me the fastest skill to learn next to improve my match score.',
+  ],
+  resume_improvement: [
+    'Rewrite my strongest project bullets to sound more recruiter-friendly.',
+    'Show me what should move to the top of my resume for this role.',
+  ],
+  interview_prep: [
+    'Give me a 7-day backend interview revision plan.',
+    'Create likely technical and HR questions for my target role.',
+  ],
+  project_ideas: [
+    'Suggest 3 portfolio projects that close my biggest skill gaps.',
+    'Give me one project idea that can be built in 2 weeks.',
+  ],
+  study_plan: [
+    'Build a 30-day plan for my missing skills with weekly milestones.',
+    'Turn my gap list into a realistic evening study routine.',
+  ],
+};
 
 export default function StudentUpskillingHub({
   recommendations,
@@ -537,7 +571,7 @@ export default function StudentUpskillingHub({
                   <UploadCloud className="w-8 h-8" />
                 </div>
                 <h3 className="text-lg font-medium text-primary mb-2">Drag and drop your resume here</h3>
-                <p className="text-sm text-secondary mb-6">PDF files up to 5MB</p>
+                <p className="text-sm text-secondary mb-6">PDF files up to {MAX_RESUME_FILE_SIZE_MB}MB</p>
                 <Button variant="primary">Browse Files</Button>
               </>
             )}
@@ -956,6 +990,10 @@ export default function StudentUpskillingHub({
           <h2 className="text-2xl font-serif text-primary">AI Career Coach</h2>
         </div>
         <Card hoverable={false} className="p-6 space-y-4">
+          <div className="rounded-2xl border border-border bg-white/60 p-4 text-sm text-secondary">
+            This coach uses your resume, roadmap, recommendations, and saved progress so the response is based on
+            your actual student profile, not a generic prompt.
+          </div>
           <div className="grid gap-4 md:grid-cols-[220px,1fr]">
             <div>
               <label className="mb-1 block text-xs uppercase tracking-[0.12em] text-secondary">Feature</label>
@@ -985,10 +1023,22 @@ export default function StudentUpskillingHub({
               <input
                 value={aiPrompt}
                 onChange={(event) => setAiPrompt(event.target.value)}
-                placeholder="Example: Help me plan next 2 weeks for backend interviews."
+                placeholder={aiPromptExamples[aiFeature][0]}
                 className="w-full rounded-xl border border-border bg-white px-3 py-2 text-sm"
               />
             </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {aiPromptExamples[aiFeature].map((example) => (
+              <button
+                key={example}
+                type="button"
+                onClick={() => setAiPrompt(example)}
+                className="rounded-full border border-border bg-white px-3 py-1.5 text-xs text-secondary transition hover:border-primary hover:text-primary"
+              >
+                {example}
+              </button>
+            ))}
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <Button isLoading={aiLoading} onClick={() => void handleRunAICoach()} className="rounded-full">

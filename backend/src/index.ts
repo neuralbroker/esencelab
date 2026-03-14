@@ -1,9 +1,9 @@
 /**
  * Main backend server.
  *
- * This file sets up the Express app, seeds demo data, applies middleware,
- * connects optional persistence, and defines the student, recruiter, admin,
- * and health routes used by the whole platform.
+ * This file sets up the Express app, applies middleware, connects optional
+ * persistence, and defines the student, recruiter, admin, and health routes
+ * used by the whole platform.
  */
 import express, { NextFunction, Request, Response } from 'express';
 import cors from 'cors';
@@ -36,9 +36,291 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const JWT_SECRET = process.env.JWT_SECRET || 'esencelab-demo-secret';
+const JWT_SECRET = String(process.env.JWT_SECRET || '').trim();
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET environment variable is required.');
+}
 const SERVER_STARTED_AT = Date.now();
 const SLOW_ENDPOINT_THRESHOLD_MS = Number(process.env.SLOW_ENDPOINT_THRESHOLD_MS || 1200);
+const MAX_RESUME_FILE_SIZE_MB = Math.max(
+  1,
+  Math.min(4.4, Number(process.env.MAX_RESUME_FILE_SIZE_MB || 4))
+);
+const MAX_RESUME_FILE_SIZE_BYTES = Math.floor(MAX_RESUME_FILE_SIZE_MB * 1024 * 1024);
+let runtimeReady: Promise<void> = Promise.resolve();
+type BootstrapRole = 'student' | 'employer' | 'admin';
+
+const toBooleanEnv = (name: string, defaultValue = false) => {
+  const rawValue = process.env[name];
+  if (rawValue === undefined || rawValue === null || String(rawValue).trim() === '') {
+    return defaultValue;
+  }
+  const normalized = String(rawValue).trim().toLowerCase();
+  return ['1', 'true', 'yes', 'on'].includes(normalized);
+};
+
+const requireEnv = (name: string) => {
+  const value = String(process.env[name] || '').trim();
+  if (!value) {
+    throw new Error(`${name} environment variable is required.`);
+  }
+  return value;
+};
+
+const ENABLE_DEMO_DATA = toBooleanEnv('ENABLE_DEMO_DATA');
+const ALLOW_INSECURE_PASSWORD_RESET_TOKEN_RESPONSE = toBooleanEnv(
+  'ALLOW_INSECURE_PASSWORD_RESET_TOKEN_RESPONSE'
+);
+const SYNC_DEMO_DATA_TO_SUPABASE = toBooleanEnv('SYNC_DEMO_DATA_TO_SUPABASE');
+const DATA_PROVIDER = String(process.env.DATA_PROVIDER || 'memory')
+  .trim()
+  .toLowerCase();
+const SHOULD_BOOT_DEMO_DATA =
+  ENABLE_DEMO_DATA && (DATA_PROVIDER === 'memory' || SYNC_DEMO_DATA_TO_SUPABASE);
+
+type SeedUserConfig = {
+  id: string;
+  email: string;
+  password: string;
+  name: string;
+  role: BootstrapRole;
+};
+
+const readSeedUserConfig = (prefix: string, role: BootstrapRole, id: string): SeedUserConfig => ({
+  id,
+  email: requireEnv(`${prefix}_EMAIL`).toLowerCase(),
+  password: requireEnv(`${prefix}_PASSWORD`),
+  name: requireEnv(`${prefix}_NAME`),
+  role,
+});
+
+const buildDemoSeedUsers = (): SeedUserConfig[] => {
+  if (!SHOULD_BOOT_DEMO_DATA) {
+    return [];
+  }
+
+  return [
+    readSeedUserConfig('DEMO_STUDENT', 'student', '11111111-1111-1111-1111-111111111111'),
+    readSeedUserConfig('DEMO_RECRUITER', 'employer', '22222222-2222-2222-2222-222222222222'),
+    readSeedUserConfig('DEMO_ADMIN', 'admin', '33333333-3333-3333-3333-333333333333'),
+  ];
+};
+
+const createEmptyDb = () => ({
+  profiles: [] as any[],
+  jobs: [] as any[],
+  candidates: [] as any[],
+  applications: [] as any[],
+  courses: [] as any[],
+  resumes: [] as any[],
+  recommendations: [] as any[],
+  resumeScores: [] as any[],
+  skillProgress: [] as any[],
+  learningPlans: [] as any[],
+  mockInterviewSessions: [] as any[],
+  savedJobs: [] as any[],
+  careerPreferences: [] as any[],
+  adminLogs: [] as any[],
+  requestMetrics: {
+    totalRequests: 0,
+    totalErrors: 0,
+    authFailures: 0,
+    slowRequests: 0,
+    endpoints: {} as Record<string, any>,
+  },
+});
+
+const createInitialDb = () => {
+  const db = createEmptyDb();
+  if (!SHOULD_BOOT_DEMO_DATA) {
+    return db;
+  }
+
+  const demoUsers = buildDemoSeedUsers();
+  const now = new Date();
+  const demoPasswordHashes = new Map(
+    demoUsers.map((user) => [user.id, bcrypt.hashSync(user.password, 10)])
+  );
+  const student = demoUsers.find((user) => user.role === 'student');
+  const recruiter = demoUsers.find((user) => user.role === 'employer');
+
+  db.profiles = demoUsers.map((user) => ({
+    id: user.id,
+    email: user.email,
+    passwordHash: demoPasswordHashes.get(user.id),
+    name: user.name,
+    role: user.role,
+    avatarUrl: null,
+    isActive: true,
+    createdAt: now,
+    updatedAt: now,
+  }));
+
+  if (recruiter) {
+    db.jobs = [
+      {
+        id: '1',
+        employerId: recruiter.id,
+        title: 'Software Engineer',
+        company: 'Tech Corp',
+        location: 'Bangalore, India',
+        description: 'We are looking for a skilled software engineer',
+        requirements: ['Python', 'JavaScript', 'React', 'Node.js', 'SQL'],
+        skills: ['Python', 'JavaScript', 'React', 'Node.js', 'SQL'],
+        salaryMin: 80000,
+        salaryMax: 120000,
+        jobType: 'full_time',
+        status: 'active',
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: '2',
+        employerId: recruiter.id,
+        title: 'Data Scientist',
+        company: 'Data Inc',
+        location: 'Hyderabad, India',
+        description: 'Join our data science team',
+        requirements: ['Python', 'Machine Learning', 'TensorFlow', 'SQL'],
+        skills: ['Python', 'Machine Learning', 'TensorFlow'],
+        salaryMin: 100000,
+        salaryMax: 150000,
+        jobType: 'full_time',
+        status: 'active',
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: '3',
+        employerId: recruiter.id,
+        title: 'Frontend Developer',
+        company: 'Web Solutions',
+        location: 'Remote',
+        description: 'Build beautiful web applications',
+        requirements: ['React', 'TypeScript', 'CSS', 'HTML'],
+        skills: ['React', 'TypeScript', 'CSS'],
+        salaryMin: 60000,
+        salaryMax: 90000,
+        jobType: 'full_time',
+        status: 'active',
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: '4',
+        employerId: recruiter.id,
+        title: 'Backend Developer',
+        company: 'API Solutions',
+        location: 'Chennai, India',
+        description: 'Build scalable backend services',
+        requirements: ['Node.js', 'Python', 'PostgreSQL'],
+        skills: ['Node.js', 'Python', 'PostgreSQL'],
+        salaryMin: 70000,
+        salaryMax: 110000,
+        jobType: 'full_time',
+        status: 'active',
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: '5',
+        employerId: recruiter.id,
+        title: 'DevOps Engineer',
+        company: 'Cloud Systems',
+        location: 'Bangalore, India',
+        description: 'Manage cloud infrastructure',
+        requirements: ['AWS', 'Docker', 'Kubernetes'],
+        skills: ['AWS', 'Docker', 'Kubernetes'],
+        salaryMin: 90000,
+        salaryMax: 140000,
+        jobType: 'full_time',
+        status: 'active',
+        createdAt: now,
+        updatedAt: now,
+      },
+    ];
+  }
+
+  if (student) {
+    db.candidates = [
+      {
+        id: '1',
+        userId: student.id,
+        name: student.name,
+        email: student.email,
+        role: 'Software Developer',
+        skills: JSON.stringify(['Python', 'JavaScript', 'React', 'Node.js', 'SQL']),
+        education: JSON.stringify([
+          { institution: 'SNGCET', degree: 'B.Tech', field: 'Computer Science', year: '2025' },
+        ]),
+        experience: JSON.stringify([]),
+        matchScore: 85,
+        status: 'new',
+        createdAt: now,
+        updatedAt: now,
+      },
+    ];
+    db.careerPreferences = [{ userId: student.id, roleId: 'backend_developer', updatedAt: now }];
+  }
+
+  db.courses = [
+    {
+      id: '1',
+      title: 'Complete Python Bootcamp',
+      description: 'Learn Python from scratch',
+      provider: 'Udemy',
+      url: 'https://udemy.com',
+      skills: ['Python', 'Django'],
+      duration: '22 hours',
+      level: 'beginner',
+      rating: 4.5,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: '2',
+      title: 'React - The Complete Guide',
+      description: 'Master React.js',
+      provider: 'Udemy',
+      url: 'https://udemy.com',
+      skills: ['React', 'Redux'],
+      duration: '40 hours',
+      level: 'intermediate',
+      rating: 4.6,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: '3',
+      title: 'Machine Learning A-Z',
+      description: 'Learn ML Algorithms',
+      provider: 'Udemy',
+      url: 'https://udemy.com',
+      skills: ['Python', 'Machine Learning'],
+      duration: '44 hours',
+      level: 'intermediate',
+      rating: 4.5,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: '4',
+      title: 'Node.js Developer Course',
+      description: 'Build real-world apps',
+      provider: 'Udemy',
+      url: 'https://udemy.com',
+      skills: ['Node.js', 'Express'],
+      duration: '37 hours',
+      level: 'intermediate',
+      rating: 4.7,
+      createdAt: now,
+      updatedAt: now,
+    },
+  ];
+
+  return db;
+};
+
 const FRONTEND_ORIGINS = (() => {
   const rawOrigins = process.env.FRONTEND_URLS || process.env.FRONTEND_URL || 'http://localhost:3000';
   return rawOrigins
@@ -77,6 +359,16 @@ app.use(
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.set('etag', 'strong');
+
+app.use(async (_req, res, next) => {
+  try {
+    await runtimeReady;
+    next();
+  } catch (error: any) {
+    console.error('Runtime bootstrap failed:', error);
+    res.status(500).json({ message: 'Server initialization failed.' });
+  }
+});
 
 app.use((req, res, next) => {
   if (req.method !== 'GET') {
@@ -119,10 +411,10 @@ const adminLimiter = rateLimit({
 });
 
 // Setup multer for file uploads
-const uploadDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir);
-}
+//
+// Use in-memory storage so uploads work both locally and inside serverless
+// runtimes such as Vercel Functions, where writing to the app directory is not
+// a safe long-term assumption.
 const PDF_MIME_TYPES = new Set([
   'application/pdf',
   'application/x-pdf',
@@ -144,13 +436,9 @@ const isLikelyPdfFile = (file: Express.Multer.File) => {
   return ext === '.pdf' && acceptableMime;
 };
 
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadDir),
-  filename: (_req, file, cb) => cb(null, `${Date.now()}-${sanitizeUploadFilename(file.originalname)}`),
-});
 const upload = multer({
-  storage,
-  limits: { fileSize: 5 * 1024 * 1024 },
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_RESUME_FILE_SIZE_BYTES },
   fileFilter: (_req, file, cb) => {
     if (!isLikelyPdfFile(file)) {
       cb(new Error('Only PDF files are allowed.'));
@@ -165,7 +453,9 @@ const resumeUploadMiddleware = (req: Request, res: Response, next: NextFunction)
     if (!error) return next();
     if (error instanceof multer.MulterError) {
       if (error.code === 'LIMIT_FILE_SIZE') {
-        return res.status(400).json({ message: 'File too large. Maximum size is 5MB.' });
+        return res
+          .status(400)
+          .json({ message: `File too large. Maximum size is ${MAX_RESUME_FILE_SIZE_MB}MB.` });
       }
       return res.status(400).json({ message: error.message || 'Invalid upload payload.' });
     }
@@ -175,49 +465,7 @@ const resumeUploadMiddleware = (req: Request, res: Response, next: NextFunction)
 
 // AI Service URL
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:3002';
-const DEMO_PASSWORD_HASH = bcrypt.hashSync('demo123', 10);
-
-// In-memory data store for demo
-const db: any = {
-  profiles: [
-    { id: '1', email: 'student@esencelab.com', passwordHash: DEMO_PASSWORD_HASH, name: 'Sajad', role: 'student', avatarUrl: null, isActive: true, createdAt: new Date(), updatedAt: new Date() },
-    { id: '2', email: 'recruiter@esencelab.com', passwordHash: DEMO_PASSWORD_HASH, name: 'adwaith', role: 'employer', avatarUrl: null, isActive: true, createdAt: new Date(), updatedAt: new Date() },
-    { id: '3', email: 'admin@esencelab.com', passwordHash: DEMO_PASSWORD_HASH, name: 'Admin User', role: 'admin', avatarUrl: null, isActive: true, createdAt: new Date(), updatedAt: new Date() },
-  ],
-  jobs: [
-    { id: '1', employerId: '2', title: 'Software Engineer', company: 'Tech Corp', location: 'Bangalore, India', description: 'We are looking for a skilled software engineer', requirements: ['Python', 'JavaScript', 'React', 'Node.js', 'SQL'], skills: ['Python', 'JavaScript', 'React', 'Node.js', 'SQL'], salaryMin: 80000, salaryMax: 120000, jobType: 'full_time', status: 'active', createdAt: new Date() },
-    { id: '2', employerId: '2', title: 'Data Scientist', company: 'Data Inc', location: 'Hyderabad, India', description: 'Join our data science team', requirements: ['Python', 'Machine Learning', 'TensorFlow', 'SQL'], skills: ['Python', 'Machine Learning', 'TensorFlow'], salaryMin: 100000, salaryMax: 150000, jobType: 'full_time', status: 'active', createdAt: new Date() },
-    { id: '3', employerId: '2', title: 'Frontend Developer', company: 'Web Solutions', location: 'Remote', description: 'Build beautiful web applications', requirements: ['React', 'TypeScript', 'CSS', 'HTML'], skills: ['React', 'TypeScript', 'CSS'], salaryMin: 60000, salaryMax: 90000, jobType: 'full_time', status: 'active', createdAt: new Date() },
-    { id: '4', employerId: '2', title: 'Backend Developer', company: 'API Solutions', location: 'Chennai, India', description: 'Build scalable backend services', requirements: ['Node.js', 'Python', 'PostgreSQL'], skills: ['Node.js', 'Python', 'PostgreSQL'], salaryMin: 70000, salaryMax: 110000, jobType: 'full_time', status: 'active', createdAt: new Date() },
-    { id: '5', employerId: '2', title: 'DevOps Engineer', company: 'Cloud Systems', location: 'Bangalore, India', description: 'Manage cloud infrastructure', requirements: ['AWS', 'Docker', 'Kubernetes'], skills: ['AWS', 'Docker', 'Kubernetes'], salaryMin: 90000, salaryMax: 140000, jobType: 'full_time', status: 'active', createdAt: new Date() },
-  ],
-  candidates: [
-    { id: '1', userId: '1', name: 'Sajad', email: 'student@esencelab.com', role: 'Software Developer', skills: JSON.stringify(['Python', 'JavaScript', 'React', 'Node.js', 'SQL']), education: JSON.stringify([{ institution: 'SNGCET', degree: 'B.Tech', field: 'Computer Science', year: '2025' }]), experience: JSON.stringify([]), matchScore: 85, status: 'new', createdAt: new Date() },
-  ],
-  applications: [] as any[],
-  courses: [
-    { id: '1', title: 'Complete Python Bootcamp', description: 'Learn Python from scratch', provider: 'Udemy', url: 'https://udemy.com', skills: ['Python', 'Django'], duration: '22 hours', level: 'beginner', rating: 4.5 },
-    { id: '2', title: 'React - The Complete Guide', description: 'Master React.js', provider: 'Udemy', url: 'https://udemy.com', skills: ['React', 'Redux'], duration: '40 hours', level: 'intermediate', rating: 4.6 },
-    { id: '3', title: 'Machine Learning A-Z', description: 'Learn ML Algorithms', provider: 'Udemy', url: 'https://udemy.com', skills: ['Python', 'Machine Learning'], duration: '44 hours', level: 'intermediate', rating: 4.5 },
-    { id: '4', title: 'Node.js Developer Course', description: 'Build real-world apps', provider: 'Udemy', url: 'https://udemy.com', skills: ['Node.js', 'Express'], duration: '37 hours', level: 'intermediate', rating: 4.7 },
-  ],
-  resumes: [] as any[],
-  recommendations: [] as any[],
-  resumeScores: [] as any[],
-  skillProgress: [] as any[],
-  learningPlans: [] as any[],
-  mockInterviewSessions: [] as any[],
-  savedJobs: [] as any[],
-  careerPreferences: [{ userId: '1', roleId: 'backend_developer', updatedAt: new Date() }] as any[],
-  adminLogs: [] as any[],
-  requestMetrics: {
-    totalRequests: 0,
-    totalErrors: 0,
-    authFailures: 0,
-    slowRequests: 0,
-    endpoints: {} as Record<string, any>,
-  },
-};
+const db: any = createInitialDb();
 
 const supabaseStore = new SupabaseStore();
 
@@ -339,6 +587,32 @@ const toCanonicalRole = (inputRole: unknown): CanonicalRole => {
 
 const roleMatches = (inputRole: unknown, requiredRole: CanonicalRole) => {
   return toCanonicalRole(inputRole) === requiredRole;
+};
+
+const readOptionalBootstrapUser = (
+  prefix: string,
+  role: SupportedRole,
+  fallbackName: string
+): { email: string; password: string; name: string; role: SupportedRole } | null => {
+  const email = String(process.env[`${prefix}_EMAIL`] || '')
+    .trim()
+    .toLowerCase();
+  const password = String(process.env[`${prefix}_PASSWORD`] || '').trim();
+  const name = String(process.env[`${prefix}_NAME`] || fallbackName).trim() || fallbackName;
+
+  if (!email && !password) {
+    return null;
+  }
+  if (!email || !password) {
+    throw new Error(`${prefix}_EMAIL and ${prefix}_PASSWORD must both be set.`);
+  }
+
+  return {
+    email,
+    password,
+    name,
+    role,
+  };
 };
 
 const roleFilterMatches = (inputRole: unknown, filterRole: string) => {
@@ -707,6 +981,7 @@ const ensureResumeScoreHistory = async (userId: string) => {
 
 const toHumanReadableImpact = (impact: number) => Math.max(3, Math.min(30, Math.round(impact)));
 
+// Local fallback used when the AI service is unavailable or returns invalid data.
 const buildStudentAICoachFallback = (payload: {
   feature: string;
   prompt: string;
@@ -816,6 +1091,7 @@ const buildStudentAICoachFallback = (payload: {
   };
 };
 
+// Small backend wrapper so the main route stays focused on business context.
 const callStudentAICoach = async (payload: {
   feature: string;
   prompt: string;
@@ -1533,6 +1809,7 @@ const pruneExpiredResetTokens = () => {
 };
 
 // Auth Routes
+// Authentication routes: registration, login, password reset, logout, and profile state.
 app.post('/api/auth/register', authLimiter, async (req, res) => {
   const email = String(req.body?.email || '')
     .trim()
@@ -1584,9 +1861,7 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
   const profile = db.profiles.find((p: any) => p.email?.toLowerCase() === email);
   if (!profile || profile.isActive === false) return res.status(401).json({ message: 'Invalid credentials' });
 
-  const isValid = profile.passwordHash
-    ? await bcrypt.compare(password, profile.passwordHash)
-    : password === 'demo123';
+  const isValid = profile.passwordHash ? await bcrypt.compare(password, profile.passwordHash) : false;
   if (!isValid) return res.status(401).json({ message: 'Invalid credentials' });
 
   const token = createToken(profile.id);
@@ -1634,9 +1909,7 @@ app.put('/api/auth/password', authLimiter, requireAuth, async (req: RequestWithA
     return res.status(400).json({ message: 'newPassword must be at least 6 characters' });
   }
 
-  const isValid = profile.passwordHash
-    ? await bcrypt.compare(currentPassword, profile.passwordHash)
-    : currentPassword === 'demo123';
+  const isValid = profile.passwordHash ? await bcrypt.compare(currentPassword, profile.passwordHash) : false;
   if (!isValid) return res.status(401).json({ message: 'Current password is invalid' });
 
   profile.passwordHash = await bcrypt.hash(newPassword, 10);
@@ -1659,11 +1932,13 @@ app.post('/api/auth/password/forgot', authLimiter, (req, res) => {
     const expiresAt = Date.now() + 15 * 60 * 1000;
     resetTokens.set(token, { userId: profile.id, expiresAt });
 
-    return res.json({
-      message: 'Password reset token generated for demo mode',
-      resetToken: token,
-      expiresAt: new Date(expiresAt).toISOString(),
-    });
+    if (ALLOW_INSECURE_PASSWORD_RESET_TOKEN_RESPONSE) {
+      return res.json({
+        message: 'Password reset token generated for local-only testing.',
+        resetToken: token,
+        expiresAt: new Date(expiresAt).toISOString(),
+      });
+    }
   }
 
   return res.json({ message: 'If the account exists, a password reset link was sent.' });
@@ -1886,7 +2161,6 @@ app.post(
     const shouldReplaceExisting = String(req.body?.replaceExisting ?? 'true').toLowerCase() !== 'false';
     const existingResumeIndex = db.resumes.findIndex((entry: any) => entry.userId === profile.id);
     if (existingResumeIndex >= 0 && !shouldReplaceExisting) {
-      await safeDeleteTempFile(req.file.path);
       return res.status(409).json({
         message: 'A resume already exists. Set replaceExisting=true to replace it.',
       });
@@ -1910,7 +2184,12 @@ app.post(
 
     try {
       try {
-        const fileBuffer = await fs.promises.readFile(req.file.path);
+        const fileBuffer =
+          req.file.buffer && req.file.buffer.length > 0
+            ? req.file.buffer
+            : req.file.path
+              ? await fs.promises.readFile(req.file.path)
+              : Buffer.alloc(0);
         const formData = new FormData();
         formData.append('file', new Blob([fileBuffer], { type: 'application/pdf' }), req.file.originalname);
 
@@ -2140,6 +2419,7 @@ app.delete('/api/admin/resumes/:id', requireAuth, requireRoles('admin'), adminLi
 });
 
 // Jobs Routes
+// Job and application routes used by students and recruiters.
 app.get('/api/jobs', (req, res) => {
   const { search, jobType, location, status, limit, my, recruiterId, page } = req.query;
   let jobs = [...db.jobs];
@@ -2765,6 +3045,7 @@ app.post('/api/career/target-role', (req, res) => {
   res.json({ data: { roleId: safeRoleId } });
 });
 
+// Student career routes: overview, roadmap, AI coach, learning plan, and progress tools.
 app.get('/api/career/overview', async (req, res) => {
   const profile = getProfileFromAuth(req);
   if (!profile) return res.status(401).json({ message: 'Not authenticated' });
@@ -2867,6 +3148,9 @@ app.post('/api/career/ai-coach', async (req, res) => {
   const resume = db.resumes.find((entry: any) => entry.userId === profile.id) || null;
   const latestScore = await ensureResumeScoreHistory(profile.id);
   const roadmap = getStudentRoadmap(profile.id, roleId);
+  const roadmapHighlights = roadmap
+    .map((entry) => `${entry.skill} (${entry.status.replace('_', ' ')})`)
+    .slice(0, 8);
   const missingSkills = roadmap
     .filter((entry) => entry.status !== 'completed')
     .map((entry) => entry.skill)
@@ -2876,6 +3160,42 @@ app.post('/api/career/ai-coach', async (req, res) => {
     ...toSkillList(resume?.parsedData?.skills || []),
   ]).slice(0, 30);
   const resumeSummary = String(resume?.parsedData?.summary || '').trim();
+  const studentApplications = db.applications.filter((entry: any) => entry.candidateId === profile.id);
+  const studentSavedJobs = db.savedJobs.filter((entry: any) => entry.userId === profile.id);
+  const applicationStatusCounts = studentApplications.reduce(
+    (acc: Record<string, number>, entry: any) => {
+      const trackerStatus = toTrackerApplicationStatus(entry.status);
+      acc[trackerStatus] = (acc[trackerStatus] || 0) + 1;
+      return acc;
+    },
+    {
+      saved: studentSavedJobs.length,
+      applied: 0,
+      interviewing: 0,
+      offer: 0,
+      rejected: 0,
+    }
+  );
+  const topRecommendedJobs = db.recommendations
+    .filter((entry: any) => entry.userId === profile.id)
+    .sort((left: any, right: any) => Number(right.matchScore || 0) - Number(left.matchScore || 0))
+    .slice(0, 3)
+    .map((entry: any) => {
+      const job = db.jobs.find((jobItem: any) => jobItem.id === entry.jobId);
+      return {
+        title: job?.title || 'Recommended role',
+        company: job?.company || 'Unknown company',
+        matchScore: Math.round(Number(entry.matchScore || 0)),
+      };
+    });
+  const topResources = generateLearningPlan(roleId, roadmap, 30)
+    .weeks.flatMap((week) => week.resources || [])
+    .slice(0, 3)
+    .map((resource) => ({
+      title: resource.title,
+      provider: resource.provider,
+      url: resource.url,
+    }));
 
   const aiPayload = {
     feature: safeFeature,
@@ -2886,6 +3206,11 @@ app.post('/api/career/ai-coach', async (req, res) => {
       missingSkills,
       resumeSummary,
       readinessScore: latestScore?.score || 0,
+      roadmapHighlights,
+      scoreSections: latestScore?.sectionScores || {},
+      applicationStatusCounts,
+      topRecommendedJobs,
+      topResources,
     },
   };
   const response = await callStudentAICoach(aiPayload);
@@ -3199,6 +3524,7 @@ app.get('/api/jobs/:id/candidate-matches', async (req, res) => {
   });
 });
 
+// Recruiter routes: recruiter dashboard, candidate ranking, and hiring analytics.
 app.get('/api/recruiter/overview', async (req, res) => {
   const profile = getProfileFromAuth(req);
   if (!profile) return res.status(401).json({ message: 'Not authenticated' });
@@ -3390,6 +3716,7 @@ app.delete('/api/courses/:id', async (req, res) => {
 });
 
 // Dashboard Stats
+// Shared dashboard summary route used to render role-specific top-line metrics.
 app.get('/api/dashboard/stats', (req, res) => {
   const profile = getProfileFromAuth(req);
   if (!profile) return res.json({ data: {} });
@@ -3454,6 +3781,7 @@ app.get('/api/admin/logs', requireAuth, requireRoles('admin'), adminLimiter, (re
   res.json({ data: paginated.data, meta: paginated.meta });
 });
 
+// Admin routes: monitoring, moderation, user management, and audit-friendly operations.
 app.get('/api/admin/monitoring', requireAuth, requireRoles('admin'), adminLimiter, async (req: RequestWithAuth, res) => {
   const days = toPositiveInt(req.query?.days, 30, 365);
   const resumes = db.resumes.map((entry: any) => buildResumeMonitoringRecord(entry));
@@ -3545,22 +3873,83 @@ const seedSupabaseFromMemory = async () => {
   }
 };
 
-const startServer = async () => {
+const ensureBootstrapUsers = async () => {
+  const bootstrapUsers = [
+    readOptionalBootstrapUser('INITIAL_ADMIN', 'admin', 'Platform Admin'),
+    readOptionalBootstrapUser('INITIAL_RECRUITER', 'employer', 'Initial Recruiter'),
+  ].filter(Boolean) as Array<{ email: string; password: string; name: string; role: SupportedRole }>;
+
+  for (const bootstrapUser of bootstrapUsers) {
+    const existing = db.profiles.find(
+      (entry: any) => entry.email?.toLowerCase() === bootstrapUser.email
+    );
+
+    if (existing) {
+      let didChange = false;
+      if (existing.role !== bootstrapUser.role) {
+        existing.role = bootstrapUser.role;
+        didChange = true;
+      }
+      if (!existing.name && bootstrapUser.name) {
+        existing.name = bootstrapUser.name;
+        didChange = true;
+      }
+      if (!existing.passwordHash) {
+        existing.passwordHash = await bcrypt.hash(bootstrapUser.password, 10);
+        didChange = true;
+      }
+      if (didChange) {
+        existing.updatedAt = new Date();
+        await supabaseStore.upsertUser(existing);
+      }
+      continue;
+    }
+
+    const profile = {
+      id: uuidv4(),
+      email: bootstrapUser.email,
+      passwordHash: await bcrypt.hash(bootstrapUser.password, 10),
+      name: bootstrapUser.name,
+      role: bootstrapUser.role,
+      avatarUrl: null,
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    db.profiles.push(profile);
+    await supabaseStore.upsertUser(profile);
+  }
+};
+
+const initializeRuntime = async () => {
   const bootstrap = await supabaseStore.bootstrap(db);
   if (bootstrap.mode === 'supabase' && bootstrap.loaded) {
     console.log('Loaded runtime data from Supabase.');
-  } else if (supabaseStore.isActive()) {
-    console.log('Supabase mode enabled, using in-memory defaults and seeding Supabase.');
+  } else if (supabaseStore.isActive() && SHOULD_BOOT_DEMO_DATA && SYNC_DEMO_DATA_TO_SUPABASE) {
+    console.log('Supabase mode enabled with explicit demo data sync.');
     await seedSupabaseFromMemory();
+  } else if (supabaseStore.isActive()) {
+    console.log('Supabase mode enabled with an empty initial store.');
+  } else if (SHOULD_BOOT_DEMO_DATA) {
+    console.log('Using in-memory data provider with explicit demo data.');
   } else {
-    console.log('Using in-memory data provider.');
+    console.log('Using in-memory data provider with an empty initial store.');
   }
 
+  await ensureBootstrapUsers();
+};
+
+runtimeReady = initializeRuntime();
+
+const startServer = async () => {
+  await runtimeReady;
   app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
   });
 };
 
-void startServer();
+if (require.main === module) {
+  void startServer();
+}
 
 export default app;

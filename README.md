@@ -6,7 +6,7 @@ Esencelab is a full-stack AI-assisted hiring and career intelligence platform bu
 - Recruiters post jobs, rank candidates by fit, and review structured resume insights instead of screening manually.
 - Admins monitor users, resumes, applications, moderation flows, and platform health from a single control surface.
 
-The project is split into a Next.js frontend, an Express API, and a FastAPI AI service. For local development, the platform can run entirely in `memory` mode with seeded demo users and no external database dependency.
+The project is split into a Next.js frontend, an Express API, and a FastAPI AI service. For local development, the platform can run entirely in `memory` mode with local-only seed data and no external database dependency.
 
 ## Product Scope
 
@@ -61,7 +61,7 @@ Memory store for local demo OR Supabase/Postgres for persistence
 | Frontend | Next.js 14, React 18, TypeScript, Tailwind CSS, Framer Motion, Lucide React |
 | Backend | Node.js, Express, TypeScript, JWT, bcrypt, multer, compression, helmet, rate limiting |
 | AI service | FastAPI, Python, pdfplumber, PyPDF2 |
-| Data | In-memory seeded store for local demo, optional Supabase integration |
+| Data | In-memory local seed data, optional Supabase integration |
 | Tooling | PowerShell run scripts, npm, TypeScript compiler, ESLint |
 
 ## Repository Layout
@@ -108,11 +108,11 @@ powershell -ExecutionPolicy Bypass -File .\scripts\local-demo.ps1 -SmokeTest
 - Backend API: `http://localhost:3001/api`
 - AI service: `http://localhost:3002`
 
-### Demo accounts
+### Local demo credentials
 
-- Student: `student@esencelab.com` / `demo123`
-- Recruiter: `recruiter@esencelab.com` / `demo123`
-- Admin: `admin@esencelab.com` / `demo123`
+`scripts/local-demo.ps1` now generates throwaway local credentials at runtime
+and prints them to the terminal after startup. No fixed demo credentials are
+committed for hosted deployments.
 
 ## Live Deployment
 
@@ -148,6 +148,30 @@ powershell -ExecutionPolicy Bypass -File .\scripts\direct-live-data.ps1 -EnvFile
 Fill in real Supabase values before running. The wrapper will stop if the env
 file is still using placeholder values.
 
+### Vercel deployment
+
+The stable Vercel setup for this repo uses three separate projects:
+
+- `frontend/` for the Next.js app
+- `backend/` for the Express API
+- `ai-service/` for the FastAPI AI service
+
+Use [VERCEL_DEPLOYMENT.md](C:/Dev/Projects/Esencelab/docs/VERCEL_DEPLOYMENT.md)
+for the exact env variables, project roots, and deploy order.
+
+### Public demo URL from this machine
+
+If you need a fast shareable live link before permanent cloud hosting is set
+up, first start the local stack and then open a public tunnel:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\public-demo.ps1
+```
+
+That script exposes the frontend on a temporary public URL. Because the
+frontend already proxies backend and AI requests, the single tunnel URL can be
+used as a full demo site while this machine stays online.
+
 ### Docker path
 
 The container deployment assets are also included:
@@ -158,6 +182,8 @@ The container deployment assets are also included:
 - [ai-service/Dockerfile](C:/Dev/Projects/Esencelab/ai-service/Dockerfile)
 - [.env.production.example](C:/Dev/Projects/Esencelab/.env.production.example)
 - [LIVE_DEPLOYMENT.md](C:/Dev/Projects/Esencelab/docs/LIVE_DEPLOYMENT.md)
+- [CODEBASE_GUIDE.md](C:/Dev/Projects/Esencelab/docs/CODEBASE_GUIDE.md)
+- [VERCEL_DEPLOYMENT.md](C:/Dev/Projects/Esencelab/docs/VERCEL_DEPLOYMENT.md)
 
 Quick production flow:
 
@@ -247,12 +273,20 @@ Use [backend/.env.example](C:/Dev/Projects/Esencelab/backend/.env.example) as th
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `PORT` | No | API port, defaults to `3001` |
-| `JWT_SECRET` | Yes for non-demo use | JWT signing secret |
+| `JWT_SECRET` | Yes | JWT signing secret |
 | `AI_SERVICE_URL` | No | FastAPI base URL |
 | `FRONTEND_URL` | No | Allowed frontend origin |
 | `FRONTEND_URLS` | Recommended for production | Comma-separated allowed frontend origins |
 | `TRUST_PROXY` | Recommended behind ingress | Enables correct proxy-aware request handling |
-| `DATA_PROVIDER` | Yes | `memory` for local demo, `supabase` for persistent mode |
+| `DATA_PROVIDER` | Yes | `memory` for local-only mode, `supabase` for persistent mode |
+| `ENABLE_DEMO_DATA` | No | Opt-in seed data for local-only demos |
+| `ALLOW_INSECURE_PASSWORD_RESET_TOKEN_RESPONSE` | No | Local-only reset token echo for test scripts |
+| `INITIAL_ADMIN_EMAIL` | Recommended for first hosted boot | Creates the first admin account if missing |
+| `INITIAL_ADMIN_PASSWORD` | Recommended for first hosted boot | Password for the first admin account |
+| `INITIAL_ADMIN_NAME` | No | Display name for the first admin account |
+| `INITIAL_RECRUITER_EMAIL` | Optional | Creates an initial recruiter account if missing |
+| `INITIAL_RECRUITER_PASSWORD` | Optional | Password for the initial recruiter account |
+| `INITIAL_RECRUITER_NAME` | No | Display name for the initial recruiter account |
 | `SUPABASE_URL` | Only for Supabase mode | Supabase project URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | Only for Supabase mode | Server-side Supabase key |
 | `SUPABASE_ANON_KEY` | Optional fallback | Alternate Supabase key input |
@@ -266,7 +300,9 @@ Use [ai-service/.env.example](C:/Dev/Projects/Esencelab/ai-service/.env.example)
 | --- | --- | --- |
 | `AI_ALLOWED_ORIGINS` | Recommended for production | Comma-separated origins allowed to call the AI service |
 | `GROQ_API_KEY` | Optional | Enables the student AI coach using Groq |
-| `GROQ_MODEL` | Optional | Groq model name, defaults to `llama-3.1-8b-instant` |
+| `GROQ_MODEL` | Optional | Groq model name, defaults to `openai/gpt-oss-120b` |
+| `GROQ_REASONING_EFFORT` | Optional | Reasoning level for Groq models that support it |
+| `GROQ_SERVICE_TIER` | Optional | Groq service tier, defaults to `auto` |
 | `STUDENT_ASSISTANT_CACHE_TTL_SEC` | Optional | Cache TTL for assistant responses |
 
 ### Frontend
@@ -283,7 +319,8 @@ Example PowerShell session variables:
 
 ```powershell
 $env:GROQ_API_KEY="your_groq_api_key"
-$env:GROQ_MODEL="llama-3.1-8b-instant"
+$env:GROQ_MODEL="openai/gpt-oss-120b"
+$env:GROQ_REASONING_EFFORT="high"
 ```
 
 If `GROQ_API_KEY` is not set, the AI coach falls back to local guidance logic instead of external completions.
@@ -409,6 +446,7 @@ The frontend app router lives under [frontend/src/app](C:/Dev/Projects/Esencelab
 - [CHUNKED_IMPLEMENTATION_PLAN.md](C:/Dev/Projects/Esencelab/docs/CHUNKED_IMPLEMENTATION_PLAN.md)
 - [STUDENT_AI_MODEL_PLAN.md](C:/Dev/Projects/Esencelab/docs/STUDENT_AI_MODEL_PLAN.md)
 - [LIVE_DEPLOYMENT.md](C:/Dev/Projects/Esencelab/docs/LIVE_DEPLOYMENT.md)
+- [VERCEL_DEPLOYMENT.md](C:/Dev/Projects/Esencelab/docs/VERCEL_DEPLOYMENT.md)
 - [SPEC.md](C:/Dev/Projects/Esencelab/SPEC.md)
 
 ## Operational Notes

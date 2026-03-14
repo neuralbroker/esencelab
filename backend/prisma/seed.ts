@@ -1,101 +1,140 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Role } from '@prisma/client';
 import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
+type SeedUserConfig = {
+  email: string;
+  password: string;
+  name: string;
+  role: Role;
+};
+
+const readSeedUser = (
+  prefix: string,
+  role: Role,
+  fallbackName: string
+): SeedUserConfig | null => {
+  const email = String(process.env[`${prefix}_EMAIL`] || '')
+    .trim()
+    .toLowerCase();
+  const password = String(process.env[`${prefix}_PASSWORD`] || '').trim();
+  const name = String(process.env[`${prefix}_NAME`] || fallbackName).trim() || fallbackName;
+
+  if (!email && !password) {
+    return null;
+  }
+  if (!email || !password) {
+    throw new Error(`${prefix}_EMAIL and ${prefix}_PASSWORD must both be set.`);
+  }
+
+  return {
+    email,
+    password,
+    name,
+    role,
+  };
+};
+
+async function upsertUser(config: SeedUserConfig) {
+  const passwordHash = await bcrypt.hash(config.password, 10);
+  return prisma.user.upsert({
+    where: { email: config.email },
+    update: {
+      name: config.name,
+      role: config.role,
+      passwordHash,
+    },
+    create: {
+      email: config.email,
+      passwordHash,
+      name: config.name,
+      role: config.role,
+    },
+  });
+}
+
 async function main() {
   console.log('Seeding database...');
 
-  const passwordHash = await bcrypt.hash('demo123', 10);
+  const adminConfig = readSeedUser('SEED_ADMIN', 'admin', 'Platform Admin');
+  const recruiterConfig = readSeedUser('SEED_RECRUITER', 'recruiter', 'Initial Recruiter');
+  const studentConfig = readSeedUser('SEED_STUDENT', 'student', 'Initial Student');
 
-  const student = await prisma.user.upsert({
-    where: { email: 'student@esencelab.com' },
-    update: {},
-    create: {
-      email: 'student@esencelab.com',
-      passwordHash,
-      name: 'John Student',
-      role: 'student',
-    },
-  });
+  const createdUsers = [];
+  if (adminConfig) {
+    createdUsers.push(await upsertUser(adminConfig));
+  }
 
-  const recruiter = await prisma.user.upsert({
-    where: { email: 'recruiter@esencelab.com' },
-    update: {},
-    create: {
-      email: 'recruiter@esencelab.com',
-      passwordHash,
-      name: 'Jane Recruiter',
-      role: 'recruiter',
-    },
-  });
+  let recruiter = null;
+  if (recruiterConfig) {
+    recruiter = await upsertUser(recruiterConfig);
+    createdUsers.push(recruiter);
+  }
 
-  const admin = await prisma.user.upsert({
-    where: { email: 'admin@esencelab.com' },
-    update: {},
-    create: {
-      email: 'admin@esencelab.com',
-      passwordHash,
-      name: 'Admin User',
-      role: 'admin',
-    },
-  });
+  if (studentConfig) {
+    createdUsers.push(await upsertUser(studentConfig));
+  }
 
-  const jobs = await Promise.all([
-    prisma.job.upsert({
-      where: { id: 'job-1' },
-      update: {},
-      create: {
-        id: 'job-1',
-        title: 'Software Engineer',
-        company: 'Tech Corp',
-        description: 'We are looking for a skilled software engineer to join our team.',
-        requirements: 'Python, JavaScript, React, Node.js, SQL',
-        location: 'New York, NY',
-        salaryMin: 80000,
-        salaryMax: 120000,
-        jobType: 'full_time',
-        status: 'active',
-        recruiterId: recruiter.id,
-      },
-    }),
-    prisma.job.upsert({
-      where: { id: 'job-2' },
-      update: {},
-      create: {
-        id: 'job-2',
-        title: 'Data Scientist',
-        company: 'Data Inc',
-        description: 'Join our data science team to build ML models.',
-        requirements: 'Python, Machine Learning, TensorFlow, SQL, Statistics',
-        location: 'San Francisco, CA',
-        salaryMin: 100000,
-        salaryMax: 150000,
-        jobType: 'full_time',
-        status: 'active',
-        recruiterId: recruiter.id,
-      },
-    }),
-    prisma.job.upsert({
-      where: { id: 'job-3' },
-      update: {},
-      create: {
-        id: 'job-3',
-        title: 'Frontend Developer',
-        company: 'Web Solutions',
-        description: 'Build beautiful web applications.',
-        requirements: 'React, TypeScript, CSS, HTML, JavaScript',
-        location: 'Remote',
-        salaryMin: 60000,
-        salaryMax: 90000,
-        jobType: 'full_time',
-        status: 'active',
-        recruiterId: recruiter.id,
-      },
-    }),
-  ]);
+  if (recruiter) {
+    await Promise.all([
+      prisma.job.upsert({
+        where: { id: 'job-1' },
+        update: {},
+        create: {
+          id: 'job-1',
+          title: 'Software Engineer',
+          company: 'Tech Corp',
+          description: 'We are looking for a skilled software engineer to join our team.',
+          requirements: 'Python, JavaScript, React, Node.js, SQL',
+          location: 'New York, NY',
+          salaryMin: 80000,
+          salaryMax: 120000,
+          jobType: 'full_time',
+          status: 'active',
+          recruiterId: recruiter.id,
+        },
+      }),
+      prisma.job.upsert({
+        where: { id: 'job-2' },
+        update: {},
+        create: {
+          id: 'job-2',
+          title: 'Data Scientist',
+          company: 'Data Inc',
+          description: 'Join our data science team to build ML models.',
+          requirements: 'Python, Machine Learning, TensorFlow, SQL, Statistics',
+          location: 'San Francisco, CA',
+          salaryMin: 100000,
+          salaryMax: 150000,
+          jobType: 'full_time',
+          status: 'active',
+          recruiterId: recruiter.id,
+        },
+      }),
+      prisma.job.upsert({
+        where: { id: 'job-3' },
+        update: {},
+        create: {
+          id: 'job-3',
+          title: 'Frontend Developer',
+          company: 'Web Solutions',
+          description: 'Build beautiful web applications.',
+          requirements: 'React, TypeScript, CSS, HTML, JavaScript',
+          location: 'Remote',
+          salaryMin: 60000,
+          salaryMax: 90000,
+          jobType: 'full_time',
+          status: 'active',
+          recruiterId: recruiter.id,
+        },
+      }),
+    ]);
+  } else {
+    console.log('Skipping job seed because SEED_RECRUITER credentials were not provided.');
+  }
 
-  const courses = await Promise.all([
+  await Promise.all([
     prisma.course.upsert({
       where: { id: 'course-1' },
       update: {},
@@ -120,11 +159,13 @@ async function main() {
     }),
   ]);
 
-  console.log('Seeding completed!');
-  console.log('Created demo accounts:');
-  console.log('- student@esencelab.com / demo123');
-  console.log('- recruiter@esencelab.com / demo123');
-  console.log('- admin@esencelab.com / demo123');
+  if (createdUsers.length === 0) {
+    console.log('No seed users were created. Set SEED_ADMIN_* and/or SEED_RECRUITER_* if needed.');
+  } else {
+    console.log(`Created or updated ${createdUsers.length} seed user(s).`);
+  }
+
+  console.log('Seeding completed.');
 }
 
 main()

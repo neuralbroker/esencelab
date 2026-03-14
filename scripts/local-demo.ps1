@@ -31,6 +31,28 @@ function Ensure-Command([string]$name) {
   }
 }
 
+function New-RandomSecret([int]$length = 24) {
+  $bytes = New-Object byte[] $length
+  $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+  try {
+    $rng.GetBytes($bytes)
+  } finally {
+    $rng.Dispose()
+  }
+  $value = [Convert]::ToBase64String($bytes)
+  $value = $value.Replace('+', 'A').Replace('/', 'B').Replace('=', '')
+  return $value.Substring(0, [Math]::Min($length, $value.Length))
+}
+
+function New-DemoIdentity([string]$slug, [string]$displayName) {
+  $suffix = [Guid]::NewGuid().ToString('N').Substring(0, 10)
+  return @{
+    Email = "$slug.$suffix@esencelab.local"
+    Password = New-RandomSecret -length 18
+    Name = $displayName
+  }
+}
+
 function Invoke-Checked([string]$command, [string]$workingDir) {
   Push-Location $workingDir
   try {
@@ -140,6 +162,23 @@ function Load-AiEnv {
   }
 }
 
+$studentDemo = New-DemoIdentity -slug "student" -displayName "Demo Student"
+$recruiterDemo = New-DemoIdentity -slug "recruiter" -displayName "Demo Recruiter"
+$adminDemo = New-DemoIdentity -slug "admin" -displayName "Platform Admin"
+
+[Environment]::SetEnvironmentVariable("JWT_SECRET", (New-RandomSecret -length 32), "Process")
+[Environment]::SetEnvironmentVariable("ENABLE_DEMO_DATA", "true", "Process")
+[Environment]::SetEnvironmentVariable("ALLOW_INSECURE_PASSWORD_RESET_TOKEN_RESPONSE", "true", "Process")
+[Environment]::SetEnvironmentVariable("DEMO_STUDENT_EMAIL", $studentDemo.Email, "Process")
+[Environment]::SetEnvironmentVariable("DEMO_STUDENT_PASSWORD", $studentDemo.Password, "Process")
+[Environment]::SetEnvironmentVariable("DEMO_STUDENT_NAME", $studentDemo.Name, "Process")
+[Environment]::SetEnvironmentVariable("DEMO_RECRUITER_EMAIL", $recruiterDemo.Email, "Process")
+[Environment]::SetEnvironmentVariable("DEMO_RECRUITER_PASSWORD", $recruiterDemo.Password, "Process")
+[Environment]::SetEnvironmentVariable("DEMO_RECRUITER_NAME", $recruiterDemo.Name, "Process")
+[Environment]::SetEnvironmentVariable("DEMO_ADMIN_EMAIL", $adminDemo.Email, "Process")
+[Environment]::SetEnvironmentVariable("DEMO_ADMIN_PASSWORD", $adminDemo.Password, "Process")
+[Environment]::SetEnvironmentVariable("DEMO_ADMIN_NAME", $adminDemo.Name, "Process")
+
 Ensure-Command "node"
 Ensure-Command "npm"
 Ensure-Command "python"
@@ -187,10 +226,10 @@ Write-Host "Frontend : http://localhost:3000"
 Write-Host "Backend  : http://localhost:3001"
 Write-Host "AI       : http://localhost:3002"
 Write-Host ""
-Write-Host "Demo credentials:"
-Write-Host "  Student  : student@esencelab.com / demo123"
-Write-Host "  Employer : recruiter@esencelab.com / demo123"
-Write-Host "  Admin    : admin@esencelab.com / demo123"
+Write-Host "Generated local credentials:"
+Write-Host "  Student  : $($studentDemo.Email) / $($studentDemo.Password)"
+Write-Host "  Employer : $($recruiterDemo.Email) / $($recruiterDemo.Password)"
+Write-Host "  Admin    : $($adminDemo.Email) / $($adminDemo.Password)"
 
 if ($SmokeTest) {
   if (-not (Test-Path $smokeScript)) {

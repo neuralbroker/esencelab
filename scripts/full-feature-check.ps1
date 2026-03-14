@@ -34,17 +34,25 @@ function Login([string]$email, [string]$password) {
     } | ConvertTo-Json)
 }
 
-$student = Login "student@esencelab.com" "demo123"
-$recruiter = Login "recruiter@esencelab.com" "demo123"
-$admin = Login "admin@esencelab.com" "demo123"
+function Get-RequiredEnv([string]$name) {
+  $value = [Environment]::GetEnvironmentVariable($name, "Process")
+  if (-not $value) {
+    throw "$name is required for the full feature check."
+  }
+  return $value
+}
+
+$student = Login (Get-RequiredEnv "DEMO_STUDENT_EMAIL") (Get-RequiredEnv "DEMO_STUDENT_PASSWORD")
+$recruiter = Login (Get-RequiredEnv "DEMO_RECRUITER_EMAIL") (Get-RequiredEnv "DEMO_RECRUITER_PASSWORD")
+$admin = Login (Get-RequiredEnv "DEMO_ADMIN_EMAIL") (Get-RequiredEnv "DEMO_ADMIN_PASSWORD")
 
 $studentHeaders = @{ Authorization = "Bearer $($student.token)" }
 $recruiterHeaders = @{ Authorization = "Bearer $($recruiter.token)" }
 $adminHeaders = @{ Authorization = "Bearer $($admin.token)" }
 
 $tempEmail = "autocheck.$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())@example.com"
-$tempPassword = "temp1234"
-$tempPassword2 = "temp5678"
+$tempPassword = "Tmp$([Guid]::NewGuid().ToString('N').Substring(0, 10))!"
+$tempPassword2 = "Tmp$([Guid]::NewGuid().ToString('N').Substring(0, 10))!"
 $tempUser = $null
 $tempStudentHeaders = $null
 $tempJobId = $null

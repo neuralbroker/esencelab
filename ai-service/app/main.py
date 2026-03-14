@@ -3,9 +3,17 @@ from __future__ import annotations
 """
 Main AI service used by the backend.
 
-This module handles resume parsing, skill extraction, job matching, and the
-student AI coach. It is written to fail gracefully when optional NLP or ML
-libraries are missing so the API can keep working in reduced mode.
+This module is the single AI-focused backend for the platform. It handles:
+
+1. Resume parsing from uploaded PDF files
+2. Skill extraction from raw resume text
+3. Resume-to-job matching
+4. Student assistant calls that use Groq when a key is available
+
+The service is intentionally defensive:
+- it falls back when optional NLP libraries are missing
+- it returns safe default guidance when the external AI provider is unavailable
+- it caches student assistant responses briefly to reduce latency and cost
 """
 
 import io
@@ -348,6 +356,13 @@ def extract_orgs_and_dates(text: str) -> Dict[str, List[str]]:
 
 
 def parse_resume_text(text: str) -> Dict[str, Any]:
+    """
+    Convert free-form resume text into the structured fields used elsewhere.
+
+    The parser is intentionally simple and predictable. It combines regex,
+    section splitting, lightweight entity extraction, and skill lookup so the
+    backend can still work in local or low-dependency environments.
+    """
     normalized_text = preprocess_text(text)
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     sections = split_sections(lines)
@@ -412,6 +427,13 @@ def calculate_tfidf_match(
     required_skills: List[str],
     job_requirements: str = "",
 ) -> float:
+    """
+    Compute a similarity score between resume skills and job requirements.
+
+    When scikit-learn is available, we use TF-IDF plus cosine similarity.
+    Otherwise we fall back to a deterministic skill-overlap ratio so matching
+    still works in reduced environments.
+    """
     if not resume_skills or (not required_skills and not job_requirements.strip()):
         return 0.0
 
@@ -447,21 +469,70 @@ def generate_explanation(match_score: float, matched: List[str], missing: List[s
 
 
 def _compact_context(context: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Keep only the fields that matter for the student assistant request.
+
+    This protects latency and token usage by trimming large objects before we
+    send the payload to Groq.
+    """
     role = str(context.get("targetRole") or "").strip()
     skills = [str(item).strip() for item in (context.get("skills") or []) if str(item).strip()]
     missing_skills = [str(item).strip() for item in (context.get("missingSkills") or []) if str(item).strip()]
     resume_summary = str(context.get("resumeSummary") or "").strip()
     readiness = context.get("readinessScore")
+    roadmap_highlights = [
+        str(item).strip()
+        for item in (context.get("roadmapHighlights") or [])
+        if str(item).strip()
+    ]
+    top_resources = []
+    for item in (context.get("topResources") or [])[:3]:
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("title") or "").strip()
+        provider = str(item.get("provider") or "").strip()
+        url = str(item.get("url") or "").strip()
+        if title:
+            top_resources.append(
+                {
+                    "title": title[:120],
+                    "provider": provider[:80],
+                    "url": url[:240],
+                }
+            )
+    top_jobs = []
+    for item in (context.get("topRecommendedJobs") or [])[:3]:
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("title") or "").strip()
+        company = str(item.get("company") or "").strip()
+        match_score = item.get("matchScore")
+        if title:
+            top_jobs.append(
+                {
+                    "title": title[:120],
+                    "company": company[:120],
+                    "matchScore": match_score,
+                }
+            )
+    score_sections = context.get("scoreSections") or {}
+    application_status_counts = context.get("applicationStatusCounts") or {}
     role = role[:120]
     resume_summary = resume_summary[:700]
     skills = skills[:30]
     missing_skills = missing_skills[:30]
+    roadmap_highlights = roadmap_highlights[:8]
     return {
         "targetRole": role,
         "skills": skills,
         "missingSkills": missing_skills,
         "resumeSummary": resume_summary,
         "readinessScore": readiness,
+        "roadmapHighlights": roadmap_highlights,
+        "topResources": top_resources,
+        "topRecommendedJobs": top_jobs,
+        "scoreSections": score_sections,
+        "applicationStatusCounts": application_status_counts,
     }
 
 
@@ -610,7 +681,9 @@ def _fallback_student_assistant(feature: str, prompt: str, context: Dict[str, An
 
 def _call_groq_assistant(feature: str, prompt: str, context: Dict[str, Any]) -> Dict[str, Any]:
     api_key = os.getenv("GROQ_API_KEY", "").strip()
-    model = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant").strip() or "llama-3.1-8b-instant"
+    model = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b").strip() or "openai/gpt-oss-120b"
+    reasoning_effort = os.getenv("GROQ_REASONING_EFFORT", "high").strip().lower() or "high"
+    service_tier = os.getenv("GROQ_SERVICE_TIER", "auto").strip().lower() or "auto"
     if not api_key:
         return _fallback_student_assistant(feature, prompt, context)
 
@@ -618,7 +691,10 @@ def _call_groq_assistant(feature: str, prompt: str, context: Dict[str, Any]) -> 
     clean_context = _compact_context(context)
     safe_prompt = prompt.strip()[:1200]
     system_prompt = (
-        "You are an AI career coach for students. "
+        "You are a direct, practical AI career coach for students. "
+        "Use the student context to give high-value advice that is specific, realistic, and immediately useful. "
+        "Prefer next actions that improve resume strength, interview readiness, role fit, and portfolio quality. "
+        "When resources are present in the context, use them in the action plan instead of generic advice. "
         "Return strict JSON only with keys: title, summary, actionItems, followUpQuestions. "
         "actionItems and followUpQuestions must be arrays of short strings. "
         "No markdown, no extra keys."
@@ -633,13 +709,16 @@ def _call_groq_assistant(feature: str, prompt: str, context: Dict[str, Any]) -> 
     body = {
         "model": model,
         "temperature": 0.2,
-        "max_tokens": 700,
+        "max_tokens": 900,
+        "service_tier": service_tier,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": json.dumps(user_payload, ensure_ascii=True)},
         ],
         "response_format": {"type": "json_object"},
     }
+    if "gpt-oss" in model:
+        body["reasoning_effort"] = reasoning_effort
 
     req = urllib.request.Request(
         "https://api.groq.com/openai/v1/chat/completions",
@@ -654,7 +733,7 @@ def _call_groq_assistant(feature: str, prompt: str, context: Dict[str, Any]) -> 
     )
 
     try:
-        with urllib.request.urlopen(req, timeout=18) as response:
+        with urllib.request.urlopen(req, timeout=22) as response:
             payload = json.loads(response.read().decode("utf-8"))
             content = (
                 payload.get("choices", [{}])[0]

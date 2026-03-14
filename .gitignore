@@ -5,12 +5,16 @@ build/
 *.tsbuildinfo
 *.log
 .env
+.env.live-data
 .env.local
 .env.*.local
 .env.production
 
 uploads/
 *.pdf
+public-demo.pid
+public-demo.log
+.vercel/
 
 .DS_Store
 Thumbs.db

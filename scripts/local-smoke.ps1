@@ -52,6 +52,21 @@ function Get-StableStatus([string]$url, [int]$attempts = 5, [int]$delaySeconds =
   return $status
 }
 
+function Get-RequiredEnv([string]$name) {
+  $value = [Environment]::GetEnvironmentVariable($name, "Process")
+  if (-not $value) {
+    throw "$name is required for local smoke tests."
+  }
+  return $value
+}
+
+$studentEmail = Get-RequiredEnv "DEMO_STUDENT_EMAIL"
+$studentPassword = Get-RequiredEnv "DEMO_STUDENT_PASSWORD"
+$recruiterEmail = Get-RequiredEnv "DEMO_RECRUITER_EMAIL"
+$recruiterPassword = Get-RequiredEnv "DEMO_RECRUITER_PASSWORD"
+$adminEmail = Get-RequiredEnv "DEMO_ADMIN_EMAIL"
+$adminPassword = Get-RequiredEnv "DEMO_ADMIN_PASSWORD"
+
 $studentToken = $null
 $employerToken = $null
 $adminToken = $null
@@ -71,19 +86,19 @@ Step "health_backend" { Invoke-RestMethod -Uri "http://localhost:3001/api/health
 Step "health_ai" { Invoke-RestMethod -Uri "http://localhost:3002/health" -Method GET -TimeoutSec 20 }
 
 Step "auth_student" {
-  $response = Invoke-RestMethod -Uri "http://localhost:3001/api/auth/login" -Method POST -ContentType "application/json" -Body (@{ email = "student@esencelab.com"; password = "demo123" } | ConvertTo-Json)
+  $response = Invoke-RestMethod -Uri "http://localhost:3001/api/auth/login" -Method POST -ContentType "application/json" -Body (@{ email = $studentEmail; password = $studentPassword } | ConvertTo-Json)
   $script:studentToken = $response.token
   $response.user.role
 }
 
 Step "auth_employer" {
-  $response = Invoke-RestMethod -Uri "http://localhost:3001/api/auth/login" -Method POST -ContentType "application/json" -Body (@{ email = "recruiter@esencelab.com"; password = "demo123" } | ConvertTo-Json)
+  $response = Invoke-RestMethod -Uri "http://localhost:3001/api/auth/login" -Method POST -ContentType "application/json" -Body (@{ email = $recruiterEmail; password = $recruiterPassword } | ConvertTo-Json)
   $script:employerToken = $response.token
   $response.user.role
 }
 
 Step "auth_admin" {
-  $response = Invoke-RestMethod -Uri "http://localhost:3001/api/auth/login" -Method POST -ContentType "application/json" -Body (@{ email = "admin@esencelab.com"; password = "demo123" } | ConvertTo-Json)
+  $response = Invoke-RestMethod -Uri "http://localhost:3001/api/auth/login" -Method POST -ContentType "application/json" -Body (@{ email = $adminEmail; password = $adminPassword } | ConvertTo-Json)
   $script:adminToken = $response.token
   $response.user.role
 }

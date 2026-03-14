@@ -1,12 +1,16 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
-
 /**
  * Supabase persistence adapter.
  *
  * The API works against an in-memory `db` object for simplicity. This class
  * mirrors that data to Supabase so the same route code can run in demo mode
  * or with persistent live data.
+ *
+ * In practice this file does three jobs:
+ * 1. decide whether Supabase mode is active
+ * 2. load remote tables into the in-memory runtime shape at startup
+ * 3. persist writes from the API routes back into Supabase
  */
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 type AnyRecord = Record<string, any>;
 
 const toArray = (value: any): string[] => {

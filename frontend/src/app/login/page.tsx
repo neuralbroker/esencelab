@@ -3,8 +3,8 @@
 /**
  * Login page.
  *
- * This page signs users in, shows demo credentials for quick testing, and
- * routes successful logins into the correct dashboard flow.
+ * This page signs users in and routes successful logins into the correct
+ * dashboard flow.
  */
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -13,12 +13,6 @@ import { ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import EsencelabLogo from '@/components/EsencelabLogo';
-
-const demoAccounts = [
-  { label: 'Student', email: 'student@esencelab.com', password: 'demo123' },
-  { label: 'Recruiter', email: 'recruiter@esencelab.com', password: 'demo123' },
-  { label: 'Admin', email: 'admin@esencelab.com', password: 'demo123' },
-];
 
 const panelClass =
   'rounded-[30px] border border-white/72 bg-white/72 shadow-[0_26px_58px_-46px_rgba(24,24,24,0.45)] backdrop-blur-md';
@@ -78,12 +72,6 @@ export default function LoginPage() {
     await runLogin(email, password);
   };
 
-  const handleDemoLogin = async (demoEmail: string, demoPassword: string) => {
-    setEmail(demoEmail);
-    setPassword(demoPassword);
-    await runLogin(demoEmail, demoPassword);
-  };
-
   if (authLoading || isAuthenticated) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#f2f2f2]">
@@ -121,25 +109,6 @@ export default function LoginPage() {
           <p className="mt-3 max-w-md text-sm leading-relaxed text-[#4a4a4a]/88">
             Access your Esencelab dashboard, resume analysis, and role-fit workflows.
           </p>
-
-          <div className="mt-8">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#4a4a4a]/78">
-              Demo accounts
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {demoAccounts.map((account) => (
-                <button
-                  key={account.label}
-                  type="button"
-                  disabled={isLoading}
-                  onClick={() => void handleDemoLogin(account.email, account.password)}
-                  className="rounded-full border border-white/72 bg-white/66 px-3 py-1.5 text-xs font-semibold text-[#4a4a4a] transition hover:bg-white/78 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {account.label}
-                </button>
-              ))}
-            </div>
-          </div>
         </section>
 
         <section className={`${panelClass} p-8 sm:p-10`}>

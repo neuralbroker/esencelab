@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 """
 Main AI service used by the backend.
 
@@ -710,15 +716,16 @@ def _call_groq_assistant(feature: str, prompt: str, context: Dict[str, Any]) -> 
         "model": model,
         "temperature": 0.2,
         "max_tokens": 900,
-        "service_tier": service_tier,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": json.dumps(user_payload, ensure_ascii=True)},
         ],
-        "response_format": {"type": "json_object"},
     }
+    if "llama-3.3" in model or "llama-3.1" in model:
+        body["response_format"] = {"type": "json_object"}
     if "gpt-oss" in model:
         body["reasoning_effort"] = reasoning_effort
+        body["service_tier"] = service_tier
 
     req = urllib.request.Request(
         "https://api.groq.com/openai/v1/chat/completions",

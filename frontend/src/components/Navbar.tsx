@@ -78,7 +78,7 @@ export default function Navbar() {
   if (!isAuthenticated) return null;
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-white/72 bg-white/62 backdrop-blur-xl">
+    <nav className="sticky top-0 z-50 border-b border-white/72 bg-white/62 backdrop-blur-xl" aria-label="Main navigation">
       <div className="layout-container">
         <div className="flex h-16 items-center justify-between">
           <Link href="/dashboard" className="inline-flex">
@@ -129,8 +129,9 @@ export default function Navbar() {
                       <p className="truncate text-sm font-medium">{user?.name}</p>
                       <p className="mt-0.5 text-xs capitalize text-secondary">{user?.role}</p>
                     </div>
-                    <button
+<button
                       onClick={handleLogout}
+                      aria-label="Logout from your account"
                       className="flex w-full items-center space-x-3 px-4 py-2.5 text-left text-sm text-gray-600 transition-colors hover:bg-gray-100"
                     >
                       <LogOut className="h-4 w-4" />
@@ -176,8 +177,9 @@ export default function Navbar() {
                 );
               })}
               <div className="my-2 border-t border-white/72 pt-2"></div>
-              <button
+<button
                 onClick={handleLogout}
+                aria-label="Logout from your account"
                 className="flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100"
               >
                 <LogOut className="h-4 w-4" />

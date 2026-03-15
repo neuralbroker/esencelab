@@ -9,6 +9,7 @@ import { Plus_Jakarta_Sans, Playfair_Display } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '@/contexts/AuthContext';
 import UISoundLayer from '@/components/UISoundLayer';
+import { ErrorBoundary } from '@/components/ClientErrorBoundary';
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ['latin'],
@@ -33,10 +34,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${plusJakartaSans.variable} ${playfairDisplay.variable} font-sans bg-background text-primary antialiased selection:bg-accent selection:text-white`}>
+      <ErrorBoundary>
         <AuthProvider>
           <UISoundLayer />
           {children}
         </AuthProvider>
+      </ErrorBoundary>
       </body>
     </html>
   );

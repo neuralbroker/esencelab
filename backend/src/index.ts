@@ -1816,8 +1816,10 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     .toLowerCase();
   const password = String(req.body?.password || '');
   const name = String(req.body?.name || '').trim();
-  // Public signup is intentionally student-only; recruiter/admin accounts are managed internally.
-  const safeRole: SupportedRole = 'student';
+  const requestedRole = String(req.body?.role || '').toLowerCase();
+  const safeRole: SupportedRole = (requestedRole === 'employer' || requestedRole === 'admin') 
+    ? requestedRole 
+    : 'student';
 
   if (!email || !password || !name) {
     return res.status(400).json({ message: 'Name, email and password are required' });

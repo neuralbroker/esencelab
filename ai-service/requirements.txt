@@ -4,5 +4,4 @@ python-multipart==0.0.9
 pypdf2==3.0.1
 pdfplumber==0.11.4
 numpy==1.26.4
-scikit-learn==1.5.2
-spacy==3.7.5
+python-dotenv==1.0.0

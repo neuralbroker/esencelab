@@ -9,7 +9,6 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@fontsource/playfair-display": "^5.2.8",
     "axios": "1.7.2",
     "framer-motion": "^12.34.3",
     "lucide-react": "^0.400.0",

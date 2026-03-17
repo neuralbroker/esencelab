@@ -3944,13 +3944,18 @@ const initializeRuntime = async () => {
 runtimeReady = initializeRuntime();
 
 const startServer = async () => {
-  await runtimeReady;
-  app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-  });
+  try {
+    await runtimeReady;
+    const port = process.env.PORT || 3001;
+    app.listen(port, () => {
+      console.log(`Server is running on port ${port}`);
+    });
+  } catch (err) {
+    console.error('Failed to start server:', err);
+  }
 };
 
-if (require.main === module) {
+if (process.env.VERCEL === undefined) {
   void startServer();
 }
 

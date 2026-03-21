@@ -6,11 +6,11 @@ const normalizeTarget = (value) => {
 
 const backendProxyTarget = normalizeTarget(
   process.env.BACKEND_PROXY_TARGET ||
-    (process.env.NODE_ENV === 'development' ? 'http://localhost:3001' : '')
+    (process.env.NODE_ENV === 'development' ? 'http://localhost:3001' : 'https://esencelab-api.vercel.app')
 );
 const aiProxyTarget = normalizeTarget(
   process.env.AI_PROXY_TARGET ||
-    (process.env.NODE_ENV === 'development' ? 'http://localhost:3002' : '')
+    (process.env.NODE_ENV === 'development' ? 'http://localhost:3002' : 'https://esencelab-ai.vercel.app')
 );
 
 const nextConfig = {

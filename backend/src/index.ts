@@ -3924,21 +3924,25 @@ const ensureBootstrapUsers = async () => {
 };
 
 const initializeRuntime = async () => {
-  const bootstrap = await supabaseStore.bootstrap(db);
-  if (bootstrap.mode === 'supabase' && bootstrap.loaded) {
-    console.log('Loaded runtime data from Supabase.');
-  } else if (supabaseStore.isActive() && SHOULD_BOOT_DEMO_DATA && SYNC_DEMO_DATA_TO_SUPABASE) {
-    console.log('Supabase mode enabled with explicit demo data sync.');
-    await seedSupabaseFromMemory();
-  } else if (supabaseStore.isActive()) {
-    console.log('Supabase mode enabled with an empty initial store.');
-  } else if (SHOULD_BOOT_DEMO_DATA) {
-    console.log('Using in-memory data provider with explicit demo data.');
-  } else {
-    console.log('Using in-memory data provider with an empty initial store.');
-  }
+  try {
+    const bootstrap = await supabaseStore.bootstrap(db);
+    if (bootstrap.mode === 'supabase' && bootstrap.loaded) {
+      console.log('Loaded runtime data from Supabase.');
+    } else if (supabaseStore.isActive() && SHOULD_BOOT_DEMO_DATA && SYNC_DEMO_DATA_TO_SUPABASE) {
+      console.log('Supabase mode enabled with explicit demo data sync.');
+      await seedSupabaseFromMemory();
+    } else if (supabaseStore.isActive()) {
+      console.log('Supabase mode enabled with an empty initial store.');
+    } else if (SHOULD_BOOT_DEMO_DATA) {
+      console.log('Using in-memory data provider with explicit demo data.');
+    } else {
+      console.log('Using in-memory data provider with an empty initial store.');
+    }
 
-  await ensureBootstrapUsers();
+    await ensureBootstrapUsers();
+  } catch (err) {
+    console.error('Runtime initialization error:', err);
+  }
 };
 
 runtimeReady = initializeRuntime();
@@ -3958,5 +3962,13 @@ const startServer = async () => {
 if (process.env.VERCEL === undefined) {
   void startServer();
 }
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+});
 
 export default app;

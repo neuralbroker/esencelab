@@ -10,10 +10,10 @@ This project now includes two deployment paths for the full stack:
 Run the stack directly on the host:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\direct-deploy.ps1 -EnvFile .env.production.example -SmokeTest
+powershell -ExecutionPolicy Bypass -File .\scripts\direct-deploy.ps1 -EnvFile .env.production -SmokeTest
 ```
 
-For a real deployment, copy the example file first:
+For a real deployment, copy the template file first:
 
 ```powershell
 Copy-Item .\.env.production.example .\.env.production
@@ -28,7 +28,7 @@ This starts:
 
 ## Direct deployment with live data
 
-If you want local hosting with persistent data instead of memory-mode demo
+If you want local hosting with persistent Supabase-backed data
 data, use Supabase-backed mode:
 
 ```powershell
@@ -105,7 +105,7 @@ To persist data:
 2. Configure `SUPABASE_URL`
 3. Configure `SUPABASE_SERVICE_ROLE_KEY`
 4. Apply `supabase-schema.sql`
-5. Optionally apply `supabase-seed.sql`
+5. Apply only the schema and any environment-specific bootstrap records you intend to own long term.
 
 ## 5. Frontend API routing
 
@@ -115,11 +115,11 @@ The frontend supports two production modes:
   - Keep `NEXT_PUBLIC_API_URL=/api`
   - Use `BACKEND_PROXY_TARGET` and `AI_PROXY_TARGET` at build time
 - Direct API mode:
-  - Set `NEXT_PUBLIC_API_URL` to a public backend URL such as `https://api.example.com/api`
+- Set `NEXT_PUBLIC_API_URL` to a public backend URL such as `https://api.your-domain.com/api`
 
 ## 6. Security notes
 
-- Replace the demo JWT secret before deployment.
+- Set a strong production JWT secret before deployment.
 - Restrict `FRONTEND_URLS` and `AI_ALLOWED_ORIGINS` to real domains.
 - Do not commit `.env.production`.
 - If you deploy behind a proxy or ingress, keep `TRUST_PROXY=1`.

@@ -6,7 +6,7 @@ starts all three services as background processes, and can run the smoke test
 against that production-like stack.
 #>
 param(
-  [string]$EnvFile = ".env.production.example",
+  [string]$EnvFile = ".env.production",
   [switch]$InstallDeps,
   [switch]$SkipBuild,
   [switch]$SmokeTest,
@@ -32,28 +32,6 @@ if (-not $aiPort) { $aiPort = "3002" }
 function Write-Section([string]$message) {
   Write-Host ""
   Write-Host "== $message =="
-}
-
-function New-RandomSecret([int]$length = 24) {
-  $bytes = New-Object byte[] $length
-  $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
-  try {
-    $rng.GetBytes($bytes)
-  } finally {
-    $rng.Dispose()
-  }
-  $value = [Convert]::ToBase64String($bytes)
-  $value = $value.Replace('+', 'A').Replace('/', 'B').Replace('=', '')
-  return $value.Substring(0, [Math]::Min($length, $value.Length))
-}
-
-function New-DemoIdentity([string]$slug, [string]$displayName) {
-  $suffix = [Guid]::NewGuid().ToString('N').Substring(0, 10)
-  return @{
-    Email = "$slug.$suffix@esencelab.local"
-    Password = New-RandomSecret -length 18
-    Name = $displayName
-  }
 }
 
 function Get-EnvMap([string]$path) {
@@ -111,10 +89,10 @@ function Validate-DeploymentEnv([string]$path, [string]$label) {
   $values = Get-EnvMap $path
   $warnings = @()
   $errors = @()
-  $isExampleFile = $label -like "*.example"
+  $isTemplateFile = $label -like "*.example"
 
-  if ($isExampleFile) {
-    $warnings += "Using example env file $label. Replace placeholder secrets and domains before any public deployment."
+  if ($isTemplateFile) {
+    $warnings += "Using template env file $label. Replace placeholder secrets and domains before any public deployment."
   }
 
   $placeholderRules = @(
@@ -139,7 +117,7 @@ function Validate-DeploymentEnv([string]$path, [string]$label) {
     $value = Get-EnvValue $values $rule.Key
     if (Test-PlaceholderValue $value $rule.Markers) {
       $message = "$($rule.Key) in $label still uses a placeholder value. $($rule.Message)"
-      if ($isExampleFile) {
+      if ($isTemplateFile) {
         $warnings += $message
       } else {
         $errors += $message
@@ -156,7 +134,7 @@ function Validate-DeploymentEnv([string]$path, [string]$label) {
     $supabaseUrl = Get-EnvValue $values "SUPABASE_URL"
     if (-not $supabaseUrl -or (Test-PlaceholderValue $supabaseUrl @("your-project.supabase.co"))) {
       $message = "SUPABASE_URL in $label must point to a real Supabase project."
-      if ($isExampleFile) {
+      if ($isTemplateFile) {
         $warnings += $message
       } else {
         $errors += $message
@@ -166,7 +144,7 @@ function Validate-DeploymentEnv([string]$path, [string]$label) {
     $serviceRoleKey = Get-EnvValue $values "SUPABASE_SERVICE_ROLE_KEY"
     if (-not $serviceRoleKey) {
       $message = "SUPABASE_SERVICE_ROLE_KEY in $label is required for supabase mode."
-      if ($isExampleFile) {
+      if ($isTemplateFile) {
         $warnings += $message
       } else {
         $errors += $message
@@ -312,30 +290,27 @@ Set-DefaultEnv "AI_ALLOWED_ORIGINS" "http://localhost:3000"
 Set-DefaultEnv "FRONTEND_URLS" "http://localhost:3000"
 Set-DefaultEnv "FRONTEND_URL" "http://localhost:3000"
 Set-DefaultEnv "AI_SERVICE_URL" "http://localhost:3002"
-Set-DefaultEnv "DATA_PROVIDER" "memory"
-Set-DefaultEnv "ENABLE_DEMO_DATA" "false"
+Set-DefaultEnv "DATA_PROVIDER" "supabase"
 Set-DefaultEnv "ALLOW_INSECURE_PASSWORD_RESET_TOKEN_RESPONSE" "false"
-Set-DefaultEnv "SYNC_DEMO_DATA_TO_SUPABASE" "false"
 Set-DefaultEnv "FRONTEND_PORT" $frontendPort
 Set-DefaultEnv "BACKEND_PORT" $backendPort
 Set-DefaultEnv "AI_PORT" $aiPort
 
-if ($SmokeTest -and -not [Environment]::GetEnvironmentVariable("DEMO_STUDENT_EMAIL", "Process")) {
-  $studentDemo = New-DemoIdentity -slug "student" -displayName "Demo Student"
-  $recruiterDemo = New-DemoIdentity -slug "recruiter" -displayName "Demo Recruiter"
-  $adminDemo = New-DemoIdentity -slug "admin" -displayName "Platform Admin"
+if ($SmokeTest) {
+  $requiredSmokeVars = @(
+    "SMOKE_STUDENT_EMAIL",
+    "SMOKE_STUDENT_PASSWORD",
+    "SMOKE_RECRUITER_EMAIL",
+    "SMOKE_RECRUITER_PASSWORD",
+    "SMOKE_ADMIN_EMAIL",
+    "SMOKE_ADMIN_PASSWORD"
+  )
 
-  [Environment]::SetEnvironmentVariable("ENABLE_DEMO_DATA", "true", "Process")
-  [Environment]::SetEnvironmentVariable("ALLOW_INSECURE_PASSWORD_RESET_TOKEN_RESPONSE", "true", "Process")
-  [Environment]::SetEnvironmentVariable("DEMO_STUDENT_EMAIL", $studentDemo.Email, "Process")
-  [Environment]::SetEnvironmentVariable("DEMO_STUDENT_PASSWORD", $studentDemo.Password, "Process")
-  [Environment]::SetEnvironmentVariable("DEMO_STUDENT_NAME", $studentDemo.Name, "Process")
-  [Environment]::SetEnvironmentVariable("DEMO_RECRUITER_EMAIL", $recruiterDemo.Email, "Process")
-  [Environment]::SetEnvironmentVariable("DEMO_RECRUITER_PASSWORD", $recruiterDemo.Password, "Process")
-  [Environment]::SetEnvironmentVariable("DEMO_RECRUITER_NAME", $recruiterDemo.Name, "Process")
-  [Environment]::SetEnvironmentVariable("DEMO_ADMIN_EMAIL", $adminDemo.Email, "Process")
-  [Environment]::SetEnvironmentVariable("DEMO_ADMIN_PASSWORD", $adminDemo.Password, "Process")
-  [Environment]::SetEnvironmentVariable("DEMO_ADMIN_NAME", $adminDemo.Name, "Process")
+  foreach ($name in $requiredSmokeVars) {
+    if (-not [Environment]::GetEnvironmentVariable($name, "Process")) {
+      throw "Smoke testing requires $name to be set in the current environment or env file."
+    }
+  }
 }
 
 if ($InstallDeps) {
@@ -370,6 +345,7 @@ Start-Sleep -Seconds 1
 Write-Section "Starting AI service"
 Start-DetachedPowerShell -workingDir $aiDir -command "python -m uvicorn app.main:app --host 0.0.0.0 --port $aiPort" -envVars @{
   AI_ALLOWED_ORIGINS = [Environment]::GetEnvironmentVariable("AI_ALLOWED_ORIGINS", "Process")
+  AI_INTERNAL_AUTH_TOKEN = [Environment]::GetEnvironmentVariable("AI_INTERNAL_AUTH_TOKEN", "Process")
   GROQ_API_KEY = [Environment]::GetEnvironmentVariable("GROQ_API_KEY", "Process")
   GROQ_MODEL = [Environment]::GetEnvironmentVariable("GROQ_MODEL", "Process")
   GROQ_REASONING_EFFORT = [Environment]::GetEnvironmentVariable("GROQ_REASONING_EFFORT", "Process")
@@ -387,18 +363,8 @@ Start-DetachedPowerShell -workingDir $backendDir -command "npm run start" -envVa
   FRONTEND_URLS = [Environment]::GetEnvironmentVariable("FRONTEND_URLS", "Process")
   TRUST_PROXY = [Environment]::GetEnvironmentVariable("TRUST_PROXY", "Process")
   DATA_PROVIDER = [Environment]::GetEnvironmentVariable("DATA_PROVIDER", "Process")
-  ENABLE_DEMO_DATA = [Environment]::GetEnvironmentVariable("ENABLE_DEMO_DATA", "Process")
   ALLOW_INSECURE_PASSWORD_RESET_TOKEN_RESPONSE = [Environment]::GetEnvironmentVariable("ALLOW_INSECURE_PASSWORD_RESET_TOKEN_RESPONSE", "Process")
-  SYNC_DEMO_DATA_TO_SUPABASE = [Environment]::GetEnvironmentVariable("SYNC_DEMO_DATA_TO_SUPABASE", "Process")
-  DEMO_STUDENT_EMAIL = [Environment]::GetEnvironmentVariable("DEMO_STUDENT_EMAIL", "Process")
-  DEMO_STUDENT_PASSWORD = [Environment]::GetEnvironmentVariable("DEMO_STUDENT_PASSWORD", "Process")
-  DEMO_STUDENT_NAME = [Environment]::GetEnvironmentVariable("DEMO_STUDENT_NAME", "Process")
-  DEMO_RECRUITER_EMAIL = [Environment]::GetEnvironmentVariable("DEMO_RECRUITER_EMAIL", "Process")
-  DEMO_RECRUITER_PASSWORD = [Environment]::GetEnvironmentVariable("DEMO_RECRUITER_PASSWORD", "Process")
-  DEMO_RECRUITER_NAME = [Environment]::GetEnvironmentVariable("DEMO_RECRUITER_NAME", "Process")
-  DEMO_ADMIN_EMAIL = [Environment]::GetEnvironmentVariable("DEMO_ADMIN_EMAIL", "Process")
-  DEMO_ADMIN_PASSWORD = [Environment]::GetEnvironmentVariable("DEMO_ADMIN_PASSWORD", "Process")
-  DEMO_ADMIN_NAME = [Environment]::GetEnvironmentVariable("DEMO_ADMIN_NAME", "Process")
+  AI_INTERNAL_AUTH_TOKEN = [Environment]::GetEnvironmentVariable("AI_INTERNAL_AUTH_TOKEN", "Process")
   INITIAL_ADMIN_EMAIL = [Environment]::GetEnvironmentVariable("INITIAL_ADMIN_EMAIL", "Process")
   INITIAL_ADMIN_PASSWORD = [Environment]::GetEnvironmentVariable("INITIAL_ADMIN_PASSWORD", "Process")
   INITIAL_ADMIN_NAME = [Environment]::GetEnvironmentVariable("INITIAL_ADMIN_NAME", "Process")

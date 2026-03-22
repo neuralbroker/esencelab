@@ -28,9 +28,9 @@ function Step([string]$name, [scriptblock]$action) {
   }
 }
 
-function Get-Status([string]$url) {
+function Get-Status([string]$url, [int]$timeoutSeconds = 20) {
   try {
-    $response = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 20
+    $response = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec $timeoutSeconds
     return [int]$response.StatusCode
   } catch {
     if ($_.Exception.Response) {
@@ -40,14 +40,22 @@ function Get-Status([string]$url) {
   }
 }
 
-function Get-StableStatus([string]$url, [int]$attempts = 5, [int]$delaySeconds = 1) {
+function Get-StableStatus(
+  [string]$url,
+  [int]$attempts = 5,
+  [int]$delaySeconds = 1,
+  [int]$timeoutSeconds = 20,
+  [int]$expectedStatusCode = 200
+) {
   $status = -1
   for ($i = 0; $i -lt $attempts; $i++) {
-    $status = Get-Status $url
-    if ($status -eq 200) {
+    $status = Get-Status $url $timeoutSeconds
+    if ($status -eq $expectedStatusCode) {
       return $status
     }
-    Start-Sleep -Seconds $delaySeconds
+    if ($i -lt ($attempts - 1)) {
+      Start-Sleep -Seconds $delaySeconds
+    }
   }
   return $status
 }
@@ -60,12 +68,13 @@ function Get-RequiredEnv([string]$name) {
   return $value
 }
 
-$studentEmail = Get-RequiredEnv "DEMO_STUDENT_EMAIL"
-$studentPassword = Get-RequiredEnv "DEMO_STUDENT_PASSWORD"
-$recruiterEmail = Get-RequiredEnv "DEMO_RECRUITER_EMAIL"
-$recruiterPassword = Get-RequiredEnv "DEMO_RECRUITER_PASSWORD"
-$adminEmail = Get-RequiredEnv "DEMO_ADMIN_EMAIL"
-$adminPassword = Get-RequiredEnv "DEMO_ADMIN_PASSWORD"
+$studentEmail = Get-RequiredEnv "SMOKE_STUDENT_EMAIL"
+$studentPassword = Get-RequiredEnv "SMOKE_STUDENT_PASSWORD"
+$recruiterEmail = Get-RequiredEnv "SMOKE_RECRUITER_EMAIL"
+$recruiterPassword = Get-RequiredEnv "SMOKE_RECRUITER_PASSWORD"
+$adminEmail = Get-RequiredEnv "SMOKE_ADMIN_EMAIL"
+$adminPassword = Get-RequiredEnv "SMOKE_ADMIN_PASSWORD"
+$aiInternalAuthToken = [Environment]::GetEnvironmentVariable("AI_INTERNAL_AUTH_TOKEN", "Process")
 
 $studentToken = $null
 $employerToken = $null
@@ -76,7 +85,7 @@ $resumeId = $null
 $appId = $null
 
 Step "health_frontend" {
-  $status = Get-StableStatus "http://localhost:3000/"
+  $status = Get-StableStatus "http://localhost:3000/" -attempts 10 -delaySeconds 3 -timeoutSeconds 30
   if ($status -ne 200) {
     throw "Frontend health check failed with HTTP $status"
   }
@@ -84,6 +93,32 @@ Step "health_frontend" {
 }
 Step "health_backend" { Invoke-RestMethod -Uri "http://localhost:3001/api/health" -Method GET -TimeoutSec 20 }
 Step "health_ai" { Invoke-RestMethod -Uri "http://localhost:3002/health" -Method GET -TimeoutSec 20 }
+
+Step "register_rejects_privileged_roles" {
+  $stamp = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+  $body = @{
+    name = "Smoke Test Admin"
+    email = "smoke-admin-$stamp@esencelab.local"
+    password = "smoke123"
+    role = "admin"
+  } | ConvertTo-Json
+
+  try {
+    $response = Invoke-WebRequest -Uri "http://localhost:3001/api/auth/register" -Method POST -ContentType "application/json" -Body $body -TimeoutSec 20 -UseBasicParsing
+    throw "Expected privileged registration to be rejected, got HTTP $([int]$response.StatusCode)"
+  } catch {
+    if (-not $_.Exception.Response) {
+      throw
+    }
+
+    $status = [int]$_.Exception.Response.StatusCode
+    if ($status -ne 403) {
+      throw "Expected privileged registration to be rejected with HTTP 403, got HTTP $status"
+    }
+
+    $status
+  }
+}
 
 Step "auth_student" {
   $response = Invoke-RestMethod -Uri "http://localhost:3001/api/auth/login" -Method POST -ContentType "application/json" -Body (@{ email = $studentEmail; password = $studentPassword } | ConvertTo-Json)
@@ -107,7 +142,7 @@ Step "frontend_routes" {
   $routes = @("/", "/login", "/register", "/dashboard", "/jobs", "/resume", "/applications", "/courses", "/applicants", "/users")
   $map = [ordered]@{}
   foreach ($route in $routes) {
-    $status = Get-StableStatus ("http://localhost:3000" + $route)
+    $status = Get-StableStatus ("http://localhost:3000" + $route) -attempts 3 -delaySeconds 3 -timeoutSeconds 30
     if ($status -ne 200) {
       throw "Route $route returned HTTP $status"
     }
@@ -129,6 +164,30 @@ Step "recommendations" {
 Step "career_roles" {
   $response = Invoke-RestMethod -Uri "http://localhost:3001/api/career/roles" -Method GET -Headers @{ Authorization = "Bearer $studentToken" }
   @($response.data).Count
+}
+
+Step "career_target_role_update" {
+  $rolesResponse = Invoke-RestMethod -Uri "http://localhost:3001/api/career/roles" -Method GET -Headers @{ Authorization = "Bearer $studentToken" }
+  $overviewBefore = Invoke-RestMethod -Uri "http://localhost:3001/api/career/overview" -Method GET -Headers @{ Authorization = "Bearer $studentToken" }
+  $roles = @($rolesResponse.data)
+  $targetRole = $roles | Where-Object { $_.id -ne $overviewBefore.data.roleId } | Select-Object -First 1
+
+  if (-not $targetRole) {
+    throw "No alternate career role available for update test"
+  }
+
+  $updateBody = @{ roleId = $targetRole.id } | ConvertTo-Json
+  $updateResponse = Invoke-RestMethod -Uri "http://localhost:3001/api/career/target-role" -Method POST -ContentType "application/json" -Headers @{ Authorization = "Bearer $studentToken" } -Body $updateBody
+  if ($updateResponse.data.roleId -ne $targetRole.id) {
+    throw "Target role update returned unexpected roleId $($updateResponse.data.roleId)"
+  }
+
+  $overviewAfter = Invoke-RestMethod -Uri "http://localhost:3001/api/career/overview" -Method GET -Headers @{ Authorization = "Bearer $studentToken" }
+  if ($overviewAfter.data.roleId -ne $targetRole.id) {
+    throw "Career overview did not reflect updated target role"
+  }
+
+  $updateResponse.data.roleId
 }
 
 Step "career_overview" {
@@ -233,7 +292,7 @@ Step "admin_course_crud" {
     title = "Smoke Course $stamp"
     description = "Temporary smoke test course"
     provider = "EsenceLab"
-    url = "https://example.com/course"
+    url = "https://esencelab.local/course"
     skills = @("Python")
     duration = "2h"
     level = "beginner"
@@ -292,13 +351,21 @@ Step "dashboard_stats_admin" {
 }
 
 Step "ai_extract_skills" {
-  $response = Invoke-RestMethod -Uri "http://localhost:3002/ai/extract-skills" -Method POST -ContentType "application/x-www-form-urlencoded" -Body "text=python react docker"
+  $headers = @{}
+  if ($aiInternalAuthToken) {
+    $headers["x-internal-service-token"] = $aiInternalAuthToken
+  }
+  $response = Invoke-RestMethod -Uri "http://localhost:3002/ai/extract-skills" -Method POST -ContentType "application/x-www-form-urlencoded" -Headers $headers -Body "text=python react docker"
   @($response.skills).Count
 }
 
 Step "ai_match" {
   $body = @{ resumeSkills = @("Python", "React"); jobRequirements = "Need Python React SQL"; includeExplanation = $true } | ConvertTo-Json
-  $response = Invoke-RestMethod -Uri "http://localhost:3002/ai/match" -Method POST -ContentType "application/json" -Body $body
+  $headers = @{}
+  if ($aiInternalAuthToken) {
+    $headers["x-internal-service-token"] = $aiInternalAuthToken
+  }
+  $response = Invoke-RestMethod -Uri "http://localhost:3002/ai/match" -Method POST -ContentType "application/json" -Headers $headers -Body $body
   [ordered]@{
     score = $response.matchScore
     matched = @($response.matchedSkills).Count

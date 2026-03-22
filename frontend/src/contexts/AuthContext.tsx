@@ -26,6 +26,40 @@ const normalizeUser = (user: User): User => {
   return user;
 };
 
+const safeStorageGet = (key: string) => {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+
+const safeStorageSet = (key: string, value: string) => {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Ignore storage failures so auth can still work in-memory.
+  }
+};
+
+const safeStorageRemove = (key: string) => {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // Ignore storage failures so logout can still clear in-memory state.
+  }
+};
+
+const persistAuthSession = (token: string, user: User) => {
+  safeStorageSet('token', token);
+  safeStorageSet('user', JSON.stringify(user));
+};
+
+const clearPersistedAuthSession = () => {
+  safeStorageRemove('token');
+  safeStorageRemove('user');
+};
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({
     user: null,
@@ -35,8 +69,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const userStr = localStorage.getItem('user');
+    const token = safeStorageGet('token');
+    const userStr = safeStorageGet('user');
     
     if (token && userStr) {
       try {
@@ -49,8 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           isAuthenticated: true,
         });
       } catch {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+        clearPersistedAuthSession();
         setState({
           user: null,
           token: null,
@@ -68,8 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { token, user } = response.data;
     const normalizedUser = normalizeUser(user);
     
-    localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(normalizedUser));
+    persistAuthSession(token, normalizedUser);
     invalidateApiCache();
     
     setState({
@@ -85,8 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { token, user } = response.data;
     const normalizedUser = normalizeUser(user);
     
-    localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(normalizedUser));
+    persistAuthSession(token, normalizedUser);
     invalidateApiCache();
     
     setState({
@@ -99,8 +130,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     void api.post('/auth/logout').catch(() => undefined);
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    clearPersistedAuthSession();
     invalidateApiCache();
     setState({
       user: null,
@@ -111,8 +141,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const updateUser = (user: User) => {
-    localStorage.setItem('user', JSON.stringify(user));
-    setState(prev => ({ ...prev, user }));
+    const normalizedUser = normalizeUser(user);
+    safeStorageSet('user', JSON.stringify(normalizedUser));
+    setState(prev => ({ ...prev, user: normalizedUser }));
   };
 
   return (

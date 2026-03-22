@@ -57,9 +57,8 @@ Set these env vars in Vercel:
 - `FRONTEND_URLS=https://<your-frontend-project>.vercel.app`
 - `TRUST_PROXY=1`
 - `DATA_PROVIDER=supabase`
-- `ENABLE_DEMO_DATA=false`
 - `ALLOW_INSECURE_PASSWORD_RESET_TOKEN_RESPONSE=false`
-- `SYNC_DEMO_DATA_TO_SUPABASE=false`
+- `AI_INTERNAL_AUTH_TOKEN=<same value used by backend>`
 - `INITIAL_ADMIN_EMAIL=<your-admin-email>`
 - `INITIAL_ADMIN_PASSWORD=<strong-admin-password>`
 - `INITIAL_ADMIN_NAME=Platform Admin`
@@ -83,7 +82,7 @@ After deploy, verify:
 
 Important:
 
-- Demo data is no longer seeded automatically for hosted environments.
+- Hosted environments start from the persisted database state.
 - Public signup remains student-only.
 - Admin and recruiter access should be bootstrapped from the backend env vars above.
 

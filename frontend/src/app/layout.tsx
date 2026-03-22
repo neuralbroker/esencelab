@@ -26,6 +26,8 @@ export const metadata: Metadata = {
   description: 'AI-powered Career Intelligence Platform',
 };
 
+const enableUiSounds = process.env.NEXT_PUBLIC_ENABLE_UI_SOUNDS === 'true';
+
 export default function RootLayout({
   children,
 }: {
@@ -36,7 +38,7 @@ export default function RootLayout({
       <body className={`${plusJakartaSans.variable} ${playfairDisplay.variable} font-sans bg-background text-primary antialiased selection:bg-accent selection:text-white`}>
       <ErrorBoundary>
         <AuthProvider>
-          <UISoundLayer />
+          {enableUiSounds ? <UISoundLayer /> : null}
           {children}
         </AuthProvider>
       </ErrorBoundary>

@@ -5,7 +5,7 @@ This script checks that the production compose file can be resolved from the
 selected env file and can optionally build images when Docker Engine is ready.
 #>
 param(
-  [string]$EnvFile = ".env.production.example",
+  [string]$EnvFile = ".env.production",
   [switch]$BuildImages,
   [switch]$SkipEnvValidation
 )
@@ -77,10 +77,10 @@ function Validate-DeploymentEnv([string]$path, [string]$label) {
   $values = Get-EnvMap $path
   $warnings = @()
   $errors = @()
-  $isExampleFile = $label -like "*.example"
+  $isTemplateFile = $label -like "*.example"
 
-  if ($isExampleFile) {
-    $warnings += "Using example env file $label. Replace placeholder secrets and domains before any public deployment."
+  if ($isTemplateFile) {
+    $warnings += "Using template env file $label. Replace placeholder secrets and domains before any public deployment."
   }
 
   $placeholderRules = @(
@@ -105,7 +105,7 @@ function Validate-DeploymentEnv([string]$path, [string]$label) {
     $value = Get-EnvValue $values $rule.Key
     if (Test-PlaceholderValue $value $rule.Markers) {
       $message = "$($rule.Key) in $label still uses a placeholder value. $($rule.Message)"
-      if ($isExampleFile) {
+      if ($isTemplateFile) {
         $warnings += $message
       } else {
         $errors += $message
@@ -122,7 +122,7 @@ function Validate-DeploymentEnv([string]$path, [string]$label) {
     $supabaseUrl = Get-EnvValue $values "SUPABASE_URL"
     if (-not $supabaseUrl -or (Test-PlaceholderValue $supabaseUrl @("your-project.supabase.co"))) {
       $message = "SUPABASE_URL in $label must point to a real Supabase project."
-      if ($isExampleFile) {
+      if ($isTemplateFile) {
         $warnings += $message
       } else {
         $errors += $message
@@ -132,7 +132,7 @@ function Validate-DeploymentEnv([string]$path, [string]$label) {
     $serviceRoleKey = Get-EnvValue $values "SUPABASE_SERVICE_ROLE_KEY"
     if (-not $serviceRoleKey) {
       $message = "SUPABASE_SERVICE_ROLE_KEY in $label is required for supabase mode."
-      if ($isExampleFile) {
+      if ($isTemplateFile) {
         $warnings += $message
       } else {
         $errors += $message

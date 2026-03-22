@@ -12,8 +12,6 @@ build/
 
 uploads/
 *.pdf
-public-demo.pid
-public-demo.log
 .vercel/
 
 .DS_Store

@@ -1,8 +1,8 @@
 /**
  * Supabase persistence adapter.
  *
- * The API works against an in-memory `db` object for simplicity. This class
- * mirrors that data to Supabase so the same route code can run in demo mode
+ * The API works against an in-memory `db` object for runtime simplicity. This
+ * class mirrors that data to Supabase so the same route code can run locally
  * or with persistent live data.
  *
  * In practice this file does three jobs:
@@ -45,6 +45,22 @@ const toNumberOrNull = (value: any): number | null => {
 const toNumberOrZero = (value: any): number => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const toJsonArray = (value: any): any[] => {
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return value
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+  }
+  return [];
 };
 
 export class SupabaseStore {
@@ -366,9 +382,9 @@ export class SupabaseStore {
       name: candidate.name,
       email: candidate.email,
       role: candidate.role,
-      skills: JSON.parse(candidate.skills || '[]'),
-      education: JSON.parse(candidate.education || '[]'),
-      experience: JSON.parse(candidate.experience || '[]'),
+      skills: toJsonArray(candidate.skills),
+      education: toJsonArray(candidate.education),
+      experience: toJsonArray(candidate.experience),
       parsed_data: candidate.parsedData || null,
       match_score: toNumberOrZero(candidate.matchScore),
       status: candidate.status || 'new',

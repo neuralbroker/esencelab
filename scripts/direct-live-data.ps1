@@ -5,7 +5,7 @@ This is a safety wrapper around direct-deploy.ps1. It validates that the env
 file is really configured for Supabase before starting the stack.
 #>
 param(
-  [string]$EnvFile = ".env.live-data.example",
+  [string]$EnvFile = ".env.live-data",
   [switch]$InstallDeps,
   [switch]$SkipBuild,
   [switch]$SmokeTest

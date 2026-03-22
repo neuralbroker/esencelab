@@ -232,3 +232,54 @@ body {
   }
 }
 
+@media (max-width: 767px) {
+  .layout-container {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .section-spacing {
+    padding-top: 2.5rem;
+    padding-bottom: 2.5rem;
+  }
+
+  .glass-card,
+  .glass-card-no-hover,
+  .glass-panel,
+  .velocity-card {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .landing-aura,
+  .landing-aura-secondary,
+  .velocity-orb {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .glass-card,
+  .glass-card-no-hover,
+  .glass-panel,
+  .velocity-card {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .landing-aura,
+  .landing-aura-secondary,
+  .velocity-orb {
+    display: none;
+  }
+}
+

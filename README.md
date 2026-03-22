@@ -6,7 +6,7 @@ Esencelab is a full-stack AI-assisted hiring and career intelligence platform bu
 - Recruiters post jobs, rank candidates by fit, and review structured resume insights instead of screening manually.
 - Admins monitor users, resumes, applications, moderation flows, and platform health from a single control surface.
 
-The project is split into a Next.js frontend, an Express API, and a FastAPI AI service. For local development, the platform can run entirely in `memory` mode with local-only seed data and no external database dependency.
+The project is split into a Next.js frontend, an Express API, and a FastAPI AI service, with Supabase/Postgres used for persistent production data.
 
 ## Product Scope
 
@@ -51,17 +51,17 @@ Express API (backend)
     ->
 FastAPI AI service (ai-service)
     ->
-Memory store for local demo OR Supabase/Postgres for persistence
+Supabase/Postgres persistence
 ```
 
 ## Tech Stack
 
 | Layer | Stack |
 | --- | --- |
-| Frontend | Next.js 14, React 18, TypeScript, Tailwind CSS, Framer Motion, Lucide React |
-| Backend | Node.js, Express, TypeScript, JWT, bcrypt, multer, compression, helmet, rate limiting |
+| Frontend | Next.js 15, React 18, TypeScript, Tailwind CSS, Framer Motion, Lucide React |
+| Backend | Node.js, Express, TypeScript, JWT, bcryptjs, multer, compression, helmet, rate limiting |
 | AI service | FastAPI, Python, pdfplumber, PyPDF2 |
-| Data | In-memory local seed data, optional Supabase integration |
+| Data | Supabase/Postgres persistence with local in-memory runtime state |
 | Tooling | PowerShell run scripts, npm, TypeScript compiler, ESLint |
 
 ## Repository Layout
@@ -72,9 +72,8 @@ Esencelab/
 |- backend/               # Express API and data-provider layer
 |- ai-service/            # FastAPI AI and resume processing service
 |- docs/                  # Build specs and implementation plans
-|- scripts/               # Local run, smoke-test, and full-check scripts
+|- scripts/               # Deployment, smoke-test, and validation scripts
 |- supabase-schema.sql    # Schema for persistent mode
-|- supabase-seed.sql      # Optional seed data
 |- SPEC.md                # Product and system specification
 ```
 
@@ -86,20 +85,21 @@ Esencelab/
 - Python 3.11+ with `pip`
 - PowerShell on Windows
 
-The bundled scripts are optimized for Windows PowerShell. The fastest path for local evaluation is the one-command demo flow below.
+The bundled scripts are optimized for Windows PowerShell. The fastest production-style validation flow is the direct deployment path below.
 
-### One-command local run
+### Production-style local run
 
-Install dependencies, start all services, and run the smoke test:
+Copy the production env template, fill in real values, and start the stack:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\local-demo.ps1 -InstallDeps -SmokeTest
+Copy-Item .\.env.production.example .\.env.production
+powershell -ExecutionPolicy Bypass -File .\scripts\direct-deploy.ps1 -EnvFile .env.production -InstallDeps -SmokeTest
 ```
 
 Run again without reinstalling dependencies:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\local-demo.ps1 -SmokeTest
+powershell -ExecutionPolicy Bypass -File .\scripts\direct-deploy.ps1 -EnvFile .env.production -SmokeTest
 ```
 
 ### Local URLs
@@ -107,12 +107,6 @@ powershell -ExecutionPolicy Bypass -File .\scripts\local-demo.ps1 -SmokeTest
 - Frontend: `http://localhost:3000`
 - Backend API: `http://localhost:3001/api`
 - AI service: `http://localhost:3002`
-
-### Local demo credentials
-
-`scripts/local-demo.ps1` now generates throwaway local credentials at runtime
-and prints them to the terminal after startup. No fixed demo credentials are
-committed for hosted deployments.
 
 ## Live Deployment
 
@@ -126,7 +120,7 @@ The repository now includes two production-ready deployment paths:
 Build and run the stack directly on the host machine:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\direct-deploy.ps1 -EnvFile .env.production.example -SmokeTest
+powershell -ExecutionPolicy Bypass -File .\scripts\direct-deploy.ps1 -EnvFile .env.production -SmokeTest
 ```
 
 That command:
@@ -141,7 +135,6 @@ That command:
 For persistent data backed by Supabase:
 
 ```powershell
-Copy-Item .\.env.live-data.example .\.env.live-data
 powershell -ExecutionPolicy Bypass -File .\scripts\direct-live-data.ps1 -EnvFile .env.live-data
 ```
 
@@ -158,19 +151,6 @@ The stable Vercel setup for this repo uses three separate projects:
 
 Use [VERCEL_DEPLOYMENT.md](C:/Dev/Projects/Esencelab/docs/VERCEL_DEPLOYMENT.md)
 for the exact env variables, project roots, and deploy order.
-
-### Public demo URL from this machine
-
-If you need a fast shareable live link before permanent cloud hosting is set
-up, first start the local stack and then open a public tunnel:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\public-demo.ps1
-```
-
-That script exposes the frontend on a temporary public URL. Because the
-frontend already proxies backend and AI requests, the single tunnel URL can be
-used as a full demo site while this machine stays online.
 
 ### Docker path
 
@@ -203,7 +183,14 @@ Before deploying publicly:
 - Replace `JWT_SECRET`
 - Set `FRONTEND_URLS` to your real frontend domain
 - Set `AI_ALLOWED_ORIGINS` to your real frontend domain
+- Set the same strong `AI_INTERNAL_AUTH_TOKEN` in both `backend` and `ai-service`
 - Switch `DATA_PROVIDER=supabase` if you want persistent data
+
+## API Versioning And Contracts
+
+- The current public backend surface is the `/api/*` compatibility contract and should be treated as `v1`.
+- Any future breaking API changes should be introduced under `/api/v2/*` rather than changing existing `v1` payloads in place.
+- The AI service exposes a live OpenAPI/Swagger contract through FastAPI at `/docs` and `/openapi.json`.
 
 ## Manual Development Setup
 
@@ -226,7 +213,7 @@ python -m pip install -r requirements.txt
 
 ### 2. Configure backend environment
 
-Use the example file as the base:
+Use the env template as the base:
 
 ```powershell
 Copy-Item .\backend\.env.example .\backend\.env
@@ -279,7 +266,6 @@ Use [backend/.env.example](C:/Dev/Projects/Esencelab/backend/.env.example) as th
 | `FRONTEND_URLS` | Recommended for production | Comma-separated allowed frontend origins |
 | `TRUST_PROXY` | Recommended behind ingress | Enables correct proxy-aware request handling |
 | `DATA_PROVIDER` | Yes | `memory` for local-only mode, `supabase` for persistent mode |
-| `ENABLE_DEMO_DATA` | No | Opt-in seed data for local-only demos |
 | `ALLOW_INSECURE_PASSWORD_RESET_TOKEN_RESPONSE` | No | Local-only reset token echo for test scripts |
 | `INITIAL_ADMIN_EMAIL` | Recommended for first hosted boot | Creates the first admin account if missing |
 | `INITIAL_ADMIN_PASSWORD` | Recommended for first hosted boot | Password for the first admin account |
@@ -315,7 +301,7 @@ Use [frontend/.env.example](C:/Dev/Projects/Esencelab/frontend/.env.example) for
 | `BACKEND_PROXY_TARGET` | If using same-domain proxy mode | Internal backend target for Next.js rewrites |
 | `AI_PROXY_TARGET` | If using same-domain proxy mode | Internal AI target for Next.js rewrites |
 
-Example PowerShell session variables:
+PowerShell session variables:
 
 ```powershell
 $env:GROQ_API_KEY="your_groq_api_key"
@@ -331,10 +317,9 @@ If `GROQ_API_KEY` is not set, the AI coach falls back to local guidance logic in
 
 `memory` mode is the default for local work. It provides:
 
-- Seeded student, recruiter, and admin accounts
-- Seeded jobs, recommendations, and dashboard data
+- Empty runtime state without an external database
 - No dependency on a running external database
-- Fast startup for testing and presentations
+- Fast startup for development and debugging
 
 ### Supabase mode
 
@@ -345,7 +330,6 @@ Required changes:
 1. Set `DATA_PROVIDER=supabase` in `backend/.env`.
 2. Configure `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.
 3. Apply [supabase-schema.sql](C:/Dev/Projects/Esencelab/supabase-schema.sql).
-4. Optionally load [supabase-seed.sql](C:/Dev/Projects/Esencelab/supabase-seed.sql).
 
 ## Validation and Testing
 
@@ -355,6 +339,17 @@ Starts from already-running services and verifies the core flows:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\local-smoke.ps1
+```
+
+Set these environment variables before running the smoke suite:
+
+```powershell
+$env:SMOKE_STUDENT_EMAIL="student@your-domain.com"
+$env:SMOKE_STUDENT_PASSWORD="..."
+$env:SMOKE_RECRUITER_EMAIL="recruiter@your-domain.com"
+$env:SMOKE_RECRUITER_PASSWORD="..."
+$env:SMOKE_ADMIN_EMAIL="admin@your-domain.com"
+$env:SMOKE_ADMIN_PASSWORD="..."
 ```
 
 The smoke suite covers:
@@ -368,8 +363,6 @@ The smoke suite covers:
 - Admin course and user management flows
 - Resume upload, retrieval, and deletion
 - Dashboard stats and AI skill extraction endpoints
-
-### Full feature check
 
 Runs a wider set of feature checks on top of a running local stack:
 
@@ -451,7 +444,7 @@ The frontend app router lives under [frontend/src/app](C:/Dev/Projects/Esencelab
 
 ## Operational Notes
 
-- The local demo scripts automatically configure the backend for `memory` mode.
+- Local development can use `memory` mode, but hosted environments should use `supabase`.
 - The AI service is required for resume parsing and match-related flows.
 - JWT secrets and external API keys should be set through environment variables and never committed.
 - PowerShell scripts stop and restart ports `3000`, `3001`, and `3002` to keep the local stack predictable.

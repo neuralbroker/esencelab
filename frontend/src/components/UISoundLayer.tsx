@@ -25,6 +25,8 @@ export default function UISoundLayer() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (window.matchMedia('(pointer: coarse)').matches) return;
 
     const getAudioContext = () => {
       if (audioContextRef.current) return audioContextRef.current;

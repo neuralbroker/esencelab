@@ -8,6 +8,7 @@
  * fetch logic so auth, caching, and error behavior stay consistent.
  */
 import axios from 'axios';
+
 const getBaseUrl = () => {
   if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
   if (typeof window !== 'undefined') {
@@ -42,10 +43,28 @@ const MAX_CACHE_ENTRIES = 200;
 const responseCache = new Map<string, { expiresAt: number; payload: any }>();
 const inFlightGetRequests = new Map<string, Promise<any>>();
 
+const safeStorageGet = (key: string) => {
+  if (typeof window === 'undefined') return null;
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+
+const safeStorageRemove = (key: string) => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // Ignore storage cleanup failures so auth fallback can continue.
+  }
+};
+
 const getAuthScopeKey = () => {
   if (typeof window === 'undefined') return 'server';
-  const user = localStorage.getItem('user') || '';
-  const token = localStorage.getItem('token') || '';
+  const user = safeStorageGet('user') || '';
+  const token = safeStorageGet('token') || '';
   if (user) return `user:${user}`;
   if (token) return `token:${token.slice(-16)}`;
   return 'anon';
@@ -147,11 +166,10 @@ export const cachedGet = async <T = any>(
 };
 
 api.interceptors.request.use((config) => {
-  if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+  const token = safeStorageGet('token');
+  if (token) {
+    config.headers = config.headers ?? {};
+    config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });
@@ -168,8 +186,8 @@ api.interceptors.response.use(
 
     if (status === 401 && !isAuthRequest) {
       if (typeof window !== 'undefined') {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+        safeStorageRemove('token');
+        safeStorageRemove('user');
         invalidateApiCache();
         if (window.location.pathname !== '/login') {
           window.location.href = '/login';

@@ -60,7 +60,7 @@ Recommended:
 ### Backend
 - `backend/src/index.ts`
   - Main API server
-  - Holds route definitions, auth middleware, in-memory demo data, and wiring to Supabase
+- Holds route definitions, auth middleware, in-memory runtime state, and wiring to Supabase
   - If you want to understand request flow first, start here
 - `backend/src/careerEngine.ts`
   - Pure business logic for resume scoring, roadmap generation, learning plans, and mock interviews
@@ -141,8 +141,8 @@ Recommended:
   - Production-style local run script without Docker
 - `scripts/direct-live-data.ps1`
   - Safe wrapper for live Supabase mode
-- `scripts/local-demo.ps1`
-  - Demo mode runner with in-memory data
+- `scripts/direct-deploy.ps1`
+- Production-style local runner for the full stack
 - `scripts/local-smoke.ps1`
   - Fast end-to-end smoke suite
 - `scripts/full-check.ps1`

@@ -110,7 +110,7 @@ const aiCoachFeatures: Array<{
   { value: 'study_plan', label: 'Study plan' },
 ];
 
-const aiPromptExamples: Record<
+const aiPromptSuggestions: Record<
   'skill_gap' | 'resume_improvement' | 'interview_prep' | 'project_ideas' | 'study_plan',
   string[]
 > = {
@@ -549,7 +549,7 @@ export default function StudentUpskillingHub({
 
           <Card
             hoverable={false}
-            className="border-dashed border-2 bg-transparent hover:bg-white/40 transition-colors p-12 flex flex-col items-center justify-center text-center cursor-pointer"
+            className="border-dashed border-2 bg-transparent p-6 text-center transition-colors hover:bg-white/40 sm:p-8 md:p-12 flex flex-col items-center justify-center cursor-pointer"
             onClick={() => !uploading && fileInputRef.current?.click()}
           >
             {uploading ? (
@@ -627,7 +627,7 @@ export default function StudentUpskillingHub({
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className={`rounded-2xl border-[0.5px] px-6 py-4 text-sm font-medium font-sans flex items-center gap-3 shadow-sm ${feedbackClass}`}
+            className={`rounded-2xl border-[0.5px] px-4 py-3 text-sm font-medium font-sans flex flex-wrap items-center gap-3 shadow-sm sm:px-6 sm:py-4 ${feedbackClass}`}
           >
             {feedback.tone === 'error' ? <AlertCircle className="h-5 w-5" /> : <CheckCircle2 className="h-5 w-5" />}
             {feedback.text}
@@ -657,7 +657,7 @@ export default function StudentUpskillingHub({
       </section>
 
       <section>
-        <div className="glass-panel flex flex-col md:flex-row items-center justify-between gap-12 p-8 md:p-12 rounded-[2.5rem]">
+        <div className="glass-panel flex flex-col items-center justify-between gap-8 rounded-[2.5rem] p-6 md:flex-row md:gap-12 md:p-12">
           <div className="space-y-5 max-w-lg text-center md:text-left flex-1">
             <h2 className="text-3xl font-serif text-primary">Resume Strength Score</h2>
             <p className="text-base text-secondary">
@@ -691,7 +691,7 @@ export default function StudentUpskillingHub({
           <div className="flex-shrink-0 relative">
             <div className="absolute inset-0 bg-accent/10 blur-[50px] rounded-full" />
             <div className="p-4 rounded-full border-[0.5px] border-border bg-white/50 relative z-10 shadow-2xl shadow-black/5">
-              <CircularProgress value={readiness} max={100} size={180} strokeWidth={8} />
+              <CircularProgress value={readiness} max={100} size={168} strokeWidth={8} />
             </div>
           </div>
         </div>
@@ -994,7 +994,7 @@ export default function StudentUpskillingHub({
             This coach uses your resume, roadmap, recommendations, and saved progress so the response is based on
             your actual student profile, not a generic prompt.
           </div>
-          <div className="grid gap-4 md:grid-cols-[220px,1fr]">
+          <div className="grid gap-4 lg:grid-cols-[220px,1fr]">
             <div>
               <label className="mb-1 block text-xs uppercase tracking-[0.12em] text-secondary">Feature</label>
               <select
@@ -1023,20 +1023,20 @@ export default function StudentUpskillingHub({
               <input
                 value={aiPrompt}
                 onChange={(event) => setAiPrompt(event.target.value)}
-                placeholder={aiPromptExamples[aiFeature][0]}
+                placeholder={aiPromptSuggestions[aiFeature][0]}
                 className="w-full rounded-xl border border-border bg-white px-3 py-2 text-sm"
               />
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            {aiPromptExamples[aiFeature].map((example) => (
+            {aiPromptSuggestions[aiFeature].map((suggestion) => (
               <button
-                key={example}
+                key={suggestion}
                 type="button"
-                onClick={() => setAiPrompt(example)}
+                onClick={() => setAiPrompt(suggestion)}
                 className="rounded-full border border-border bg-white px-3 py-1.5 text-xs text-secondary transition hover:border-primary hover:text-primary"
               >
-                {example}
+                {suggestion}
               </button>
             ))}
           </div>

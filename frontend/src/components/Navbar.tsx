@@ -111,7 +111,7 @@ export default function Navbar() {
                 aria-haspopup="true"
               >
                 <div className="h-8 w-8 rounded-full bg-[#f0f0f0] text-[#111111] flex items-center justify-center text-sm font-semibold">
-                  {user?.name?.charAt(0).toUpperCase()}
+                  {user?.name?.charAt(0)?.toUpperCase() || 'U'}
                 </div>
                 <span className="max-w-[120px] truncate text-sm font-medium text-primary">{user?.name}</span>
               </button>

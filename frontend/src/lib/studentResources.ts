@@ -151,7 +151,7 @@ const resourceCatalog: StudentResource[] = [
     level: 'beginner',
     skills: ['Docker'],
     roleIds: ['backend_developer'],
-    whyItHelps: 'Container skills make projects easier to demo, ship, and discuss in interviews.',
+    whyItHelps: 'Container skills make projects easier to ship, showcase, and discuss in interviews.',
   },
   {
     id: 'git-book',

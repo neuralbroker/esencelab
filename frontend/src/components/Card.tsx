@@ -21,7 +21,7 @@ export default function Card({ children, className = '', hoverable = true, title
   const isInteractive = typeof onClick === 'function';
   return (
     <div
-      className={`${baseClass} overflow-hidden ${isInteractive ? 'cursor-pointer' : ''} ${className}`}
+      className={`${baseClass} min-w-0 overflow-hidden ${isInteractive ? 'cursor-pointer' : ''} ${className}`}
       onClick={onClick}
       role={isInteractive ? 'button' : undefined}
       tabIndex={isInteractive ? 0 : undefined}
@@ -45,7 +45,7 @@ export default function Card({ children, className = '', hoverable = true, title
           {action && <div>{action}</div>}
         </div>
       )}
-      <div>{children}</div>
+      <div className="min-w-0">{children}</div>
     </div>
   );
 }

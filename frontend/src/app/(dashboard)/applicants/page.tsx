@@ -309,7 +309,7 @@ export default function ApplicantsPage() {
                 <div className="flex items-center space-x-4">
                   <div className="w-12 h-12 bg-black/5 rounded-full flex items-center justify-center">
                     <span className="text-black font-medium">
-                      {app.student?.name?.charAt(0).toUpperCase()}
+                      {app.student?.name?.charAt(0)?.toUpperCase() || 'U'}
                     </span>
                   </div>
                   <div>

@@ -25,17 +25,22 @@ The service is intentionally defensive:
 import io
 import json
 import hashlib
+import logging
 import os
 import re
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from pathlib import Path
+from uuid import uuid4
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 
 try:
     import numpy as np
@@ -65,6 +70,36 @@ except Exception:  # pragma: no cover
     cosine_similarity = None
 
 app = FastAPI(title="EsenceLab AI Service")
+NODE_ENV = str(os.getenv("NODE_ENV", "development")).strip().lower()
+IS_PRODUCTION = NODE_ENV == "production"
+AI_INTERNAL_AUTH_TOKEN = str(os.getenv("AI_INTERNAL_AUTH_TOKEN", "")).strip()
+MAX_RESUME_FILE_SIZE_MB = max(1, min(8, int(os.getenv("AI_MAX_UPLOAD_MB", "4"))))
+MAX_RESUME_FILE_SIZE_BYTES = MAX_RESUME_FILE_SIZE_MB * 1024 * 1024
+LOG_LEVEL = str(os.getenv("LOG_LEVEL", "INFO")).strip().upper() or "INFO"
+
+logging.basicConfig(level=getattr(logging, LOG_LEVEL, logging.INFO), format="%(message)s")
+logger = logging.getLogger("esencelab.ai")
+
+
+def _timestamp() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _log_event(level: str, event: str, **payload: Any) -> None:
+    entry = {
+        "ts": _timestamp(),
+        "level": level.lower(),
+        "event": event,
+        **payload,
+    }
+    getattr(logger, level.lower(), logger.info)(json.dumps(entry, ensure_ascii=True))
+
+
+def _serialize_error(error: Exception) -> Dict[str, Any]:
+    return {
+        "type": error.__class__.__name__,
+        "message": str(error),
+    }
 
 
 def _load_local_env() -> None:
@@ -90,14 +125,47 @@ _load_local_env()
 
 
 def _parse_allowed_origins() -> List[str]:
-    raw = os.getenv("AI_ALLOWED_ORIGINS", "*").strip()
-    if not raw or raw == "*":
+    raw = os.getenv("AI_ALLOWED_ORIGINS", "").strip()
+    if not raw:
+        return ["*"] if not IS_PRODUCTION else []
+    if raw == "*":
         return ["*"]
     return [entry.strip() for entry in raw.split(",") if entry.strip()]
 
 
 ALLOWED_ORIGINS = _parse_allowed_origins()
 ALLOW_CREDENTIALS = ALLOWED_ORIGINS != ["*"]
+
+
+def _looks_like_placeholder_value(value: str) -> bool:
+    normalized = value.strip().lower()
+    if not normalized:
+        return True
+    return (
+        normalized.startswith("change-this")
+        or normalized.startswith("your-")
+        or "example" in normalized
+        or normalized == "xxx"
+    )
+
+
+def _assert_production_safety() -> None:
+    if not IS_PRODUCTION:
+        return
+    if not ALLOWED_ORIGINS or ALLOWED_ORIGINS == ["*"]:
+        raise RuntimeError("Production requires explicit AI_ALLOWED_ORIGINS values.")
+    if not AI_INTERNAL_AUTH_TOKEN or len(AI_INTERNAL_AUTH_TOKEN) < 24 or _looks_like_placeholder_value(AI_INTERNAL_AUTH_TOKEN):
+        raise RuntimeError("Production requires AI_INTERNAL_AUTH_TOKEN with at least 24 non-placeholder characters.")
+    for origin in ALLOWED_ORIGINS:
+        parsed = urllib.parse.urlparse(origin)
+        if not parsed.scheme or not parsed.netloc:
+            raise RuntimeError(f"Invalid AI_ALLOWED_ORIGINS origin: {origin}")
+        is_local = parsed.hostname in {"localhost", "127.0.0.1"}
+        if not is_local and parsed.scheme != "https":
+            raise RuntimeError(f"Production AI_ALLOWED_ORIGINS must use https: {origin}")
+
+
+_assert_production_safety()
 
 app.add_middleware(
     CORSMiddleware,
@@ -106,6 +174,88 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def request_logging_middleware(request: Request, call_next):
+    request_id = request.headers.get("x-request-id", "").strip() or uuid4().hex
+    request.state.request_id = request_id
+
+    if AI_INTERNAL_AUTH_TOKEN and request.url.path.startswith("/ai/"):
+        provided_token = request.headers.get("x-internal-service-token", "").strip()
+        if provided_token != AI_INTERNAL_AUTH_TOKEN:
+            _log_event(
+                "warning",
+                "auth.internal_token_rejected",
+                requestId=request_id,
+                method=request.method,
+                path=request.url.path,
+            )
+            return JSONResponse(
+                status_code=401,
+                content={
+                    "error": "not_authenticated",
+                    "message": "Not authenticated",
+                    "code": "NOT_AUTHENTICATED",
+                    "requestId": request_id,
+                },
+            )
+
+    started = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception as exc:
+        duration_ms = round((time.perf_counter() - started) * 1000)
+        _log_event(
+            "error",
+            "http.request.failed",
+            requestId=request_id,
+            method=request.method,
+            path=request.url.path,
+            latencyMs=duration_ms,
+            error=_serialize_error(exc),
+        )
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": "internal_server_error",
+                "message": "Internal server error",
+                "code": "INTERNAL_SERVER_ERROR",
+                "requestId": request_id,
+            },
+        )
+
+    duration_ms = round((time.perf_counter() - started) * 1000)
+    level = "info"
+    if response.status_code >= 500:
+        level = "error"
+    elif response.status_code >= 400 or duration_ms >= 1200:
+        level = "warning"
+    _log_event(
+        level,
+        "http.request.completed",
+        requestId=request_id,
+        method=request.method,
+        path=request.url.path,
+        statusCode=response.status_code,
+        latencyMs=duration_ms,
+    )
+    response.headers["X-Request-Id"] = request_id
+    return response
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    message = str(exc.detail or "Request failed")
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": "request_failed" if exc.status_code < 500 else "internal_server_error",
+            "message": message if exc.status_code < 500 else "Internal server error",
+            "code": "REQUEST_FAILED" if exc.status_code < 500 else "INTERNAL_SERVER_ERROR",
+            "requestId": getattr(request.state, "request_id", None),
+        },
+    )
 
 NLP_MODEL = None
 if spacy:
@@ -189,7 +339,7 @@ class MatchResponse(BaseModel):
 class StudentAssistantRequest(BaseModel):
     feature: str
     prompt: Optional[str] = None
-    context: Dict[str, Any] = {}
+    context: Dict[str, Any] = Field(default_factory=dict)
 
 
 class StudentAssistantResponse(BaseModel):
@@ -638,7 +788,7 @@ def _fallback_student_assistant(feature: str, prompt: str, context: Dict[str, An
             "actionItems": [
                 f"Project 1: Build a mini app focused on {missing[0] if missing else 'core backend/frontend'} with deployment.",
                 "Project 2: Add analytics, testing, and monitoring to show production readiness.",
-                "Project 3: Publish architecture notes and demo video in your portfolio.",
+                "Project 3: Publish architecture notes and a walkthrough video in your portfolio.",
                 "Track measurable outcomes: performance, uptime, or user interactions.",
             ],
             "followUpQuestions": [
@@ -786,33 +936,58 @@ async def root():
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "groqConfigured": bool(str(os.getenv("GROQ_API_KEY", "")).strip()),
+        "allowedOriginsConfigured": 0 if ALLOWED_ORIGINS == ["*"] else len(ALLOWED_ORIGINS),
+        "assistantCacheSize": len(_assistant_cache),
+    }
 
 
 @app.post("/ai/parse-resume", response_model=ResumeParseResponse)
-async def parse_resume_endpoint(file: UploadFile = File(...)):
-    if not file.filename.lower().endswith(".pdf"):
+async def parse_resume_endpoint(request: Request, file: UploadFile = File(...)):
+    filename = str(file.filename or "").strip().lower()
+    if not filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
 
     try:
         content = await file.read()
+        if len(content) > MAX_RESUME_FILE_SIZE_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large. Maximum size is {MAX_RESUME_FILE_SIZE_MB}MB.",
+            )
         parsed_data = empty_parsed_resume()
 
         try:
             text = extract_text_from_pdf_bytes(content)
             if text:
                 parsed_data = parse_resume_text(text)
-        except Exception:
-            # Do not fail the full flow for malformed/scanned PDFs in demo mode.
+        except Exception as exc:
+            _log_event(
+                "warning",
+                "resume.parse.fallback_used",
+                requestId=getattr(request.state, "request_id", None),
+                error=_serialize_error(exc),
+            )
+        # Do not fail the full flow for malformed or scanned PDFs.
             parsed_data = empty_parsed_resume()
 
         return ResumeParseResponse(parsedData=parsed_data, skills=parsed_data.get("skills", []))
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Error parsing resume: {str(exc)}")
+        if isinstance(exc, HTTPException):
+            raise exc
+        _log_event(
+            "error",
+            "resume.parse.failed",
+            requestId=getattr(request.state, "request_id", None),
+            error=_serialize_error(exc),
+        )
+        raise HTTPException(status_code=500, detail="Failed to parse resume")
 
 
 @app.post("/ai/match", response_model=MatchResponse)
-async def match_jobs(request: MatchRequest):
+async def match_jobs(request: MatchRequest, http_request: Request):
     try:
         resume_skills = normalize_skill_list(request.resumeSkills)
         job_skills = normalize_skill_list(
@@ -843,19 +1018,31 @@ async def match_jobs(request: MatchRequest):
             explanation=explanation,
         )
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Error matching: {str(exc)}")
+        _log_event(
+            "error",
+            "match.failed",
+            requestId=getattr(http_request.state, "request_id", None),
+            error=_serialize_error(exc),
+        )
+        raise HTTPException(status_code=500, detail="Failed to calculate match")
 
 
 @app.post("/ai/extract-skills")
-async def extract_skills_endpoint(text: str = Form(...)):
+async def extract_skills_endpoint(http_request: Request, text: str = Form(...)):
     try:
         return {"skills": extract_skills(preprocess_text(text))}
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Error extracting skills: {str(exc)}")
+        _log_event(
+            "error",
+            "skills.extract.failed",
+            requestId=getattr(http_request.state, "request_id", None),
+            error=_serialize_error(exc),
+        )
+        raise HTTPException(status_code=500, detail="Failed to extract skills")
 
 
 @app.post("/ai/student-assistant", response_model=StudentAssistantResponse)
-async def student_assistant_endpoint(request: StudentAssistantRequest):
+async def student_assistant_endpoint(request: StudentAssistantRequest, http_request: Request):
     feature = str(request.feature or "").strip().lower()
     if feature not in SUPPORTED_STUDENT_FEATURES:
         feature = "skill_gap"
@@ -893,10 +1080,17 @@ async def student_assistant_endpoint(request: StudentAssistantRequest):
         "expiresAt": time.time() + max(30, ASSISTANT_CACHE_TTL_SEC),
         "data": safe_result,
     }
+    _log_event(
+        "info",
+        "student_assistant.completed",
+        requestId=getattr(http_request.state, "request_id", None),
+        feature=feature,
+        provider=safe_result["provider"],
+    )
     return StudentAssistantResponse(**safe_result)
 
 
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "8000")))

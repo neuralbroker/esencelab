@@ -207,7 +207,7 @@ export default function UsersPage() {
                         <div className="flex items-center space-x-3">
                           <div className="w-8 h-8 bg-black/5 rounded-full flex items-center justify-center">
                             <span className="text-black text-sm font-medium">
-                              {entry.name?.charAt(0).toUpperCase()}
+                              {entry.name?.charAt(0)?.toUpperCase() || 'U'}
                             </span>
                           </div>
                           <span className="font-medium text-black">{entry.name}</span>

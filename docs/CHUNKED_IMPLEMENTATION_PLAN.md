@@ -12,7 +12,7 @@ Scope:
 - Auth hardening and role compatibility
 - Reusable auth/RBAC middleware
 - Profile/security endpoints
-- Password reset (demo-safe optional flow)
+- Password reset (optional secure flow)
 
 Acceptance criteria:
 - Register/login supports student/recruiter/admin (with legacy employer compatibility)

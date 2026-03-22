@@ -13,11 +13,13 @@ import compression from 'compression';
 import dotenv from 'dotenv';
 import { v4 as uuidv4 } from 'uuid';
 import multer from 'multer';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
+import { createServer, Server } from 'http';
+import { Socket } from 'net';
 import { SupabaseStore } from './supabaseStore';
 import {
   CAREER_ROLES,
@@ -36,19 +38,31 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const NODE_ENV = String(process.env.NODE_ENV || 'development')
+  .trim()
+  .toLowerCase();
+const IS_PRODUCTION = NODE_ENV === 'production';
 const JWT_SECRET = String(process.env.JWT_SECRET || '').trim();
+const AI_SERVICE_URL = String(process.env.AI_SERVICE_URL || 'http://localhost:3002').trim() || 'http://localhost:3002';
+const AI_INTERNAL_AUTH_TOKEN = String(process.env.AI_INTERNAL_AUTH_TOKEN || '').trim();
 if (!JWT_SECRET) {
   throw new Error('JWT_SECRET environment variable is required.');
 }
 const SERVER_STARTED_AT = Date.now();
 const SLOW_ENDPOINT_THRESHOLD_MS = Number(process.env.SLOW_ENDPOINT_THRESHOLD_MS || 1200);
+const GENERAL_RATE_LIMIT_WINDOW_MS = Math.max(60_000, Number(process.env.GENERAL_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000));
+const GENERAL_RATE_LIMIT_MAX_REQUESTS = Math.max(100, Number(process.env.GENERAL_RATE_LIMIT_MAX_REQUESTS || 400));
 const MAX_RESUME_FILE_SIZE_MB = Math.max(
   1,
   Math.min(4.4, Number(process.env.MAX_RESUME_FILE_SIZE_MB || 4))
 );
 const MAX_RESUME_FILE_SIZE_BYTES = Math.floor(MAX_RESUME_FILE_SIZE_MB * 1024 * 1024);
+const METRIC_SAMPLE_LIMIT = Math.max(50, Number(process.env.METRIC_SAMPLE_LIMIT || 240));
+const AI_REQUEST_TIMEOUT_MS = Math.max(1000, Number(process.env.AI_REQUEST_TIMEOUT_MS || 12000));
+const AI_MATCH_TIMEOUT_MS = Math.max(1000, Number(process.env.AI_MATCH_TIMEOUT_MS || 8000));
+const AI_HEALTH_TIMEOUT_MS = Math.max(1000, Number(process.env.AI_HEALTH_TIMEOUT_MS || 3500));
+const SHUTDOWN_TIMEOUT_MS = Math.max(1000, Number(process.env.SHUTDOWN_TIMEOUT_MS || 10000));
 let runtimeReady: Promise<void> = Promise.resolve();
-type BootstrapRole = 'student' | 'employer' | 'admin';
 
 const toBooleanEnv = (name: string, defaultValue = false) => {
   const rawValue = process.env[name];
@@ -67,44 +81,113 @@ const requireEnv = (name: string) => {
   return value;
 };
 
-const ENABLE_DEMO_DATA = toBooleanEnv('ENABLE_DEMO_DATA');
 const ALLOW_INSECURE_PASSWORD_RESET_TOKEN_RESPONSE = toBooleanEnv(
   'ALLOW_INSECURE_PASSWORD_RESET_TOKEN_RESPONSE'
 );
-const SYNC_DEMO_DATA_TO_SUPABASE = toBooleanEnv('SYNC_DEMO_DATA_TO_SUPABASE');
 const DATA_PROVIDER = String(process.env.DATA_PROVIDER || 'memory')
   .trim()
   .toLowerCase();
-const SHOULD_BOOT_DEMO_DATA =
-  ENABLE_DEMO_DATA && (DATA_PROVIDER === 'memory' || SYNC_DEMO_DATA_TO_SUPABASE);
+const DEFAULT_BOOTSTRAP_EMAILS = new Set(['admin@esencelab.com', 'recruiter@esencelab.com']);
+const DEFAULT_BOOTSTRAP_PASSWORDS = new Set(['changethispassword123!', 'admin@esencelab2026', 'password123456']);
 
-type SeedUserConfig = {
-  id: string;
-  email: string;
-  password: string;
-  name: string;
-  role: BootstrapRole;
+const parseEnvList = (rawValue: string) =>
+  rawValue
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+const looksLikePlaceholderValue = (value: string) => {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return true;
+  return (
+    normalized.startsWith('change-this') ||
+    normalized.startsWith('your-') ||
+    normalized === 'xxx'
+  );
 };
 
-const readSeedUserConfig = (prefix: string, role: BootstrapRole, id: string): SeedUserConfig => ({
-  id,
-  email: requireEnv(`${prefix}_EMAIL`).toLowerCase(),
-  password: requireEnv(`${prefix}_PASSWORD`),
-  name: requireEnv(`${prefix}_NAME`),
-  role,
-});
+const assertProductionSafety = () => {
+  if (!IS_PRODUCTION) return;
 
-const buildDemoSeedUsers = (): SeedUserConfig[] => {
-  if (!SHOULD_BOOT_DEMO_DATA) {
-    return [];
+  if (DATA_PROVIDER !== 'supabase') {
+    throw new Error('Production requires DATA_PROVIDER=supabase.');
+  }
+  if (ALLOW_INSECURE_PASSWORD_RESET_TOKEN_RESPONSE) {
+    throw new Error('ALLOW_INSECURE_PASSWORD_RESET_TOKEN_RESPONSE must remain disabled in production.');
+  }
+  if (JWT_SECRET.length < 32 || looksLikePlaceholderValue(JWT_SECRET)) {
+    throw new Error('Production requires a strong non-placeholder JWT_SECRET with at least 32 characters.');
+  }
+  if (!AI_INTERNAL_AUTH_TOKEN || AI_INTERNAL_AUTH_TOKEN.length < 24 || looksLikePlaceholderValue(AI_INTERNAL_AUTH_TOKEN)) {
+    throw new Error('Production requires AI_INTERNAL_AUTH_TOKEN with at least 24 non-placeholder characters.');
   }
 
-  return [
-    readSeedUserConfig('DEMO_STUDENT', 'student', '11111111-1111-1111-1111-111111111111'),
-    readSeedUserConfig('DEMO_RECRUITER', 'employer', '22222222-2222-2222-2222-222222222222'),
-    readSeedUserConfig('DEMO_ADMIN', 'admin', '33333333-3333-3333-3333-333333333333'),
-  ];
+  const configuredFrontendOrigins = parseEnvList(
+    process.env.FRONTEND_URLS || process.env.FRONTEND_URL || ''
+  );
+  if (configuredFrontendOrigins.length === 0) {
+    throw new Error('Production requires FRONTEND_URLS or FRONTEND_URL to be configured.');
+  }
+  if (configuredFrontendOrigins.includes('*')) {
+    throw new Error('Production does not allow wildcard FRONTEND_URLS origins.');
+  }
+  for (const origin of configuredFrontendOrigins) {
+    let parsedOrigin: URL;
+    try {
+      parsedOrigin = new URL(origin);
+    } catch {
+      throw new Error(`FRONTEND_URLS contains an invalid origin: ${origin}`);
+    }
+    const isLocalOrigin = ['localhost', '127.0.0.1'].includes(parsedOrigin.hostname);
+    if (!isLocalOrigin && parsedOrigin.protocol !== 'https:') {
+      throw new Error(`Production frontend origins must use https: ${origin}`);
+    }
+  }
+
+  const bootstrapPrefixes = ['INITIAL_ADMIN', 'INITIAL_RECRUITER'];
+  for (const prefix of bootstrapPrefixes) {
+    const email = String(process.env[`${prefix}_EMAIL`] || '')
+      .trim()
+      .toLowerCase();
+    const password = String(process.env[`${prefix}_PASSWORD`] || '').trim();
+
+    if (!email && !password) continue;
+
+    if (!email || !password) {
+      throw new Error(`${prefix}_EMAIL and ${prefix}_PASSWORD must both be set when bootstrapping users in production.`);
+    }
+    if (DEFAULT_BOOTSTRAP_EMAILS.has(email)) {
+      throw new Error(`${prefix}_EMAIL must be changed before running in production.`);
+    }
+    if (DEFAULT_BOOTSTRAP_PASSWORDS.has(password.toLowerCase()) || password.length < 12) {
+      throw new Error(`${prefix}_PASSWORD must be a unique production password with at least 12 characters.`);
+    }
+  }
 };
+
+assertProductionSafety();
+
+const wrapRouteHandler = (handler: unknown) => {
+  if (typeof handler !== 'function') return handler;
+  return (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = (handler as any)(req, res, next);
+      if (result && typeof result.then === 'function') {
+        Promise.resolve(result).catch(next);
+      }
+    } catch (error) {
+      next(error);
+    }
+  };
+};
+
+for (const method of ['get', 'post', 'put', 'delete', 'patch'] as const) {
+  const originalMethod = (app as any)[method].bind(app);
+  (app as any)[method] = (...args: any[]) => {
+    const [pathOrHandler, ...handlers] = args;
+    return originalMethod(pathOrHandler, ...handlers.map((handler: unknown) => wrapRouteHandler(handler)));
+  };
+}
 
 const createEmptyDb = () => ({
   profiles: [] as any[],
@@ -130,203 +213,9 @@ const createEmptyDb = () => ({
   },
 });
 
-const createInitialDb = () => {
-  const db = createEmptyDb();
-  if (!SHOULD_BOOT_DEMO_DATA) {
-    return db;
-  }
-
-  const demoUsers = buildDemoSeedUsers();
-  const now = new Date();
-  const demoPasswordHashes = new Map(
-    demoUsers.map((user) => [user.id, bcrypt.hashSync(user.password, 10)])
-  );
-  const student = demoUsers.find((user) => user.role === 'student');
-  const recruiter = demoUsers.find((user) => user.role === 'employer');
-
-  db.profiles = demoUsers.map((user) => ({
-    id: user.id,
-    email: user.email,
-    passwordHash: demoPasswordHashes.get(user.id),
-    name: user.name,
-    role: user.role,
-    avatarUrl: null,
-    isActive: true,
-    createdAt: now,
-    updatedAt: now,
-  }));
-
-  if (recruiter) {
-    db.jobs = [
-      {
-        id: '1',
-        employerId: recruiter.id,
-        title: 'Software Engineer',
-        company: 'Tech Corp',
-        location: 'Bangalore, India',
-        description: 'We are looking for a skilled software engineer',
-        requirements: ['Python', 'JavaScript', 'React', 'Node.js', 'SQL'],
-        skills: ['Python', 'JavaScript', 'React', 'Node.js', 'SQL'],
-        salaryMin: 80000,
-        salaryMax: 120000,
-        jobType: 'full_time',
-        status: 'active',
-        createdAt: now,
-        updatedAt: now,
-      },
-      {
-        id: '2',
-        employerId: recruiter.id,
-        title: 'Data Scientist',
-        company: 'Data Inc',
-        location: 'Hyderabad, India',
-        description: 'Join our data science team',
-        requirements: ['Python', 'Machine Learning', 'TensorFlow', 'SQL'],
-        skills: ['Python', 'Machine Learning', 'TensorFlow'],
-        salaryMin: 100000,
-        salaryMax: 150000,
-        jobType: 'full_time',
-        status: 'active',
-        createdAt: now,
-        updatedAt: now,
-      },
-      {
-        id: '3',
-        employerId: recruiter.id,
-        title: 'Frontend Developer',
-        company: 'Web Solutions',
-        location: 'Remote',
-        description: 'Build beautiful web applications',
-        requirements: ['React', 'TypeScript', 'CSS', 'HTML'],
-        skills: ['React', 'TypeScript', 'CSS'],
-        salaryMin: 60000,
-        salaryMax: 90000,
-        jobType: 'full_time',
-        status: 'active',
-        createdAt: now,
-        updatedAt: now,
-      },
-      {
-        id: '4',
-        employerId: recruiter.id,
-        title: 'Backend Developer',
-        company: 'API Solutions',
-        location: 'Chennai, India',
-        description: 'Build scalable backend services',
-        requirements: ['Node.js', 'Python', 'PostgreSQL'],
-        skills: ['Node.js', 'Python', 'PostgreSQL'],
-        salaryMin: 70000,
-        salaryMax: 110000,
-        jobType: 'full_time',
-        status: 'active',
-        createdAt: now,
-        updatedAt: now,
-      },
-      {
-        id: '5',
-        employerId: recruiter.id,
-        title: 'DevOps Engineer',
-        company: 'Cloud Systems',
-        location: 'Bangalore, India',
-        description: 'Manage cloud infrastructure',
-        requirements: ['AWS', 'Docker', 'Kubernetes'],
-        skills: ['AWS', 'Docker', 'Kubernetes'],
-        salaryMin: 90000,
-        salaryMax: 140000,
-        jobType: 'full_time',
-        status: 'active',
-        createdAt: now,
-        updatedAt: now,
-      },
-    ];
-  }
-
-  if (student) {
-    db.candidates = [
-      {
-        id: '1',
-        userId: student.id,
-        name: student.name,
-        email: student.email,
-        role: 'Software Developer',
-        skills: JSON.stringify(['Python', 'JavaScript', 'React', 'Node.js', 'SQL']),
-        education: JSON.stringify([
-          { institution: 'SNGCET', degree: 'B.Tech', field: 'Computer Science', year: '2025' },
-        ]),
-        experience: JSON.stringify([]),
-        matchScore: 85,
-        status: 'new',
-        createdAt: now,
-        updatedAt: now,
-      },
-    ];
-    db.careerPreferences = [{ userId: student.id, roleId: 'backend_developer', updatedAt: now }];
-  }
-
-  db.courses = [
-    {
-      id: '1',
-      title: 'Complete Python Bootcamp',
-      description: 'Learn Python from scratch',
-      provider: 'Udemy',
-      url: 'https://udemy.com',
-      skills: ['Python', 'Django'],
-      duration: '22 hours',
-      level: 'beginner',
-      rating: 4.5,
-      createdAt: now,
-      updatedAt: now,
-    },
-    {
-      id: '2',
-      title: 'React - The Complete Guide',
-      description: 'Master React.js',
-      provider: 'Udemy',
-      url: 'https://udemy.com',
-      skills: ['React', 'Redux'],
-      duration: '40 hours',
-      level: 'intermediate',
-      rating: 4.6,
-      createdAt: now,
-      updatedAt: now,
-    },
-    {
-      id: '3',
-      title: 'Machine Learning A-Z',
-      description: 'Learn ML Algorithms',
-      provider: 'Udemy',
-      url: 'https://udemy.com',
-      skills: ['Python', 'Machine Learning'],
-      duration: '44 hours',
-      level: 'intermediate',
-      rating: 4.5,
-      createdAt: now,
-      updatedAt: now,
-    },
-    {
-      id: '4',
-      title: 'Node.js Developer Course',
-      description: 'Build real-world apps',
-      provider: 'Udemy',
-      url: 'https://udemy.com',
-      skills: ['Node.js', 'Express'],
-      duration: '37 hours',
-      level: 'intermediate',
-      rating: 4.7,
-      createdAt: now,
-      updatedAt: now,
-    },
-  ];
-
-  return db;
-};
-
 const FRONTEND_ORIGINS = (() => {
   const rawOrigins = process.env.FRONTEND_URLS || process.env.FRONTEND_URL || 'http://localhost:3000';
-  return rawOrigins
-    .split(',')
-    .map((entry) => entry.trim())
-    .filter(Boolean);
+  return parseEnvList(rawOrigins);
 })();
 const ALLOW_ALL_FRONTEND_ORIGINS = FRONTEND_ORIGINS.includes('*');
 const TRUST_PROXY_RAW = String(process.env.TRUST_PROXY || '').trim().toLowerCase();
@@ -338,6 +227,7 @@ if (TRUST_PROXY_RAW) {
   else app.set('trust proxy', TRUST_PROXY_RAW);
 }
 
+app.disable('x-powered-by');
 app.use(helmet());
 app.use(
   cors({
@@ -360,13 +250,206 @@ app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.set('etag', 'strong');
 
-app.use(async (_req, res, next) => {
+type RequestWithAuth = Request & { authToken?: string; profile?: any; requestId?: string };
+type LogLevel = 'info' | 'warn' | 'error';
+
+const toSerializableError = (error: any) => ({
+  message: String(error?.message || error || 'Unknown error'),
+  name: String(error?.name || 'Error'),
+  stack: typeof error?.stack === 'string' ? error.stack : undefined,
+  code: error?.code ? String(error.code) : undefined,
+});
+
+const logEvent = (level: LogLevel, event: string, payload: Record<string, any> = {}) => {
+  const entry = JSON.stringify({
+    ts: new Date().toISOString(),
+    level,
+    event,
+    ...payload,
+  });
+  if (level === 'error') {
+    console.error(entry);
+  } else if (level === 'warn') {
+    console.warn(entry);
+  } else {
+    console.log(entry);
+  }
+};
+
+const logError = (event: string, error: any, payload: Record<string, any> = {}) => {
+  logEvent('error', event, {
+    ...payload,
+    error: toSerializableError(error),
+  });
+};
+
+const toRequestPath = (req: Request) => (req.originalUrl || req.url || '/').split('?')[0] || '/';
+
+const getResponseLogLevel = (statusCode: number, durationMs: number): LogLevel => {
+  if (statusCode >= 500) return 'error';
+  if (statusCode >= 400 || durationMs >= SLOW_ENDPOINT_THRESHOLD_MS) return 'warn';
+  return 'info';
+};
+
+const toErrorName = (statusCode: number) => {
+  switch (statusCode) {
+    case 400:
+      return 'bad_request';
+    case 401:
+      return 'not_authenticated';
+    case 403:
+      return 'not_authorized';
+    case 404:
+      return 'not_found';
+    case 409:
+      return 'conflict';
+    case 413:
+      return 'payload_too_large';
+    case 429:
+      return 'rate_limited';
+    default:
+      return statusCode >= 500 ? 'internal_server_error' : 'request_failed';
+  }
+};
+
+const toErrorCode = (statusCode: number) => {
+  switch (statusCode) {
+    case 400:
+      return 'BAD_REQUEST';
+    case 401:
+      return 'NOT_AUTHENTICATED';
+    case 403:
+      return 'NOT_AUTHORIZED';
+    case 404:
+      return 'NOT_FOUND';
+    case 409:
+      return 'CONFLICT';
+    case 413:
+      return 'PAYLOAD_TOO_LARGE';
+    case 429:
+      return 'RATE_LIMITED';
+    default:
+      return statusCode >= 500 ? 'INTERNAL_SERVER_ERROR' : 'REQUEST_FAILED';
+  }
+};
+
+const normalizeErrorResponseBody = (statusCode: number, body: any, requestId?: string) => {
+  if (statusCode < 400) {
+    return body;
+  }
+
+  const safeMessage = statusCode >= 500 ? 'Internal server error' : undefined;
+
+  if (body && typeof body === 'object' && !Array.isArray(body)) {
+    if (typeof body.error === 'string' && typeof body.message === 'string') {
+      return {
+        ...body,
+        code: body.code || toErrorCode(statusCode),
+        requestId: body.requestId || requestId,
+      };
+    }
+
+    if (typeof body.message === 'string') {
+      return {
+        ...body,
+        error: body.error || toErrorName(statusCode),
+        message: safeMessage || body.message,
+        code: body.code || toErrorCode(statusCode),
+        requestId: body.requestId || requestId,
+      };
+    }
+  }
+
+  if (typeof body === 'string') {
+    return {
+      error: toErrorName(statusCode),
+      message: safeMessage || body,
+      code: toErrorCode(statusCode),
+      requestId,
+    };
+  }
+
+  return {
+    error: toErrorName(statusCode),
+    message: safeMessage || 'Request failed',
+    code: toErrorCode(statusCode),
+    requestId,
+  };
+};
+
+const toPercentile = (values: number[], percentile: number) => {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((left, right) => left - right);
+  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil((percentile / 100) * sorted.length) - 1));
+  return Math.round(sorted[index] || 0);
+};
+
+const getMetricSamples = (entry: any): number[] => {
+  return Array.isArray(entry?.recentDurationsMs)
+    ? entry.recentDurationsMs.filter((value: unknown) => Number.isFinite(Number(value))).map((value: unknown) => Number(value))
+    : [];
+};
+
+const buildAiServiceHeaders = (headers: Record<string, string> = {}) => {
+  if (!AI_INTERNAL_AUTH_TOKEN) {
+    return headers;
+  }
+  return {
+    ...headers,
+    'x-internal-service-token': AI_INTERNAL_AUTH_TOKEN,
+  };
+};
+
+let isShuttingDown = false;
+let server: Server | null = null;
+const openConnections = new Set<Socket>();
+
+app.use((req: RequestWithAuth, res, next) => {
+  const requestId = String(req.headers['x-request-id'] || '').trim() || crypto.randomUUID();
+  req.requestId = requestId;
+  res.setHeader('X-Request-Id', requestId);
+  next();
+});
+
+app.use((req: RequestWithAuth, res, next) => {
+  const originalJson = res.json.bind(res);
+  const normalize = (body: any) =>
+    normalizeErrorResponseBody(res.statusCode, body, req.requestId);
+
+  res.json = ((body: any) => originalJson(normalize(body))) as typeof res.json;
+
+  next();
+});
+
+app.use((req, res, next) => {
+  if (isShuttingDown && req.path !== '/api/health') {
+    res.setHeader('Connection', 'close');
+    return res.status(503).json({
+      error: 'service_unavailable',
+      message: 'Server is restarting. Please retry shortly.',
+      code: 'SERVICE_UNAVAILABLE',
+      requestId: (req as RequestWithAuth).requestId,
+    });
+  }
+  return next();
+});
+
+app.use(async (req: RequestWithAuth, res, next) => {
   try {
     await runtimeReady;
     next();
   } catch (error: any) {
-    console.error('Runtime bootstrap failed:', error);
-    res.status(500).json({ message: 'Server initialization failed.' });
+    logError('runtime.bootstrap_failed', error, {
+      requestId: req.requestId,
+      method: req.method,
+      path: normalizeMetricPath(toRequestPath(req)),
+    });
+    res.status(500).json({
+      error: 'service_initialization_failed',
+      message: 'Server initialization failed.',
+      code: 'SERVICE_INITIALIZATION_FAILED',
+      requestId: req.requestId,
+    });
   }
 });
 
@@ -409,6 +492,17 @@ const adminLimiter = rateLimit({
   legacyHeaders: false,
   message: { message: 'Too many admin requests, please retry shortly.' },
 });
+
+const publicApiLimiter = rateLimit({
+  windowMs: GENERAL_RATE_LIMIT_WINDOW_MS,
+  max: GENERAL_RATE_LIMIT_MAX_REQUESTS,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.path === '/health' || Boolean(req.headers.authorization),
+  message: { message: 'Too many requests, please retry later.' },
+});
+
+app.use('/api', publicApiLimiter);
 
 // Setup multer for file uploads
 //
@@ -463,9 +557,7 @@ const resumeUploadMiddleware = (req: Request, res: Response, next: NextFunction)
   });
 };
 
-// AI Service URL
-const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:3002';
-const db: any = createInitialDb();
+const db: any = createEmptyDb();
 
 const supabaseStore = new SupabaseStore();
 
@@ -519,13 +611,13 @@ const normalizeMetricPath = (value: string) => {
     .replace(/\/\d+(?=\/|$)/g, '/:id');
 };
 
-app.use((req, res, next) => {
+app.use((req: RequestWithAuth, res, next) => {
   const start = Date.now();
   db.requestMetrics.totalRequests += 1;
 
   res.on('finish', () => {
     const durationMs = Date.now() - start;
-    const pathPart = normalizeMetricPath((req.originalUrl || req.url || '/').split('?')[0] || '/');
+    const pathPart = normalizeMetricPath(toRequestPath(req));
     const key = `${req.method.toUpperCase()} ${pathPart}`;
     const current = db.requestMetrics.endpoints[key] || {
       count: 0,
@@ -535,6 +627,7 @@ app.use((req, res, next) => {
       slowCount: 0,
       lastStatusCode: 200,
       lastSeenAt: null,
+      recentDurationsMs: [] as number[],
     };
 
     current.count += 1;
@@ -542,6 +635,10 @@ app.use((req, res, next) => {
     current.maxDurationMs = Math.max(current.maxDurationMs, durationMs);
     current.lastStatusCode = res.statusCode;
     current.lastSeenAt = new Date();
+    current.recentDurationsMs.push(durationMs);
+    if (current.recentDurationsMs.length > METRIC_SAMPLE_LIMIT) {
+      current.recentDurationsMs.splice(0, current.recentDurationsMs.length - METRIC_SAMPLE_LIMIT);
+    }
     if (res.statusCode >= 400) {
       current.errors += 1;
       db.requestMetrics.totalErrors += 1;
@@ -554,6 +651,17 @@ app.use((req, res, next) => {
       db.requestMetrics.slowRequests += 1;
     }
     db.requestMetrics.endpoints[key] = current;
+
+    const authenticatedProfile = req.profile || getProfileFromAuth(req);
+    logEvent(getResponseLogLevel(res.statusCode, durationMs), 'http.request.completed', {
+      requestId: req.requestId,
+      method: req.method,
+      path: pathPart,
+      statusCode: res.statusCode,
+      latencyMs: durationMs,
+      userId: authenticatedProfile?.id || null,
+      userRole: authenticatedProfile ? toCanonicalRole(authenticatedProfile.role) : null,
+    });
   });
 
   next();
@@ -561,7 +669,6 @@ app.use((req, res, next) => {
 
 type CanonicalRole = 'student' | 'recruiter' | 'admin';
 type SupportedRole = CanonicalRole | 'employer';
-type RequestWithAuth = Request & { authToken?: string; profile?: any };
 
 const resetTokens = new Map<string, { userId: string; expiresAt: number }>();
 const revokedTokens = new Set<string>();
@@ -869,6 +976,17 @@ const normalizeSkillList = (value: unknown): string[] => {
   return Array.from(unique.values());
 };
 
+const parseJsonArray = (value: unknown): any[] => {
+  if (Array.isArray(value)) return value;
+  if (typeof value !== 'string') return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
 const normalizeResumeParsedData = (value: any, profile: any) => {
   const safe = value && typeof value === 'object' ? value : {};
   const parsedSkills = normalizeSkillList(safe.skills);
@@ -917,7 +1035,7 @@ const setCareerPreference = (userId: string, roleId: string) => {
   };
   if (idx >= 0) db.careerPreferences[idx] = record;
   else db.careerPreferences.push(record);
-  return safeRoleId;
+  return record;
 };
 
 const getStudentResumeSkills = (userId: string) => {
@@ -1042,7 +1160,7 @@ const buildStudentAICoachFallback = (payload: {
       actionItems: [
         `Create one mini project centered on ${missingSkills[0] || 'a core skill'} and deploy it.`,
         'Add testing, error handling, and logging to show production quality.',
-        'Write concise architecture notes and attach a short demo video.',
+      'Write concise architecture notes and attach a short walkthrough video.',
         'Highlight measurable outcomes in your resume.',
       ],
       followUpQuestions: [
@@ -1099,14 +1217,14 @@ const callStudentAICoach = async (payload: {
 }) => {
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 12000);
+    const timeout = setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS);
     const response = await (async () => {
       try {
         return await fetch(`${AI_SERVICE_URL}/ai/student-assistant`, {
           method: 'POST',
-          headers: {
+          headers: buildAiServiceHeaders({
             'Content-Type': 'application/json',
-          },
+          }),
           body: JSON.stringify(payload),
           signal: controller.signal,
         });
@@ -1300,10 +1418,11 @@ const getPlatformHealthSnapshot = async () => {
   };
   const started = Date.now();
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 3500);
+  const timeout = setTimeout(() => controller.abort(), AI_HEALTH_TIMEOUT_MS);
   try {
     const aiResponse = await fetch(`${AI_SERVICE_URL}/health`, {
       method: 'GET',
+      headers: buildAiServiceHeaders(),
       signal: controller.signal,
     });
     aiHealth.status = aiResponse.ok ? 'up' : 'degraded';
@@ -1318,6 +1437,8 @@ const getPlatformHealthSnapshot = async () => {
 
   const uptimeSeconds = Math.floor((Date.now() - SERVER_STARTED_AT) / 1000);
   const apiErrorRate = totalRequests > 0 ? Math.round((totalErrors / totalRequests) * 10000) / 100 : 0;
+  const latencySamples = endpointStats.flatMap((entry) => getMetricSamples(endpoints[entry.endpoint]));
+  const requestsPerMinute = uptimeSeconds > 0 ? Math.round((totalRequests / Math.max(1, uptimeSeconds)) * 60 * 100) / 100 : 0;
 
   const snapshot = {
     uptimeSeconds,
@@ -1325,12 +1446,18 @@ const getPlatformHealthSnapshot = async () => {
     totalErrors,
     apiErrorRate,
     authFailures,
+    requestsPerMinute,
     slowRequests: Number(db.requestMetrics.slowRequests || 0),
     slowThresholdMs: SLOW_ENDPOINT_THRESHOLD_MS,
     avgResponseMs:
       endpointStats.length > 0
         ? Math.round(average(endpointStats.map((entry) => Number(entry.avgDurationMs || 0))))
         : 0,
+    latencyPercentilesMs: {
+      p50: toPercentile(latencySamples, 50),
+      p95: toPercentile(latencySamples, 95),
+      p99: toPercentile(latencySamples, 99),
+    },
     slowEndpoints,
     aiService: aiHealth,
   };
@@ -1441,16 +1568,25 @@ const getMatchInsights = async (resumeSkills: string[], job: any) => {
   const requirementsText = jobRequirementText(job);
 
   try {
-    const aiResponse = await fetch(`${AI_SERVICE_URL}/ai/match`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        resumeSkills: sanitizedSkills,
-        jobRequirements: requirementsText,
-        jobRequiredSkills: requiredSkills,
-        includeExplanation: true,
-      }),
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), AI_MATCH_TIMEOUT_MS);
+    const aiResponse = await (async () => {
+      try {
+        return await fetch(`${AI_SERVICE_URL}/ai/match`, {
+          method: 'POST',
+          headers: buildAiServiceHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({
+            resumeSkills: sanitizedSkills,
+            jobRequirements: requirementsText,
+            jobRequiredSkills: requiredSkills,
+            includeExplanation: true,
+          }),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
+    })();
 
     if (!aiResponse.ok) throw new Error(`AI match failed with status ${aiResponse.status}`);
     const aiData: any = await aiResponse.json();
@@ -1570,14 +1706,7 @@ const parseYearRangeFromText = (text: string) => {
 };
 
 const estimateExperienceYears = (candidate: any, resume: any) => {
-  const candidateEntries = (() => {
-    try {
-      const parsed = JSON.parse(candidate?.experience || '[]');
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  })();
+  const candidateEntries = parseJsonArray(candidate?.experience);
   const resumeEntries = Array.isArray(resume?.parsedData?.experience) ? resume.parsedData.experience : [];
   const allEntries = [...candidateEntries, ...resumeEntries];
 
@@ -1817,12 +1946,13 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
   const password = String(req.body?.password || '');
   const name = String(req.body?.name || '').trim();
   const requestedRole = String(req.body?.role || '').toLowerCase();
-  const safeRole: SupportedRole = (requestedRole === 'employer' || requestedRole === 'admin') 
-    ? requestedRole 
-    : 'student';
+  const safeRole: SupportedRole = 'student';
 
   if (!email || !password || !name) {
     return res.status(400).json({ message: 'Name, email and password are required' });
+  }
+  if (requestedRole && requestedRole !== 'student') {
+    return res.status(403).json({ message: 'Public registration only supports student accounts' });
   }
   if (password.length < 6) {
     return res.status(400).json({ message: 'Password must be at least 6 characters' });
@@ -2200,6 +2330,7 @@ app.post(
         try {
           const aiResponse = await fetch(`${AI_SERVICE_URL}/ai/parse-resume`, {
             method: 'POST',
+            headers: buildAiServiceHeaders(),
             body: formData,
             signal: controller.signal,
           });
@@ -2210,14 +2341,18 @@ app.post(
             skills = normalizeSkillList(aiData?.skills?.length ? aiData.skills : parsedData.skills);
             parsedData.skills = skills;
           } else {
-            console.warn('AI parsing failed with status', aiResponse.status);
+            logEvent('warn', 'ai.resume_parse.degraded', {
+              requestId: req.requestId,
+              statusCode: aiResponse.status,
+            });
           }
         } finally {
           clearTimeout(timeout);
         }
       } catch (aiError) {
-        console.warn('AI service unavailable, using fallback parsing');
-        console.warn(aiError);
+        logError('ai.resume_parse.unavailable', aiError, {
+          requestId: req.requestId,
+        });
       }
 
       const replaced = existingResumeIndex >= 0;
@@ -2271,7 +2406,10 @@ app.post(
 
       return res.status(replaced ? 200 : 201).json({ data: { ...resume, latestScore, replaced } });
     } catch (error: any) {
-      console.error('Resume upload error:', error);
+      logError('resume.upload.failed', error, {
+        requestId: req.requestId,
+        userId: profile.id,
+      });
       return res.status(500).json({ message: error.message || 'Failed to upload resume' });
     } finally {
       await safeDeleteTempFile(req.file.path);
@@ -2479,7 +2617,7 @@ app.get('/api/jobs/:id', (req, res) => {
   res.json({ data: job });
 });
 
-app.post('/api/jobs', async (req, res) => {
+app.post('/api/jobs', requireAuth, requireRoles('recruiter', 'admin'), async (req: RequestWithAuth, res) => {
   const profile = getProfileFromAuth(req);
   if (!profile) return res.status(401).json({ message: 'Not authenticated' });
   if (!profile || !(roleMatches(profile.role, 'recruiter') || roleMatches(profile.role, 'admin'))) {
@@ -2540,7 +2678,7 @@ app.post('/api/jobs', async (req, res) => {
   res.status(201).json({ data: job });
 });
 
-app.put('/api/jobs/:id', async (req, res) => {
+app.put('/api/jobs/:id', requireAuth, requireRoles('recruiter', 'admin'), async (req: RequestWithAuth, res) => {
   const profile = getProfileFromAuth(req);
   if (!profile) return res.status(401).json({ message: 'Not authenticated' });
 
@@ -2622,7 +2760,7 @@ app.put('/api/jobs/:id', async (req, res) => {
   res.json({ data: db.jobs[idx] });
 });
 
-app.delete('/api/jobs/:id', async (req, res) => {
+app.delete('/api/jobs/:id', requireAuth, requireRoles('recruiter', 'admin'), async (req: RequestWithAuth, res) => {
   const profile = getProfileFromAuth(req);
   if (!profile) return res.status(401).json({ message: 'Not authenticated' });
 
@@ -2656,9 +2794,9 @@ app.get('/api/candidates', (req, res) => {
 
   const candidates = db.candidates.map((candidate: any) => ({
     ...candidate,
-    skills: JSON.parse(candidate.skills || '[]'),
-    education: JSON.parse(candidate.education || '[]'),
-    experience: JSON.parse(candidate.experience || '[]'),
+    skills: normalizeSkillList(candidate.skills),
+    education: parseJsonArray(candidate.education),
+    experience: parseJsonArray(candidate.experience),
   }));
 
   res.json({ data: candidates });
@@ -2697,20 +2835,10 @@ app.get('/api/candidates/:id', async (req, res) => {
   const resume = db.resumes.find((entry: any) => entry.userId === candidate.userId) || null;
   const parsedSkills = normalizeSkillList(candidate.skills);
   const parsedEducation = (() => {
-    try {
-      const parsed = JSON.parse(candidate.education || '[]');
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
+    return parseJsonArray(candidate.education);
   })();
   const parsedExperience = (() => {
-    try {
-      const parsed = JSON.parse(candidate.experience || '[]');
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
+    return parseJsonArray(candidate.experience);
   })();
   const parsedProjects = Array.isArray(resume?.parsedData?.projects)
     ? resume?.parsedData?.projects
@@ -2809,7 +2937,7 @@ app.get('/api/applications/my', (req, res) => {
   res.json({ data: withApplicationDetails(myApps) });
 });
 
-app.post('/api/applications', async (req, res) => {
+app.post('/api/applications', requireAuth, requireRoles('student'), async (req: RequestWithAuth, res) => {
   const profile = getProfileFromAuth(req);
   if (!profile) return res.status(401).json({ message: 'Not authenticated' });
   if (profile.role !== 'student') return res.status(403).json({ message: 'Not authorized' });
@@ -2856,7 +2984,11 @@ app.post('/api/applications', async (req, res) => {
   res.status(201).json({ data: withApplicationDetails([application])[0] });
 });
 
-app.put('/api/applications/:id/status', async (req, res) => {
+app.put(
+  '/api/applications/:id/status',
+  requireAuth,
+  requireRoles('recruiter', 'admin'),
+  async (req: RequestWithAuth, res) => {
   const profile = getProfileFromAuth(req);
   if (!profile) return res.status(401).json({ message: 'Not authenticated' });
   if (!(roleMatches(profile.role, 'recruiter') || roleMatches(profile.role, 'admin'))) return res.status(403).json({ message: 'Not authorized' });
@@ -3037,14 +3169,15 @@ app.get('/api/career/roles', (_req, res) => {
   res.json({ data: getRoleExplorerData() });
 });
 
-app.post('/api/career/target-role', (req, res) => {
+app.post('/api/career/target-role', requireAuth, requireRoles('student'), async (req: RequestWithAuth, res) => {
   const profile = getProfileFromAuth(req);
   if (!profile) return res.status(401).json({ message: 'Not authenticated' });
   if (profile.role !== 'student') return res.status(403).json({ message: 'Not authorized' });
 
   const requestedRoleId = String(req.body?.roleId || '');
-  const safeRoleId = setCareerPreference(profile.id, requestedRoleId);
-  res.json({ data: { roleId: safeRoleId } });
+  const preference = setCareerPreference(profile.id, requestedRoleId);
+  await supabaseStore.upsertCareerPreference(preference);
+  res.json({ data: { roleId: preference.roleId } });
 });
 
 // Student career routes: overview, roadmap, AI coach, learning plan, and progress tools.
@@ -3127,7 +3260,7 @@ app.get('/api/career/roadmap', (req, res) => {
   res.json({ data: { role, roadmap } });
 });
 
-app.post('/api/career/ai-coach', async (req, res) => {
+app.post('/api/career/ai-coach', requireAuth, requireRoles('student'), async (req: RequestWithAuth, res) => {
   const profile = getProfileFromAuth(req);
   if (!profile) return res.status(401).json({ message: 'Not authenticated' });
   if (profile.role !== 'student') return res.status(403).json({ message: 'Not authorized' });
@@ -3219,7 +3352,7 @@ app.post('/api/career/ai-coach', async (req, res) => {
   res.json({ data: response });
 });
 
-app.put('/api/career/roadmap/skill', async (req, res) => {
+app.put('/api/career/roadmap/skill', requireAuth, requireRoles('student'), async (req: RequestWithAuth, res) => {
   const profile = getProfileFromAuth(req);
   if (!profile) return res.status(401).json({ message: 'Not authenticated' });
   if (profile.role !== 'student') return res.status(403).json({ message: 'Not authorized' });
@@ -3289,7 +3422,7 @@ app.get('/api/career/learning-plan', async (req, res) => {
   return res.json({ data: record });
 });
 
-app.post('/api/career/learning-plan', async (req, res) => {
+app.post('/api/career/learning-plan', requireAuth, requireRoles('student'), async (req: RequestWithAuth, res) => {
   const profile = getProfileFromAuth(req);
   if (!profile) return res.status(401).json({ message: 'Not authenticated' });
   if (profile.role !== 'student') return res.status(403).json({ message: 'Not authorized' });
@@ -3327,7 +3460,7 @@ app.get('/api/career/mock-interview', (req, res) => {
   res.json({ data: pack });
 });
 
-app.post('/api/career/mock-interview/session', async (req, res) => {
+app.post('/api/career/mock-interview/session', requireAuth, requireRoles('student'), async (req: RequestWithAuth, res) => {
   const profile = getProfileFromAuth(req);
   if (!profile) return res.status(401).json({ message: 'Not authenticated' });
   if (profile.role !== 'student') return res.status(403).json({ message: 'Not authorized' });
@@ -3404,7 +3537,7 @@ app.get('/api/career/job-tracker', (req, res) => {
   });
 });
 
-app.post('/api/career/job-tracker/save', async (req, res) => {
+app.post('/api/career/job-tracker/save', requireAuth, requireRoles('student'), async (req: RequestWithAuth, res) => {
   const profile = getProfileFromAuth(req);
   if (!profile) return res.status(401).json({ message: 'Not authenticated' });
   if (profile.role !== 'student') return res.status(403).json({ message: 'Not authorized' });
@@ -3428,7 +3561,7 @@ app.post('/api/career/job-tracker/save', async (req, res) => {
   res.status(201).json({ data: record });
 });
 
-app.delete('/api/career/job-tracker/save/:jobId', async (req, res) => {
+app.delete('/api/career/job-tracker/save/:jobId', requireAuth, requireRoles('student'), async (req: RequestWithAuth, res) => {
   const profile = getProfileFromAuth(req);
   if (!profile) return res.status(401).json({ message: 'Not authenticated' });
   if (profile.role !== 'student') return res.status(403).json({ message: 'Not authorized' });
@@ -3443,7 +3576,11 @@ app.delete('/api/career/job-tracker/save/:jobId', async (req, res) => {
   res.json({ message: 'Saved job removed' });
 });
 
-app.put('/api/career/job-tracker/application/:applicationId', async (req, res) => {
+app.put(
+  '/api/career/job-tracker/application/:applicationId',
+  requireAuth,
+  requireRoles('student'),
+  async (req: RequestWithAuth, res) => {
   const profile = getProfileFromAuth(req);
   if (!profile) return res.status(401).json({ message: 'Not authenticated' });
   if (profile.role !== 'student') return res.status(403).json({ message: 'Not authorized' });
@@ -3474,7 +3611,11 @@ app.put('/api/career/job-tracker/application/:applicationId', async (req, res) =
   res.json({ data: withApplicationDetails([db.applications[idx]])[0] });
 });
 
-app.delete('/api/career/job-tracker/application/:applicationId', async (req, res) => {
+app.delete(
+  '/api/career/job-tracker/application/:applicationId',
+  requireAuth,
+  requireRoles('student'),
+  async (req: RequestWithAuth, res) => {
   const profile = getProfileFromAuth(req);
   if (!profile) return res.status(401).json({ message: 'Not authenticated' });
   if (profile.role !== 'student') return res.status(403).json({ message: 'Not authorized' });
@@ -3675,7 +3816,7 @@ app.get('/api/courses/:id', (req, res) => {
   res.json({ data: course });
 });
 
-app.post('/api/courses', async (req, res) => {
+app.post('/api/courses', requireAuth, requireRoles('admin'), adminLimiter, async (req: RequestWithAuth, res) => {
   const profile = getProfileFromAuth(req);
   if (!profile) return res.status(401).json({ message: 'Not authenticated' });
   if (profile.role !== 'admin') return res.status(403).json({ message: 'Not authorized' });
@@ -3691,7 +3832,7 @@ app.post('/api/courses', async (req, res) => {
   res.status(201).json({ data: course });
 });
 
-app.put('/api/courses/:id', async (req, res) => {
+app.put('/api/courses/:id', requireAuth, requireRoles('admin'), adminLimiter, async (req: RequestWithAuth, res) => {
   const profile = getProfileFromAuth(req);
   if (!profile) return res.status(401).json({ message: 'Not authenticated' });
   if (profile.role !== 'admin') return res.status(403).json({ message: 'Not authorized' });
@@ -3704,7 +3845,7 @@ app.put('/api/courses/:id', async (req, res) => {
   res.json({ data: db.courses[idx] });
 });
 
-app.delete('/api/courses/:id', async (req, res) => {
+app.delete('/api/courses/:id', requireAuth, requireRoles('admin'), adminLimiter, async (req: RequestWithAuth, res) => {
   const profile = getProfileFromAuth(req);
   if (!profile) return res.status(401).json({ message: 'Not authenticated' });
   if (profile.role !== 'admin') return res.status(403).json({ message: 'Not authorized' });
@@ -3824,56 +3965,24 @@ app.get('/api/admin/monitoring', requireAuth, requireRoles('admin'), adminLimite
 });
 
 // Health check
-app.get('/api/health', (_req, res) => {
+app.get('/api/health', async (_req, res) => {
+  const platformHealth = await getPlatformHealthSnapshot();
   res.json({
-    status: 'ok',
+    status: isShuttingDown ? 'degraded' : 'ok',
     message: 'Backend API is running',
     dataProvider: supabaseStore.isActive() ? 'supabase' : 'memory',
+    uptimeSeconds: platformHealth.uptimeSeconds,
+    requestsPerMinute: platformHealth.requestsPerMinute,
+    latencyPercentilesMs: platformHealth.latencyPercentilesMs,
+    aiService: platformHealth.aiService,
   });
 });
 
-const seedSupabaseFromMemory = async () => {
-  if (!supabaseStore.isActive()) return;
-  for (const profile of db.profiles) {
-    await supabaseStore.upsertUser(profile);
-  }
-  for (const job of db.jobs) {
-    await supabaseStore.upsertJob(job);
-  }
-  for (const course of db.courses) {
-    await supabaseStore.upsertCourse(course);
-  }
-  for (const resume of db.resumes) {
-    await supabaseStore.upsertResume(resume);
-  }
-  for (const candidate of db.candidates) {
-    await supabaseStore.upsertCandidate(candidate);
-  }
-  for (const application of db.applications) {
-    await supabaseStore.upsertApplication(application);
-  }
-  for (const recommendation of db.recommendations) {
-    await supabaseStore.upsertRecommendation(recommendation);
-  }
-  for (const score of db.resumeScores) {
-    await supabaseStore.upsertResumeScore(score);
-  }
-  for (const progress of db.skillProgress) {
-    await supabaseStore.upsertSkillProgress(progress);
-  }
-  for (const plan of db.learningPlans) {
-    await supabaseStore.upsertLearningPlan(plan);
-  }
-  for (const session of db.mockInterviewSessions) {
-    await supabaseStore.upsertMockInterviewSession(session);
-  }
-  for (const saved of db.savedJobs) {
-    await supabaseStore.upsertSavedJob(saved);
-  }
-  for (const preference of db.careerPreferences) {
-    await supabaseStore.upsertCareerPreference(preference);
-  }
-};
+app.use('/api', (req: RequestWithAuth, res) => {
+  res.status(404).json({
+    message: `No API route matches ${req.method} ${toRequestPath(req)}`,
+  });
+});
 
 const ensureBootstrapUsers = async () => {
   const bootstrapUsers = [
@@ -3927,21 +4036,16 @@ const initializeRuntime = async () => {
   try {
     const bootstrap = await supabaseStore.bootstrap(db);
     if (bootstrap.mode === 'supabase' && bootstrap.loaded) {
-      console.log('Loaded runtime data from Supabase.');
-    } else if (supabaseStore.isActive() && SHOULD_BOOT_DEMO_DATA && SYNC_DEMO_DATA_TO_SUPABASE) {
-      console.log('Supabase mode enabled with explicit demo data sync.');
-      await seedSupabaseFromMemory();
+      logEvent('info', 'runtime.bootstrap.loaded_supabase');
     } else if (supabaseStore.isActive()) {
-      console.log('Supabase mode enabled with an empty initial store.');
-    } else if (SHOULD_BOOT_DEMO_DATA) {
-      console.log('Using in-memory data provider with explicit demo data.');
+      logEvent('info', 'runtime.bootstrap.supabase_empty_store');
     } else {
-      console.log('Using in-memory data provider with an empty initial store.');
+      logEvent('info', 'runtime.bootstrap.memory_empty_store');
     }
 
     await ensureBootstrapUsers();
   } catch (err) {
-    console.error('Runtime initialization error:', err);
+    logError('runtime.initialization_failed', err);
   }
 };
 
@@ -3950,12 +4054,26 @@ runtimeReady = initializeRuntime();
 const startServer = async () => {
   try {
     await runtimeReady;
-    const port = process.env.PORT || 3001;
-    app.listen(port, () => {
-      console.log(`Server is running on port ${port}`);
+    server = createServer(app);
+    server.keepAliveTimeout = 65_000;
+    server.headersTimeout = 66_000;
+    server.requestTimeout = 30_000;
+    server.on('connection', (socket) => {
+      openConnections.add(socket);
+      socket.on('close', () => {
+        openConnections.delete(socket);
+      });
+    });
+    server.listen(PORT, () => {
+      logEvent('info', 'server.started', {
+        port: Number(PORT),
+        nodeEnv: NODE_ENV,
+        dataProvider: supabaseStore.isActive() ? 'supabase' : DATA_PROVIDER,
+      });
     });
   } catch (err) {
-    console.error('Failed to start server:', err);
+    logError('server.start_failed', err);
+    process.exitCode = 1;
   }
 };
 
@@ -3963,12 +4081,81 @@ if (process.env.VERCEL === undefined) {
   void startServer();
 }
 
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+app.use((error: any, req: RequestWithAuth, res: Response, _next: NextFunction) => {
+  const statusCode =
+    Number(error?.statusCode || error?.status) >= 400 && Number(error?.statusCode || error?.status) < 600
+      ? Number(error?.statusCode || error?.status)
+      : 500;
+  const message = statusCode >= 500 ? 'Internal server error' : String(error?.message || 'Request failed');
+  logError('http.request.failed', error, {
+    requestId: req.requestId,
+    method: req.method,
+    path: normalizeMetricPath(toRequestPath(req)),
+    statusCode,
+    userId: req.profile?.id || null,
+  });
+
+  if (res.headersSent) {
+    return;
+  }
+
+  res.status(statusCode).json({
+    error: statusCode >= 500 ? 'internal_server_error' : 'request_failed',
+    message,
+    code: statusCode >= 500 ? 'INTERNAL_SERVER_ERROR' : 'REQUEST_FAILED',
+    requestId: req.requestId,
+  });
+});
+
+const shutdownServer = (signal: string) => {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  logEvent('warn', 'server.shutdown_requested', {
+    signal,
+    openConnections: openConnections.size,
+  });
+
+  const forceCloseTimer = setTimeout(() => {
+    for (const socket of openConnections) {
+      socket.destroy();
+    }
+    logEvent('error', 'server.shutdown_forced', {
+      signal,
+      remainingConnections: openConnections.size,
+    });
+  }, SHUTDOWN_TIMEOUT_MS);
+  forceCloseTimer.unref();
+
+  if (!server) {
+    return;
+  }
+
+  server.close((error) => {
+    clearTimeout(forceCloseTimer);
+    if (error) {
+      logError('server.shutdown_failed', error, { signal });
+      process.exit(1);
+      return;
+    }
+    logEvent('info', 'server.stopped', { signal });
+    process.exit(0);
+  });
+};
+
+process.on('SIGINT', () => {
+  shutdownServer('SIGINT');
+});
+
+process.on('SIGTERM', () => {
+  shutdownServer('SIGTERM');
+});
+
+process.on('unhandledRejection', (reason) => {
+  logError('process.unhandled_rejection', reason);
 });
 
 process.on('uncaughtException', (error) => {
-  console.error('Uncaught Exception:', error);
+  logError('process.uncaught_exception', error);
 });
 
 export default app;

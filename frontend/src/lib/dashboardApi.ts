@@ -45,6 +45,33 @@ const safeJsonParse = <T>(value: string | null): T | null => {
   }
 };
 
+const safeSessionGet = (key: string) => {
+  if (typeof window === 'undefined') return null;
+  try {
+    return sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+
+const safeSessionSet = (key: string, value: string) => {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.setItem(key, value);
+  } catch {
+    // Ignore storage quota/privacy-mode failures and continue with network data.
+  }
+};
+
+const safeSessionRemove = (key: string) => {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.removeItem(key);
+  } catch {
+    // Ignore storage cleanup failures.
+  }
+};
+
 export const getDashboardStats = async () => {
   const payload = await cachedGet<{ data?: any }>('/dashboard/stats', { ttlMs: 8000 });
   return payload.data || {};
@@ -380,7 +407,7 @@ export const getStudentRecommendations = async (
   const canUseCache = !forceRefresh && typeof window !== 'undefined';
 
   if (canUseCache) {
-    const cached = safeJsonParse<RecommendationCachePayload>(sessionStorage.getItem(cacheKey));
+    const cached = safeJsonParse<RecommendationCachePayload>(safeSessionGet(cacheKey));
     if (cached && Date.now() - cached.ts < RECOMMENDATION_CACHE_TTL_MS) {
       return cached.data;
     }
@@ -391,15 +418,14 @@ export const getStudentRecommendations = async (
 
   if (data && typeof window !== 'undefined') {
     const payload: RecommendationCachePayload = { ts: Date.now(), data };
-    sessionStorage.setItem(cacheKey, JSON.stringify(payload));
+    safeSessionSet(cacheKey, JSON.stringify(payload));
   }
 
   return data;
 };
 
 export const clearRecommendationCache = (userId: string) => {
-  if (typeof window === 'undefined') return;
-  sessionStorage.removeItem(getRecommendationCacheKey(userId));
+  safeSessionRemove(getRecommendationCacheKey(userId));
 };
 
 export const getCareerRoles = async (): Promise<CareerRole[]> => {

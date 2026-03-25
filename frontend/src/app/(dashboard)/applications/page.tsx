@@ -8,11 +8,11 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
 import { Application, JobTrackerData } from '@/types';
 import Card from '@/components/Card';
 import Badge from '@/components/Badge';
 import Button from '@/components/Button';
+import Loading from '@/components/Loading';
 import { AlertCircle, Bookmark, Briefcase, Loader2, Trash2 } from 'lucide-react';
 import { Skeleton } from '@/components/Skeleton';
 import {
@@ -22,6 +22,7 @@ import {
   removeSavedJob,
   updateTrackedApplication,
 } from '@/lib/dashboardApi';
+import { useRoleAccess } from '@/lib/useRoleAccess';
 
 const TRACKER_STATUS_OPTIONS: Array<{ value: 'applied' | 'interviewing' | 'offer' | 'rejected'; label: string }> = [
   { value: 'applied', label: 'Applied' },
@@ -40,7 +41,7 @@ const toTrackerStatus = (application: Application): 'applied' | 'interviewing' |
 };
 
 export default function ApplicationsPage() {
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { user, hasAllowedRole, isCheckingAccess } = useRoleAccess({ allowedRoles: ['student'] });
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
@@ -56,16 +57,6 @@ export default function ApplicationsPage() {
   );
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.push('/login');
-      return;
-    }
-    if (!isLoading && user && user.role !== 'student') {
-      router.push('/dashboard');
-    }
-  }, [isAuthenticated, isLoading, router, user]);
 
   const fetchTracker = useCallback(async () => {
     setLoading(true);
@@ -90,10 +81,9 @@ export default function ApplicationsPage() {
   }, []);
 
   useEffect(() => {
-    if (isAuthenticated && user?.role === 'student') {
-      void fetchTracker();
-    }
-  }, [fetchTracker, isAuthenticated, user?.role]);
+    if (!hasAllowedRole) return;
+    void fetchTracker();
+  }, [fetchTracker, hasAllowedRole]);
 
   const stats = useMemo(() => {
     const counts = trackerData.statusCounts || {
@@ -155,7 +145,11 @@ export default function ApplicationsPage() {
     }
   };
 
-  if (isLoading || loading) {
+  if (isCheckingAccess) {
+    return <Loading text="Checking application tracker access..." />;
+  }
+
+  if (loading) {
     return (
       <div className="layout-container section-spacing space-y-8 max-w-6xl mx-auto">
         <Skeleton className="h-14 w-64" />
@@ -171,7 +165,7 @@ export default function ApplicationsPage() {
     );
   }
 
-  if (user?.role !== 'student') return null;
+  if (!hasAllowedRole || !user) return null;
 
   return (
     <div className="layout-container section-spacing space-y-8 max-w-6xl mx-auto">
@@ -254,7 +248,12 @@ export default function ApplicationsPage() {
         <h2 className="text-2xl font-serif text-primary">Tracked Applications</h2>
         {trackerData.applications.length === 0 ? (
           <Card hoverable={false} className="p-6 text-sm text-secondary">
-            You have not applied to any jobs yet.
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <span>You have not applied to any jobs yet.</span>
+              <Button size="sm" variant="outline" onClick={() => router.push('/jobs')}>
+                Browse Jobs
+              </Button>
+            </div>
           </Card>
         ) : (
           <div className="space-y-4">

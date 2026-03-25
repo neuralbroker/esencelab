@@ -20,7 +20,7 @@ import { Skeleton } from '@/components/Skeleton';
 import { motion } from 'framer-motion';
 
 export default function JobDetailPage() {
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { user } = useAuth();
   const router = useRouter();
   const params = useParams<{ id?: string | string[] }>();
   const jobId = Array.isArray(params.id) ? params.id[0] : params.id;
@@ -42,6 +42,10 @@ export default function JobDetailPage() {
   }, [jobId, router]);
 
   const checkApplication = useCallback(async () => {
+    if (user?.role !== 'student') {
+      setHasApplied(false);
+      return;
+    }
     if (!jobId) return;
     try {
       const res = await api.get('/applications/my');
@@ -51,20 +55,13 @@ export default function JobDetailPage() {
     } catch {
       setHasApplied(false);
     }
-  }, [jobId]);
+  }, [jobId, user?.role]);
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.push('/login');
-    }
-  }, [isAuthenticated, isLoading, router]);
-
-  useEffect(() => {
-    if (isAuthenticated && jobId) {
-      void fetchJob();
-      void checkApplication();
-    }
-  }, [checkApplication, fetchJob, isAuthenticated, jobId]);
+    if (!user || !jobId) return;
+    void fetchJob();
+    void checkApplication();
+  }, [checkApplication, fetchJob, jobId, user]);
 
   const handleApply = async () => {
     if (!user?.id || !jobId) return;
@@ -81,7 +78,7 @@ export default function JobDetailPage() {
     }
   };
 
-  if (isLoading || loading || !job) {
+  if (!user || loading || !job) {
     return (
       <div className="layout-container section-spacing space-y-8 max-w-6xl mx-auto">
         <Skeleton className="h-6 w-32 mb-8" />

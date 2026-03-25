@@ -7,22 +7,21 @@
  * and apply moderation actions such as review, flag, or delete.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
 import { AdminResumeRecord } from '@/types';
 import Card from '@/components/Card';
 import Button from '@/components/Button';
 import Badge from '@/components/Badge';
+import Loading from '@/components/Loading';
 import {
   deleteAdminResume,
   getAdminResumes,
   getReadableErrorMessage,
   moderateAdminResume,
 } from '@/lib/dashboardApi';
+import { useRoleAccess } from '@/lib/useRoleAccess';
 
 export default function AdminResumesPage() {
-  const router = useRouter();
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { hasAllowedRole } = useRoleAccess({ allowedRoles: ['admin'] });
   const [loading, setLoading] = useState(true);
   const [records, setRecords] = useState<AdminResumeRecord[]>([]);
   const [summary, setSummary] = useState({ total: 0, success: 0, failed: 0, flagged: 0 });
@@ -33,18 +32,8 @@ export default function AdminResumesPage() {
   const [flaggedOnly, setFlaggedOnly] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.push('/login');
-      return;
-    }
-    if (!isLoading && user && user.role !== 'admin') {
-      router.push('/dashboard');
-    }
-  }, [isAuthenticated, isLoading, router, user]);
-
   const fetchData = useCallback(async () => {
-    if (user?.role !== 'admin') {
+    if (!hasAllowedRole) {
       setLoading(false);
       return;
     }
@@ -70,12 +59,12 @@ export default function AdminResumesPage() {
     } finally {
       setLoading(false);
     }
-  }, [flaggedOnly, page, parseStatus, search, user?.role]);
+  }, [flaggedOnly, hasAllowedRole, page, parseStatus, search]);
 
   useEffect(() => {
-    if (!isAuthenticated || user?.role !== 'admin') return;
+    if (!hasAllowedRole) return;
     void fetchData();
-  }, [fetchData, isAuthenticated, user?.role]);
+  }, [fetchData, hasAllowedRole]);
 
   useEffect(() => {
     setPage(1);
@@ -106,15 +95,11 @@ export default function AdminResumesPage() {
     }
   };
 
-  if (isLoading || loading) {
-    return (
-      <div className="flex min-h-[400px] items-center justify-center">
-        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-t-2 border-black"></div>
-      </div>
-    );
+  if (loading) {
+    return <Loading text="Checking admin resume access..." />;
   }
 
-  if (user?.role !== 'admin') return null;
+  if (!hasAllowedRole) return null;
 
   return (
     <div className="space-y-6">

@@ -7,9 +7,11 @@
  * spacing so each role-based page starts from the same shell.
  */
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import Loading from '@/components/Loading';
 import Navbar from '@/components/Navbar';
+import { getLoginHref } from '@/lib/routeAccess';
 
 export default function DashboardLayout({
   children,
@@ -18,12 +20,13 @@ export default function DashboardLayout({
 }) {
   const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      router.push('/login');
+      router.replace(getLoginHref(pathname));
     }
-  }, [isAuthenticated, isLoading, router]);
+  }, [isAuthenticated, isLoading, pathname, router]);
 
   if (isLoading) {
     return (
@@ -34,7 +37,7 @@ export default function DashboardLayout({
   }
 
   if (!isAuthenticated) {
-    return null;
+    return <Loading text="Redirecting to sign in..." fullScreen />;
   }
 
   return (

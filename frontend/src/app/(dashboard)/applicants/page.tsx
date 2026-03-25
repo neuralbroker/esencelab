@@ -6,22 +6,25 @@
  * Recruiters and admins use this page to review ranked candidates, filter the
  * list, and move into a detailed applicant view.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
 import api from '@/lib/api';
 import { Application, Job, RecruiterCandidateMatch } from '@/types';
 import Card from '@/components/Card';
 import Badge from '@/components/Badge';
+import Button from '@/components/Button';
+import Loading from '@/components/Loading';
 import { Users, Briefcase, CheckCircle, XCircle, Clock, Search } from 'lucide-react';
 import { getCandidateMatches, getEmployerJobs, getReadableErrorMessage } from '@/lib/dashboardApi';
+import { useRoleAccess } from '@/lib/useRoleAccess';
 
 export default function ApplicantsPage() {
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { user, hasAllowedRole, isCheckingAccess } = useRoleAccess({ allowedRoles: ['employer', 'admin'] });
   const router = useRouter();
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
   const [jobs, setJobs] = useState<Job[]>([]);
   const [selectedJobId, setSelectedJobId] = useState('');
   const [candidateMatches, setCandidateMatches] = useState<RecruiterCandidateMatch[]>([]);
@@ -82,22 +85,10 @@ export default function ApplicantsPage() {
   }, [sortBy, sortOrder]);
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.push('/login');
-    }
-  }, [isAuthenticated, isLoading, router]);
-
-  useEffect(() => {
-    if (!isAuthenticated) {
-      return;
-    }
-    if (user?.role === 'employer' || user?.role === 'admin') {
-      void fetchApplications();
-      void fetchJobs();
-      return;
-    }
-    setLoading(false);
-  }, [fetchApplications, fetchJobs, isAuthenticated, user?.role]);
+    if (!hasAllowedRole) return;
+    void fetchApplications();
+    void fetchJobs();
+  }, [fetchApplications, fetchJobs, hasAllowedRole]);
 
   useEffect(() => {
     if (selectedJobId) {
@@ -127,18 +118,32 @@ export default function ApplicantsPage() {
     return <Badge variant={variants[status] || 'secondary'}>{status}</Badge>;
   };
 
-  if (isLoading || loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-black"></div>
-      </div>
-    );
+  const filteredApplications = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) return applications;
+    return applications.filter((app) => {
+      const haystack = [
+        app.student?.name,
+        app.student?.email,
+        app.job?.title,
+        app.job?.company,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [applications, searchTerm]);
+
+  if (isCheckingAccess) {
+    return <Loading text="Checking applicant access..." />;
   }
 
-  if (user?.role !== 'employer' && user?.role !== 'admin') {
-    router.push('/dashboard');
-    return null;
+  if (loading) {
+    return <Loading text="Loading applicants..." />;
   }
+
+  if (!hasAllowedRole || !user) return null;
 
   const stats = {
     total: applications.length,
@@ -283,6 +288,8 @@ export default function ApplicantsPage() {
             <input
               type="text"
               placeholder="Search by name or job..."
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
               className="field-3d w-full rounded-xl py-2.5 pl-10 pr-4 focus:outline-none"
             />
           </div>
@@ -299,9 +306,9 @@ export default function ApplicantsPage() {
           </select>
         </div>
 
-        {applications.length > 0 ? (
+        {filteredApplications.length > 0 ? (
           <div className="space-y-4">
-            {applications.map((app) => (
+            {filteredApplications.map((app) => (
               <div
                 key={app.id}
                 className="flex items-center justify-between p-4 bg-black/5 rounded-xl hover:bg-black/5 transition-colors"
@@ -367,8 +374,21 @@ export default function ApplicantsPage() {
         ) : (
           <div className="text-center py-12">
             <Users className="w-12 h-12 text-secondary/70 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-black mb-2">No applicants yet</h3>
-            <p className="text-secondary">Applications will appear here when candidates apply</p>
+            <h3 className="text-lg font-medium text-black mb-2">
+              {searchTerm ? 'No applicants match your search' : 'No applicants yet'}
+            </h3>
+            <p className="text-secondary">
+              {searchTerm
+                ? 'Try a different candidate name, email, job title, or company.'
+                : 'Applications will appear here when candidates apply.'}
+            </p>
+            {!searchTerm && jobs.length === 0 && (
+              <div className="mt-4">
+                <Button size="sm" variant="outline" onClick={() => router.push('/jobs/new')}>
+                  Post Your First Job
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </Card>

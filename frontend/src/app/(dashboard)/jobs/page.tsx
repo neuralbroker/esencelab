@@ -7,7 +7,6 @@
  * same page to manage jobs they own or oversee.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import api from '@/lib/api';
 import { Job } from '@/types';
@@ -23,8 +22,8 @@ import { motion } from 'framer-motion';
 import { getReadableErrorMessage } from '@/lib/dashboardApi';
 
 export default function JobsPage() {
-  const { user, isAuthenticated, isLoading } = useAuth();
-  const router = useRouter();
+  const { user } = useAuth();
+  const userRole = user?.role;
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -34,15 +33,11 @@ export default function JobsPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionJobId, setActionJobId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.push('/login');
-    }
-  }, [isAuthenticated, isLoading, router]);
-
   const fetchJobs = useCallback(async () => {
-    const isManager = user?.role === 'employer' || user?.role === 'admin';
+    if (!user) return;
+    const isManager = userRole === 'employer' || userRole === 'admin';
     try {
+      setLoading(true);
       setActionError(null);
       const params = new URLSearchParams();
       if (searchTerm) params.append('search', searchTerm);
@@ -50,22 +45,22 @@ export default function JobsPage() {
       if (statusFilter) params.append('status', statusFilter);
       if (location) params.append('location', location);
       if (isManager && !statusFilter) params.append('status', 'all');
-      if (user?.role === 'employer') params.append('my', 'true');
+      if (userRole === 'employer') params.append('my', 'true');
 
       const res = await api.get(`/jobs?${params.toString()}`);
       setJobs(res.data.data?.jobs || []);
-    } catch {
+    } catch (error: any) {
       setJobs([]);
+      setActionError(getReadableErrorMessage(error, 'Failed to load jobs.'));
     } finally {
       setLoading(false);
     }
-  }, [jobType, location, searchTerm, statusFilter, user?.role]);
+  }, [jobType, location, searchTerm, statusFilter, user, userRole]);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      void fetchJobs();
-    }
-  }, [fetchJobs, isAuthenticated]);
+    if (!user) return;
+    void fetchJobs();
+  }, [fetchJobs, user]);
 
   const handleToggleStatus = async (job: Job) => {
     const nextStatus = job.status === 'active' ? 'closed' : 'active';
@@ -106,7 +101,7 @@ export default function JobsPage() {
     return <Badge variant={variants[type] || 'secondary'}>{type.replace('_', ' ')}</Badge>;
   };
 
-  if (isLoading || loading) {
+  if (!user || loading) {
     return (
       <div className="layout-container section-spacing space-y-8 max-w-6xl mx-auto">
         <Skeleton className="h-16 w-1/3 mb-8" />

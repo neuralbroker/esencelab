@@ -460,7 +460,9 @@ app.use((req, res, next) => {
   }
 
   const routePath = req.path || '';
-  if (routePath === '/api/health' || routePath === '/api/career/roles') {
+  if (routePath === '/api/health') {
+    res.setHeader('Cache-Control', 'no-store');
+  } else if (routePath === '/api/career/roles') {
     res.setHeader('Cache-Control', 'public, max-age=60');
   } else if (
     routePath.startsWith('/api/jobs') ||
@@ -1952,7 +1954,9 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     return res.status(400).json({ message: 'Name, email and password are required' });
   }
   if (requestedRole && requestedRole !== 'student') {
-    return res.status(403).json({ message: 'Public registration only supports student accounts' });
+    return res.status(403).json({
+      message: 'Student accounts can self-register. Employer and admin access must be provisioned before sign-in.',
+    });
   }
   if (password.length < 6) {
     return res.status(400).json({ message: 'Password must be at least 6 characters' });
@@ -4033,23 +4037,22 @@ const ensureBootstrapUsers = async () => {
 };
 
 const initializeRuntime = async () => {
-  try {
-    const bootstrap = await supabaseStore.bootstrap(db);
-    if (bootstrap.mode === 'supabase' && bootstrap.loaded) {
-      logEvent('info', 'runtime.bootstrap.loaded_supabase');
-    } else if (supabaseStore.isActive()) {
-      logEvent('info', 'runtime.bootstrap.supabase_empty_store');
-    } else {
-      logEvent('info', 'runtime.bootstrap.memory_empty_store');
-    }
-
-    await ensureBootstrapUsers();
-  } catch (err) {
-    logError('runtime.initialization_failed', err);
+  const bootstrap = await supabaseStore.bootstrap(db);
+  if (bootstrap.mode === 'supabase' && bootstrap.loaded) {
+    logEvent('info', 'runtime.bootstrap.loaded_supabase');
+  } else if (supabaseStore.isActive()) {
+    logEvent('info', 'runtime.bootstrap.supabase_empty_store');
+  } else {
+    logEvent('info', 'runtime.bootstrap.memory_empty_store');
   }
+
+  await ensureBootstrapUsers();
 };
 
-runtimeReady = initializeRuntime();
+runtimeReady = initializeRuntime().catch((err) => {
+  logError('runtime.initialization_failed', err);
+  throw err;
+});
 
 const startServer = async () => {
   try {

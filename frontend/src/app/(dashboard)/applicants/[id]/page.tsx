@@ -8,13 +8,14 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
 import api from '@/lib/api';
 import Card from '@/components/Card';
 import Badge from '@/components/Badge';
+import Loading from '@/components/Loading';
 import { Skeleton } from '@/components/Skeleton';
 import { Job } from '@/types';
 import { getEmployerJobs, getReadableErrorMessage } from '@/lib/dashboardApi';
+import { useRoleAccess } from '@/lib/useRoleAccess';
 
 interface CandidateProfile {
   id: string;
@@ -63,7 +64,7 @@ export default function ApplicantProfilePage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { user, hasAllowedRole, isCheckingAccess } = useRoleAccess({ allowedRoles: ['employer', 'admin'] });
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<CandidateProfile | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -71,22 +72,12 @@ export default function ApplicantProfilePage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.push('/login');
-      return;
-    }
-    if (!isLoading && user && user.role !== 'employer' && user.role !== 'admin') {
-      router.push('/dashboard');
-    }
-  }, [isAuthenticated, isLoading, router, user]);
-
-  useEffect(() => {
     const initialJobId = searchParams.get('jobId') || '';
     if (initialJobId) setSelectedJobId(initialJobId);
   }, [searchParams]);
 
   useEffect(() => {
-    if (!isAuthenticated || (user?.role !== 'employer' && user?.role !== 'admin')) return;
+    if (!hasAllowedRole || !user) return;
 
     const loadJobs = async () => {
       try {
@@ -102,10 +93,10 @@ export default function ApplicantProfilePage() {
     };
 
     void loadJobs();
-  }, [isAuthenticated, user?.role]);
+  }, [hasAllowedRole, user]);
 
   const loadProfile = useCallback(async () => {
-    if (!id || !isAuthenticated || (user?.role !== 'employer' && user?.role !== 'admin')) return;
+    if (!id || !hasAllowedRole || !user) return;
 
     setLoading(true);
     setError(null);
@@ -118,7 +109,7 @@ export default function ApplicantProfilePage() {
     } finally {
       setLoading(false);
     }
-  }, [id, isAuthenticated, selectedJobId, user?.role]);
+  }, [hasAllowedRole, id, selectedJobId, user]);
 
   useEffect(() => {
     void loadProfile();
@@ -133,7 +124,11 @@ export default function ApplicantProfilePage() {
     };
   }, [profile?.latestResumeScore?.sectionScores]);
 
-  if (isLoading || loading) {
+  if (isCheckingAccess) {
+    return <Loading text="Checking candidate profile access..." />;
+  }
+
+  if (loading) {
     return (
       <div className="layout-container section-spacing space-y-6 max-w-5xl mx-auto">
         <Skeleton className="h-16 w-72" />
@@ -143,7 +138,7 @@ export default function ApplicantProfilePage() {
     );
   }
 
-  if (user?.role !== 'employer' && user?.role !== 'admin') return null;
+  if (!hasAllowedRole || !user) return null;
 
   if (error) {
     return (

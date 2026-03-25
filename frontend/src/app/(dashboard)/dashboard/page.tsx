@@ -60,7 +60,7 @@ function DashboardSkeleton() {
 }
 
 export default function DashboardPage() {
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { user } = useAuth();
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
@@ -86,12 +86,6 @@ export default function DashboardPage() {
     experienceLevel: 'mid' as 'entry' | 'junior' | 'mid' | 'senior' | 'lead',
     jobType: 'full_time' as 'full_time' | 'part_time' | 'internship' | 'contract',
   });
-
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.push('/login');
-    }
-  }, [isAuthenticated, isLoading, router]);
 
   const fetchStudentDashboard = useCallback(
     async (forceRefresh = false) => {
@@ -136,7 +130,7 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    if (!isAuthenticated || !user) return;
+    if (!user) return;
     setLoading(true);
     setMessage(null);
 
@@ -149,7 +143,7 @@ export default function DashboardPage() {
       return;
     }
     void fetchAdminDashboard();
-  }, [fetchAdminDashboard, fetchEmployerDashboard, fetchStudentDashboard, isAuthenticated, user]);
+  }, [fetchAdminDashboard, fetchEmployerDashboard, fetchStudentDashboard, user]);
 
   const fetchCandidateRanking = useCallback(async (jobId: string) => {
     if (!jobId) {
@@ -208,11 +202,9 @@ export default function DashboardPage() {
     return [...candidateMatches].slice(0, 8);
   }, [candidateMatches]);
 
-  if (isLoading || loading) {
+  if (!user || loading) {
     return <DashboardSkeleton />;
   }
-
-  if (!user) return null;
 
   if (user.role === 'student') {
     return (

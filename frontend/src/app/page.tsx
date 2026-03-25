@@ -13,6 +13,7 @@ import { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowRight, Sparkles } from 'lucide-react';
 import EsencelabLogo from '@/components/EsencelabLogo';
+import { AUTH_ACCESS_ORDER, AUTH_ACCESS_OPTIONS, getAuthAccessHref } from '@/lib/authAccess';
 
 const featureRows = [
   {
@@ -104,11 +105,11 @@ export default function HomePage() {
               </nav>
 
               <div className="flex items-center gap-2">
-                <Link href="/login" className={ghostButtonClass}>
-                  Login
+                <Link href={getAuthAccessHref('/login', 'student')} className={ghostButtonClass}>
+                  Sign in
                 </Link>
-                <Link href="/register" className={primaryButtonClass}>
-                  Start now
+                <Link href={getAuthAccessHref('/register', 'student')} className={primaryButtonClass}>
+                  Student signup
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </div>
@@ -129,23 +130,28 @@ export default function HomePage() {
                 <span className="font-serif italic text-[#111111]"> Career Intelligence</span>
               </h1>
               <p className="mx-auto mt-5 max-w-[620px] text-sm leading-relaxed text-[#4a4a4a]/85 sm:text-base">
-                Built for resume parsing, skill-gap analysis, and candidate ranking.
+                Built for resume parsing, skill-gap analysis, and candidate ranking, with clear access
+                paths for students, employers, and admins.
               </p>
               <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
                 <Link
-                  href="/register"
+                  href={getAuthAccessHref('/register', 'student')}
                   className="inline-flex items-center justify-center gap-2 rounded-full bg-[#111111] px-7 py-3 text-sm font-semibold text-white shadow-[0_18px_34px_-26px_rgba(30,30,30,0.8)] transition hover:bg-[#2a2a2a]"
                 >
-                  Get started
+                  Create student account
                   <ArrowRight className="h-4 w-4" />
                 </Link>
                 <Link
-                  href="/login"
+                  href={getAuthAccessHref('/login', 'employer')}
                   className="inline-flex items-center justify-center rounded-full border border-white/72 bg-white/64 px-7 py-3 text-sm font-semibold text-[#111111] transition hover:bg-white/78"
                 >
-                  Explore dashboard
+                  Sign in to workspace
                 </Link>
               </div>
+              <p className="mx-auto mt-4 max-w-[560px] text-xs leading-relaxed tracking-[0.08em] text-[#4a4a4a]/76 uppercase">
+                Students can self-register. Employer and admin accounts are provisioned, then use the
+                same sign-in page.
+              </p>
             </motion.div>
 
             <div className="relative mt-auto px-4 pb-6 sm:px-8 sm:pb-8">
@@ -170,6 +176,48 @@ export default function HomePage() {
                 ))}
               </div>
             </div>
+          </div>
+        </section>
+
+        <section className={`mt-8 p-6 sm:p-10 ${panelClass}`}>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-3xl font-semibold tracking-tight text-[#111111] sm:text-4xl">Access paths</h2>
+              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[#4a4a4a]/88">
+                The product has one shared sign-in flow, but not every role is created the same way.
+              </p>
+            </div>
+            <p className="max-w-md text-sm leading-relaxed text-[#4a4a4a]/82">
+              Student accounts are self-serve. Employer and admin accounts must already exist, then sign
+              in through the same login page.
+            </p>
+          </div>
+
+          <div className="mt-7 grid gap-4 md:grid-cols-3">
+            {AUTH_ACCESS_ORDER.map((role) => {
+              const option = AUTH_ACCESS_OPTIONS[role];
+              const primaryHref = role === 'student' ? getAuthAccessHref('/register', role) : getAuthAccessHref('/login', role);
+              const primaryLabel = role === 'student' ? 'Student signup' : `${option.label} sign in`;
+
+              return (
+                <article key={role} className={cardClass}>
+                  <p className="text-lg font-semibold text-[#111111]">{option.label}</p>
+                  <p className="mt-1 text-[0.72rem] font-semibold uppercase tracking-[0.12em] text-[#4a4a4a]/74">
+                    {option.accessMode}
+                  </p>
+                  <p className="mt-3 text-sm leading-relaxed text-[#4a4a4a]/88">
+                    {option.landingDescription}
+                  </p>
+                  <Link
+                    href={primaryHref}
+                    className="mt-5 inline-flex items-center gap-2 rounded-full bg-[#111111] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#2a2a2a]"
+                  >
+                    {primaryLabel}
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </article>
+              );
+            })}
           </div>
         </section>
 
@@ -212,17 +260,17 @@ export default function HomePage() {
           <p className="mx-auto mt-3 max-w-2xl text-center text-sm text-[#4a4a4a]/88 sm:text-base">Turn resumes into clear insights, role-fit scores, and faster hiring decisions.</p>
           <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link
-              href="/register"
+              href={getAuthAccessHref('/register', 'student')}
               className="inline-flex items-center justify-center gap-2 rounded-full bg-[#111111] px-7 py-3 text-sm font-semibold text-white transition hover:bg-[#2a2a2a]"
             >
-              Create account
+              Create student account
               <ArrowRight className="h-4 w-4" />
             </Link>
             <Link
-              href="/login"
+              href={getAuthAccessHref('/login', 'employer')}
               className="inline-flex items-center justify-center rounded-full border border-white/72 bg-white/64 px-7 py-3 text-sm font-semibold text-[#111111] transition hover:bg-white/78"
             >
-              Sign in
+              Sign in to workspace
             </Link>
           </div>
         </section>

@@ -7,47 +7,47 @@
  * student skill-gap and roadmap workflows.
  */
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
 import api from '@/lib/api';
 import { Course } from '@/types';
 import Card from '@/components/Card';
 import Badge from '@/components/Badge';
 import Button from '@/components/Button';
+import Loading from '@/components/Loading';
 import { GraduationCap, ExternalLink, User, Star, BookOpen } from 'lucide-react';
 import { Skeleton } from '@/components/Skeleton';
 import { motion } from 'framer-motion';
+import { getReadableErrorMessage } from '@/lib/dashboardApi';
+import { useRoleAccess } from '@/lib/useRoleAccess';
 
 export default function CoursesPage() {
-  const { isAuthenticated, isLoading } = useAuth();
-  const router = useRouter();
+  const { hasAllowedRole, isCheckingAccess } = useRoleAccess({ allowedRoles: ['student'] });
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.push('/login');
-    }
-  }, [isAuthenticated, isLoading, router]);
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      fetchCourses();
-    }
-  }, [isAuthenticated]);
+    if (!hasAllowedRole) return;
+    void fetchCourses();
+  }, [hasAllowedRole]);
 
   const fetchCourses = async () => {
     try {
+      setError(null);
       const res = await api.get('/courses');
       setCourses(res.data.data || []);
-    } catch {
+    } catch (err: any) {
       setCourses([]);
+      setError(getReadableErrorMessage(err, 'Failed to load courses.'));
     } finally {
       setLoading(false);
     }
   };
 
-  if (isLoading || loading) {
+  if (isCheckingAccess) {
+    return <Loading text="Checking learning access..." />;
+  }
+
+  if (loading) {
     return (
       <div className="layout-container section-spacing space-y-8 max-w-6xl mx-auto">
         <Skeleton className="h-16 w-1/3 mb-10" />
@@ -68,6 +68,12 @@ export default function CoursesPage() {
           <p className="text-base text-secondary">Upskill with curated courses to bridge your skill gaps.</p>
         </div>
       </div>
+
+      {error && (
+        <Card hoverable={false} className="border border-gray-300 bg-gray-100 p-4 text-sm text-gray-800">
+          {error}
+        </Card>
+      )}
 
       {courses.length > 0 ? (
         <motion.div

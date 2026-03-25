@@ -6,13 +6,21 @@
  * Public signup is student-focused, so this page collects the required
  * account fields and delegates the actual auth work to the shared provider.
  */
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { ArrowRight } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import EsencelabLogo from '@/components/EsencelabLogo';
+import {
+  AUTH_ACCESS_ORDER,
+  AUTH_ACCESS_OPTIONS,
+  getAuthAccessHref,
+  isProvisionedAccessRole,
+  normalizeAuthAccessRole,
+} from '@/lib/authAccess';
+import { sanitizeNextPath, withNextPath } from '@/lib/routeAccess';
 
 const onboardingPoints = [
   'Upload and parse resumes quickly',
@@ -27,7 +35,13 @@ const ghostButtonClass =
 const inputClass =
   'w-full rounded-2xl border border-white/78 bg-white/74 px-4 py-3 text-base text-[#111111] outline-none transition focus:border-[#4b4b4b] focus:ring-2 focus:ring-[#4b4b4b]/20';
 
-export default function RegisterPage() {
+const pageFallback = (
+  <div className="flex min-h-screen items-center justify-center bg-[#f2f2f2]">
+    <div className="h-10 w-10 animate-spin rounded-full border-2 border-black/20 border-t-primary" />
+  </div>
+);
+
+function RegisterPageContent() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -37,15 +51,29 @@ export default function RegisterPage() {
 
   const { register, isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const selectedRole = normalizeAuthAccessRole(searchParams.get('role'));
+  const selectedAccess = AUTH_ACCESS_OPTIONS[selectedRole];
+  const isProvisionedRole = isProvisionedAccessRole(selectedRole);
+  const nextPath = sanitizeNextPath(searchParams.get('next'));
 
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
-      router.replace('/dashboard');
+      router.replace(nextPath || '/dashboard');
     }
-  }, [authLoading, isAuthenticated, router]);
+  }, [authLoading, isAuthenticated, nextPath, router]);
+
+  useEffect(() => {
+    setError('');
+  }, [selectedRole]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (isProvisionedRole) {
+      setError(`${selectedAccess.label} accounts must be provisioned before sign-in.`);
+      return;
+    }
+
     const trimmedName = name.trim();
     const normalizedEmail = email.trim().toLowerCase();
     const normalizedPassword = password.trim();
@@ -75,7 +103,7 @@ export default function RegisterPage() {
         password: normalizedPassword,
         role: 'student',
       });
-      router.replace('/dashboard');
+      router.replace(nextPath || '/dashboard');
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Registration failed. Please try again.');
     } finally {
@@ -112,14 +140,49 @@ export default function RegisterPage() {
       >
         <section className={`${panelClass} p-8 sm:p-10`}>
           <span className="inline-flex rounded-full border border-white/72 bg-white/64 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-[#4a4a4a]">
-            Create account
+            Student-only signup
           </span>
           <h1 className="mt-4 text-4xl font-semibold tracking-tight text-[#111111] sm:text-5xl">
-            Start with Esencelab.
+            Choose the right entry point.
           </h1>
           <p className="mt-3 max-w-md text-sm leading-relaxed text-[#4a4a4a]/88">
-            Set up your account and access the project dashboard in a few steps.
+            Students create accounts here. Employer and admin access use the same sign-in page after
+            the account has been provisioned.
           </p>
+
+          <div className="mt-7 grid gap-3 sm:grid-cols-3">
+            {AUTH_ACCESS_ORDER.map((role) => {
+              const option = AUTH_ACCESS_OPTIONS[role];
+              const isSelected = role === selectedRole;
+
+              return (
+                <Link
+                  key={role}
+                  href={withNextPath(getAuthAccessHref('/register', role), nextPath)}
+                  className={`rounded-2xl border px-4 py-4 text-left transition ${
+                    isSelected
+                      ? 'border-[#111111] bg-white/88 shadow-[0_18px_34px_-28px_rgba(20,20,20,0.72)]'
+                      : 'border-white/72 bg-white/66 hover:bg-white/80'
+                  }`}
+                >
+                  <p className="text-sm font-semibold text-[#111111]">{option.label}</p>
+                  <p className="mt-1 text-[0.72rem] font-semibold uppercase tracking-[0.12em] text-[#4a4a4a]/74">
+                    {option.accessMode}
+                  </p>
+                </Link>
+              );
+            })}
+          </div>
+
+          <div className="mt-5 rounded-2xl border border-white/72 bg-white/68 p-4">
+            <p className="text-[0.72rem] font-semibold uppercase tracking-[0.14em] text-[#4a4a4a]/74">
+              Selected access
+            </p>
+            <p className="mt-2 text-lg font-semibold text-[#111111]">{selectedAccess.label}</p>
+            <p className="mt-2 text-sm leading-relaxed text-[#4a4a4a]/88">
+              {selectedAccess.registerDescription}
+            </p>
+          </div>
 
           <ul className="mt-7 space-y-2 text-sm text-[#4a4a4a]/88">
             {onboardingPoints.map((point) => (
@@ -132,99 +195,146 @@ export default function RegisterPage() {
         </section>
 
         <section className={`${panelClass} p-8 sm:p-10`}>
-          <h2 className="text-2xl font-semibold tracking-tight text-[#111111]">Account setup</h2>
-          <p className="mt-2 text-sm text-[#4a4a4a]/88">Fill in the details below.</p>
+          <h2 className="text-2xl font-semibold tracking-tight text-[#111111]">
+            {isProvisionedRole ? `${selectedAccess.label} access is provisioned` : 'Create student account'}
+          </h2>
+          <p className="mt-2 text-sm text-[#4a4a4a]/88">
+            {isProvisionedRole
+              ? 'This page explains access for provisioned roles. It does not create employer or admin accounts.'
+              : 'Public signup creates a student workspace and routes straight into the student dashboard.'}
+          </p>
 
-          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-            {error && (
-              <div className="rounded-xl border border-gray-300 bg-gray-100 px-4 py-3 text-sm text-gray-800">
-                {error}
+          {isProvisionedRole ? (
+            <div className="mt-6 space-y-4">
+              <div className="rounded-2xl border border-[#111111]/10 bg-[#111111]/[0.04] p-5">
+                <p className="text-sm font-semibold text-[#111111]">{selectedAccess.label} accounts are not public.</p>
+                <p className="mt-2 text-sm leading-relaxed text-[#4a4a4a]/88">
+                  {selectedAccess.registerDescription} Once your account exists, use the shared login page to
+                  access the correct workspace automatically.
+                </p>
               </div>
-            )}
 
-            <div>
-              <label htmlFor="register-name" className="mb-2 block text-sm font-medium text-[#4a4a4a]/88">
-                Full name
-              </label>
-              <input
-                id="register-name"
-                type="text"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder="Your name"
-                autoComplete="name"
-                required
-                className={inputClass}
-              />
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Link
+                  href={withNextPath(getAuthAccessHref('/login', selectedRole), nextPath)}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#111111] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#2a2a2a]"
+                >
+                  Sign in with existing {selectedAccess.label.toLowerCase()} access
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+                <Link
+                  href={withNextPath(getAuthAccessHref('/register', 'student'), nextPath)}
+                  className="inline-flex items-center justify-center rounded-2xl border border-white/72 bg-white/64 px-6 py-3 text-sm font-semibold text-[#111111] transition hover:bg-white/78"
+                >
+                  Switch to student signup
+                </Link>
+              </div>
             </div>
+          ) : (
+            <>
+              <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+                {error && (
+                  <div className="rounded-xl border border-gray-300 bg-gray-100 px-4 py-3 text-sm text-gray-800">
+                    {error}
+                  </div>
+                )}
 
-            <div>
-              <label htmlFor="register-email" className="mb-2 block text-sm font-medium text-[#4a4a4a]/88">
-                Email
-              </label>
-              <input
-                id="register-email"
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="name@company.com"
-                autoComplete="email"
-                required
-                className={inputClass}
-              />
-            </div>
+                <div>
+                  <label htmlFor="register-name" className="mb-2 block text-sm font-medium text-[#4a4a4a]/88">
+                    Full name
+                  </label>
+                  <input
+                    id="register-name"
+                    type="text"
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    placeholder="Your name"
+                    autoComplete="name"
+                    required
+                    className={inputClass}
+                  />
+                </div>
 
-            <div>
-              <label htmlFor="register-password" className="mb-2 block text-sm font-medium text-[#4a4a4a]/88">
-                Password
-              </label>
-              <input
-                id="register-password"
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder="********"
-                autoComplete="new-password"
-                required
-                className={inputClass}
-              />
-            </div>
+                <div>
+                  <label htmlFor="register-email" className="mb-2 block text-sm font-medium text-[#4a4a4a]/88">
+                    Email
+                  </label>
+                  <input
+                    id="register-email"
+                    type="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    placeholder="name@company.com"
+                    autoComplete="email"
+                    required
+                    className={inputClass}
+                  />
+                </div>
 
-            <div>
-              <label htmlFor="register-confirm" className="mb-2 block text-sm font-medium text-[#4a4a4a]/88">
-                Confirm password
-              </label>
-              <input
-                id="register-confirm"
-                type="password"
-                value={confirmPassword}
-                onChange={(event) => setConfirmPassword(event.target.value)}
-                placeholder="********"
-                autoComplete="new-password"
-                required
-                className={inputClass}
-              />
-            </div>
+                <div>
+                  <label htmlFor="register-password" className="mb-2 block text-sm font-medium text-[#4a4a4a]/88">
+                    Password
+                  </label>
+                  <input
+                    id="register-password"
+                    type="password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    placeholder="********"
+                    autoComplete="new-password"
+                    required
+                    className={inputClass}
+                  />
+                </div>
 
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#111111] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#2a2a2a] disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              {isLoading ? 'Creating account...' : 'Create account'}
-              {!isLoading && <ArrowRight className="h-4 w-4" />}
-            </button>
-          </form>
+                <div>
+                  <label htmlFor="register-confirm" className="mb-2 block text-sm font-medium text-[#4a4a4a]/88">
+                    Confirm password
+                  </label>
+                  <input
+                    id="register-confirm"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    placeholder="********"
+                    autoComplete="new-password"
+                    required
+                    className={inputClass}
+                  />
+                </div>
 
-          <div className="mt-6 text-sm text-[#4a4a4a]/88">
-            Already have an account?{' '}
-            <Link href="/login" className="font-semibold text-[#111111] transition hover:text-[#111111]">
-              Sign in
-            </Link>
-          </div>
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#111111] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#2a2a2a] disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {isLoading ? 'Creating account...' : 'Create student account'}
+                  {!isLoading && <ArrowRight className="h-4 w-4" />}
+                </button>
+              </form>
+
+              <div className="mt-6 text-sm text-[#4a4a4a]/88">
+                Already have an account?{' '}
+                <Link
+                  href={withNextPath(getAuthAccessHref('/login', 'student'), nextPath)}
+                  className="font-semibold text-[#111111] transition hover:text-[#111111]"
+                >
+                  Sign in
+                </Link>
+              </div>
+            </>
+          )}
         </section>
       </motion.main>
     </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={pageFallback}>
+      <RegisterPageContent />
+    </Suspense>
   );
 }
 

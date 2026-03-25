@@ -7,10 +7,9 @@
  * students preparing for technical and behavioral rounds.
  */
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import { useRouter } from 'next/navigation';
 import Card from '@/components/Card';
 import Button from '@/components/Button';
+import Loading from '@/components/Loading';
 import { AlertCircle, CheckCircle2, Loader2, Mic, Video } from 'lucide-react';
 import {
   getCareerRoles,
@@ -20,6 +19,7 @@ import {
   saveInterviewSession,
 } from '@/lib/dashboardApi';
 import { CareerRole, MockInterviewPack } from '@/types';
+import { useRoleAccess } from '@/lib/useRoleAccess';
 
 interface InterviewSession {
   id: string;
@@ -31,8 +31,7 @@ interface InterviewSession {
 }
 
 export default function MockInterviewPage() {
-  const { user, isAuthenticated, isLoading } = useAuth();
-  const router = useRouter();
+  const { user, hasAllowedRole, isCheckingAccess } = useRoleAccess({ allowedRoles: ['student'] });
 
   const [loading, setLoading] = useState(true);
   const [roles, setRoles] = useState<CareerRole[]>([]);
@@ -49,17 +48,7 @@ export default function MockInterviewPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.push('/login');
-      return;
-    }
-    if (!isLoading && user && user.role !== 'student') {
-      router.push('/dashboard');
-    }
-  }, [isAuthenticated, isLoading, router, user]);
-
-  useEffect(() => {
-    if (!isAuthenticated || user?.role !== 'student') return;
+    if (!hasAllowedRole) return;
 
     const bootstrap = async () => {
       setLoading(true);
@@ -79,7 +68,7 @@ export default function MockInterviewPage() {
     };
 
     void bootstrap();
-  }, [isAuthenticated, user?.role]);
+  }, [hasAllowedRole]);
 
   useEffect(() => {
     if (!selectedRoleId) return;
@@ -127,7 +116,11 @@ export default function MockInterviewPage() {
     }
   };
 
-  if (isLoading || loading) {
+  if (isCheckingAccess) {
+    return <Loading text="Checking interview workspace..." />;
+  }
+
+  if (loading) {
     return (
       <div className="layout-container section-spacing">
         <div className="flex items-center gap-3 text-secondary">
@@ -138,7 +131,7 @@ export default function MockInterviewPage() {
     );
   }
 
-  if (user?.role !== 'student') return null;
+  if (!hasAllowedRole || !user) return null;
 
   return (
     <div className="layout-container section-spacing space-y-8 max-w-6xl mx-auto">

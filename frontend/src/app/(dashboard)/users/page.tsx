@@ -7,15 +7,15 @@
  * deactivating, and deleting user accounts.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
 import api from '@/lib/api';
 import { getAdminUsers, getReadableErrorMessage } from '@/lib/dashboardApi';
 import { PaginationMeta, User } from '@/types';
 import Card from '@/components/Card';
 import Badge from '@/components/Badge';
 import Button from '@/components/Button';
+import Loading from '@/components/Loading';
 import { Users, Search, Trash2 } from 'lucide-react';
+import { useRoleAccess } from '@/lib/useRoleAccess';
 
 const EMPTY_META: PaginationMeta = {
   page: 1,
@@ -25,8 +25,7 @@ const EMPTY_META: PaginationMeta = {
 };
 
 export default function UsersPage() {
-  const { user, isAuthenticated, isLoading } = useAuth();
-  const router = useRouter();
+  const { hasAllowedRole } = useRoleAccess({ allowedRoles: ['admin'] });
   const [users, setUsers] = useState<User[]>([]);
   const [meta, setMeta] = useState<PaginationMeta>(EMPTY_META);
   const [loading, setLoading] = useState(true);
@@ -37,14 +36,8 @@ export default function UsersPage() {
   const [page, setPage] = useState(1);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.push('/login');
-    }
-  }, [isAuthenticated, isLoading, router]);
-
   const fetchUsers = useCallback(async () => {
-    if (user?.role !== 'admin') {
+    if (!hasAllowedRole) {
       setLoading(false);
       return;
     }
@@ -67,12 +60,12 @@ export default function UsersPage() {
     } finally {
       setLoading(false);
     }
-  }, [order, page, roleFilter, searchTerm, sortBy, user?.role]);
+  }, [hasAllowedRole, order, page, roleFilter, searchTerm, sortBy]);
 
   useEffect(() => {
-    if (!isAuthenticated || user?.role !== 'admin') return;
+    if (!hasAllowedRole) return;
     void fetchUsers();
-  }, [fetchUsers, isAuthenticated, user?.role]);
+  }, [fetchUsers, hasAllowedRole]);
 
   useEffect(() => {
     setPage(1);
@@ -109,18 +102,11 @@ export default function UsersPage() {
     return <Badge variant={variants[role] || 'secondary'}>{role}</Badge>;
   };
 
-  if (isLoading || loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-black"></div>
-      </div>
-    );
+  if (loading) {
+    return <Loading text="Checking admin access..." />;
   }
 
-  if (user?.role !== 'admin') {
-    router.push('/dashboard');
-    return null;
-  }
+  if (!hasAllowedRole) return null;
 
   const pageStart = meta.total === 0 ? 0 : (meta.page - 1) * meta.limit + 1;
   const pageEnd = meta.total === 0 ? 0 : Math.min(meta.page * meta.limit, meta.total);

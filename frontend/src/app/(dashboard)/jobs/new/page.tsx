@@ -8,17 +8,18 @@
  */
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
 import api from '@/lib/api';
 import Card from '@/components/Card';
 import Button from '@/components/Button';
 import Input from '@/components/Input';
 import Select from '@/components/Select';
+import Loading from '@/components/Loading';
 import { Briefcase } from 'lucide-react';
+import { useRoleAccess } from '@/lib/useRoleAccess';
 
 export default function NewJobPage() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { hasAllowedRole, isCheckingAccess } = useRoleAccess({ allowedRoles: ['employer', 'admin'] });
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
@@ -51,10 +52,11 @@ export default function NewJobPage() {
     }
   };
 
-  if (user?.role !== 'employer' && user?.role !== 'admin') {
-    router.push('/dashboard');
-    return null;
+  if (isCheckingAccess) {
+    return <Loading text="Checking job posting access..." />;
   }
+
+  if (!hasAllowedRole) return null;
 
   return (
     <div className="layout-container section-spacing max-w-3xl mx-auto space-y-8">

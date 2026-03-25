@@ -7,13 +7,12 @@
  * latest stored resume insights for the signed-in student.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { AlertCircle, CheckCircle, FileText, Loader2, UploadCloud, X, Trash2 } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
 import { Resume } from '@/types';
 import Card from '@/components/Card';
 import Button from '@/components/Button';
 import Badge from '@/components/Badge';
+import Loading from '@/components/Loading';
 import { Skeleton } from '@/components/Skeleton';
 import {
   deleteResume,
@@ -22,6 +21,7 @@ import {
   uploadResume,
 } from '@/lib/dashboardApi';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useRoleAccess } from '@/lib/useRoleAccess';
 
 type FeedbackTone = 'success' | 'error' | 'info';
 
@@ -39,8 +39,7 @@ const isResumeEffectivelyEmpty = (resume: Resume) => {
 };
 
 export default function ResumeUploadPage() {
-  const router = useRouter();
-  const { user } = useAuth();
+  const { hasAllowedRole, isCheckingAccess } = useRoleAccess({ allowedRoles: ['student'] });
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -64,12 +63,9 @@ export default function ResumeUploadPage() {
   }, []);
 
   useEffect(() => {
-    if (user?.role !== 'student') {
-      router.push('/dashboard');
-      return;
-    }
+    if (!hasAllowedRole) return;
     void fetchResume();
-  }, [fetchResume, router, user?.role]);
+  }, [fetchResume, hasAllowedRole]);
 
   const validatePdf = useCallback((candidate: File) => {
     const isPdf =
@@ -154,7 +150,11 @@ export default function ResumeUploadPage() {
     }
   };
 
-  if (user?.role !== 'student') return null;
+  if (isCheckingAccess) {
+    return <Loading text="Checking resume workspace..." />;
+  }
+
+  if (!hasAllowedRole) return null;
 
   const feedbackClass =
     feedback?.tone === 'success'

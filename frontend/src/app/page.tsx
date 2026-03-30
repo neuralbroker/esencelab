@@ -13,7 +13,7 @@ import { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowRight, Sparkles } from 'lucide-react';
 import EsencelabLogo from '@/components/EsencelabLogo';
-import { AUTH_ACCESS_ORDER, AUTH_ACCESS_OPTIONS, getAuthAccessHref } from '@/lib/authAccess';
+import { getAuthAccessHref } from '@/lib/authAccess';
 
 const featureRows = [
   {
@@ -43,12 +43,6 @@ const steps = [
     title: 'Track and improve',
     detail: 'Follow learning roadmap and apply to jobs.',
   },
-];
-
-const stats = [
-  { label: 'Parsed resumes', value: '412+', width: '78%', color: '#9b9b9b' },
-  { label: 'Average role match', value: '89%', width: '89%', color: '#7f7f7f' },
-  { label: 'Shortlist speed gain', value: '3x', width: '68%', color: '#a8a8a8' },
 ];
 
 const panelClass =
@@ -89,7 +83,7 @@ export default function HomePage() {
           <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(234,234,234,0.82)_0%,rgba(244,244,244,0.72)_46%,rgba(250,250,250,0.8)_100%)]" />
           <div className="pointer-events-none absolute inset-x-0 top-0 h-[44%] bg-[linear-gradient(180deg,rgba(220,220,220,0.34)_0%,rgba(255,255,255,0)_100%)]" />
 
-          <div className="relative flex min-h-[620px] flex-col">
+          <div className="relative flex min-h-[500px] flex-col">
             <header className="mx-auto flex w-full max-w-[1160px] items-center justify-between gap-4 px-5 pt-5 sm:px-8 sm:pt-7">
               <Link href="/" className="inline-flex">
                 <EsencelabLogo />
@@ -148,76 +142,7 @@ export default function HomePage() {
                   Sign in to workspace
                 </Link>
               </div>
-              <p className="mx-auto mt-4 max-w-[560px] text-xs leading-relaxed tracking-[0.08em] text-[#4a4a4a]/76 uppercase">
-                Students can self-register. Employer and admin accounts are provisioned, then use the
-                same sign-in page.
-              </p>
-            </motion.div>
-
-            <div className="relative mt-auto px-4 pb-6 sm:px-8 sm:pb-8">
-              <div className="grid gap-3 md:grid-cols-3">
-                {stats.map((item, index) => (
-                  <motion.article
-                    key={item.label}
-                    initial={{ opacity: 0, y: 16 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.4, delay: 0.08 + index * 0.06 }}
-                    className="rounded-[24px] border border-white/72 bg-white/74 p-5 shadow-[0_24px_44px_-36px_rgba(20,20,20,0.58)] backdrop-blur-md"
-                  >
-                    <p className="text-xs font-semibold tracking-[0.12em] text-[#4a4a4a]/70">{item.label}</p>
-                    <p className="mt-3 text-2xl font-semibold text-[#111111]">{item.value}</p>
-                    <div className="mt-4 h-2 rounded-full bg-[#e5e5e5]">
-                      <div
-                        className="h-full rounded-full"
-                        style={{ width: item.width, backgroundColor: item.color }}
-                      />
-                    </div>
-                  </motion.article>
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className={`mt-8 p-6 sm:p-10 ${panelClass}`}>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <h2 className="text-3xl font-semibold tracking-tight text-[#111111] sm:text-4xl">Access paths</h2>
-              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[#4a4a4a]/88">
-                The product has one shared sign-in flow, but not every role is created the same way.
-              </p>
-            </div>
-            <p className="max-w-md text-sm leading-relaxed text-[#4a4a4a]/82">
-              Student accounts are self-serve. Employer and admin accounts must already exist, then sign
-              in through the same login page.
-            </p>
-          </div>
-
-          <div className="mt-7 grid gap-4 md:grid-cols-3">
-            {AUTH_ACCESS_ORDER.map((role) => {
-              const option = AUTH_ACCESS_OPTIONS[role];
-              const primaryHref = role === 'student' ? getAuthAccessHref('/register', role) : getAuthAccessHref('/login', role);
-              const primaryLabel = role === 'student' ? 'Student signup' : `${option.label} sign in`;
-
-              return (
-                <article key={role} className={cardClass}>
-                  <p className="text-lg font-semibold text-[#111111]">{option.label}</p>
-                  <p className="mt-1 text-[0.72rem] font-semibold uppercase tracking-[0.12em] text-[#4a4a4a]/74">
-                    {option.accessMode}
-                  </p>
-                  <p className="mt-3 text-sm leading-relaxed text-[#4a4a4a]/88">
-                    {option.landingDescription}
-                  </p>
-                  <Link
-                    href={primaryHref}
-                    className="mt-5 inline-flex items-center gap-2 rounded-full bg-[#111111] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#2a2a2a]"
-                  >
-                    {primaryLabel}
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </article>
-              );
-            })}
+              </motion.div>
           </div>
         </section>
 

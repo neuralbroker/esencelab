@@ -13,14 +13,8 @@ import { ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import EsencelabLogo from '@/components/EsencelabLogo';
-import {
-  AUTH_ACCESS_ORDER,
-  AUTH_ACCESS_OPTIONS,
-  getAuthAccessHref,
-  isProvisionedAccessRole,
-  normalizeAuthAccessRole,
-} from '@/lib/authAccess';
-import { sanitizeNextPath, withNextPath } from '@/lib/routeAccess';
+import { getAuthAccessHref } from '@/lib/authAccess';
+import { sanitizeNextPath } from '@/lib/routeAccess';
 
 const panelClass =
   'rounded-[30px] border border-white/72 bg-white/72 shadow-[0_26px_58px_-46px_rgba(24,24,24,0.45)] backdrop-blur-md';
@@ -53,8 +47,6 @@ function LoginPageContent() {
   const { login, isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const selectedRole = normalizeAuthAccessRole(searchParams.get('role'));
-  const selectedAccess = AUTH_ACCESS_OPTIONS[selectedRole];
   const nextPath = sanitizeNextPath(searchParams.get('next'));
 
   useEffect(() => {
@@ -62,10 +54,6 @@ function LoginPageContent() {
       router.replace(nextPath || '/dashboard');
     }
   }, [authLoading, isAuthenticated, nextPath, router]);
-
-  useEffect(() => {
-    setError('');
-  }, [selectedRole]);
 
   const runLogin = async (nextEmail: string, nextPassword: string) => {
     const normalizedEmail = nextEmail.trim().toLowerCase();
@@ -119,73 +107,15 @@ function LoginPageContent() {
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45 }}
-        className="relative z-10 mx-auto mt-6 grid w-full max-w-5xl gap-4 px-4 pb-12 sm:px-6 lg:grid-cols-[0.95fr,1.05fr]"
+        className="relative z-10 mx-auto mt-6 w-full max-w-md px-4 pb-12 sm:px-6"
       >
         <section className={`${panelClass} p-8 sm:p-10`}>
-          <span className="inline-flex rounded-full border border-white/72 bg-white/64 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-[#4a4a4a]">
-            Role-based sign in
-          </span>
-          <h1 className="mt-4 text-4xl font-semibold tracking-tight text-[#111111] sm:text-5xl">
-            One sign-in. Three workspaces.
-          </h1>
-          <p className="mt-3 max-w-md text-sm leading-relaxed text-[#4a4a4a]/88">
-            Students, employers, and admins all use the same email/password form. Your account role
-            decides which dashboard opens after sign-in.
-          </p>
-
-          <div className="mt-7 grid gap-3 sm:grid-cols-3">
-            {AUTH_ACCESS_ORDER.map((role) => {
-              const option = AUTH_ACCESS_OPTIONS[role];
-              const isSelected = role === selectedRole;
-
-              return (
-                <Link
-                  key={role}
-                  href={withNextPath(getAuthAccessHref('/login', role), nextPath)}
-                  className={`rounded-2xl border px-4 py-4 text-left transition ${
-                    isSelected
-                      ? 'border-[#111111] bg-white/88 shadow-[0_18px_34px_-28px_rgba(20,20,20,0.72)]'
-                      : 'border-white/72 bg-white/66 hover:bg-white/80'
-                  }`}
-                >
-                  <p className="text-sm font-semibold text-[#111111]">{option.label}</p>
-                  <p className="mt-1 text-[0.72rem] font-semibold uppercase tracking-[0.12em] text-[#4a4a4a]/74">
-                    {option.accessMode}
-                  </p>
-                </Link>
-              );
-            })}
-          </div>
-
-          <div className="mt-5 rounded-2xl border border-white/72 bg-white/68 p-4">
-            <p className="text-[0.72rem] font-semibold uppercase tracking-[0.14em] text-[#4a4a4a]/74">
-              Selected access
-            </p>
-            <p className="mt-2 text-lg font-semibold text-[#111111]">{selectedAccess.label}</p>
-            <p className="mt-2 text-sm leading-relaxed text-[#4a4a4a]/88">
-              {selectedAccess.loginDescription}
-            </p>
-          </div>
-        </section>
-
-        <section className={`${panelClass} p-8 sm:p-10`}>
-          <h2 className="text-2xl font-semibold tracking-tight text-[#111111]">Account login</h2>
-          <p className="mt-2 text-sm text-[#4a4a4a]/88">
-            There is no separate employer or admin login URL. Use your existing credentials and we
-            will route you into the correct workspace automatically.
-          </p>
+          <h2 className="text-2xl font-semibold tracking-tight text-[#111111]">Sign in</h2>
 
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
             {error && (
               <div className="rounded-xl border border-gray-300 bg-gray-100 px-4 py-3 text-sm text-gray-800">
                 {error}
-              </div>
-            )}
-
-            {isProvisionedAccessRole(selectedRole) && (
-              <div className="rounded-xl border border-[#111111]/10 bg-[#111111]/[0.04] px-4 py-3 text-sm text-[#303030]">
-                {selectedAccess.label} accounts are provisioned first, then signed in here with the
-                same form.
               </div>
             )}
 
@@ -230,22 +160,6 @@ function LoginPageContent() {
               {!isLoading && <ArrowRight className="h-4 w-4" />}
             </button>
           </form>
-
-          <div className="mt-6 space-y-2 text-sm text-[#4a4a4a]/88">
-            <p>
-              {selectedRole === 'student'
-                ? 'Need a new student account? Public signup is available.'
-                : `${selectedAccess.label} access is not created on the public signup page.`}
-            </p>
-            <Link
-              href={withNextPath(getAuthAccessHref('/register', selectedRole), nextPath)}
-              className="font-semibold text-[#111111] transition hover:text-[#111111]"
-            >
-              {selectedRole === 'student'
-                ? 'Create a student account'
-                : `See ${selectedAccess.label.toLowerCase()} access rules`}
-            </Link>
-          </div>
         </section>
       </motion.main>
     </div>

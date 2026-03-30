@@ -100,10 +100,10 @@ export default function HomePage() {
 
               <div className="flex items-center gap-2">
                 <Link href={getAuthAccessHref('/login', 'student')} className={ghostButtonClass}>
-                  Sign in
+                  Login
                 </Link>
                 <Link href={getAuthAccessHref('/register', 'student')} className={primaryButtonClass}>
-                  Student signup
+                  Sign Up
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </div>
@@ -123,23 +123,19 @@ export default function HomePage() {
                 Esencelab
                 <span className="font-serif italic text-[#111111]"> Career Intelligence</span>
               </h1>
-              <p className="mx-auto mt-5 max-w-[620px] text-sm leading-relaxed text-[#4a4a4a]/85 sm:text-base">
-                Built for resume parsing, skill-gap analysis, and candidate ranking, with clear access
-                paths for students, employers, and admins.
-              </p>
               <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
                 <Link
                   href={getAuthAccessHref('/register', 'student')}
                   className="inline-flex items-center justify-center gap-2 rounded-full bg-[#111111] px-7 py-3 text-sm font-semibold text-white shadow-[0_18px_34px_-26px_rgba(30,30,30,0.8)] transition hover:bg-[#2a2a2a]"
                 >
-                  Create student account
+                  Create Account
                   <ArrowRight className="h-4 w-4" />
                 </Link>
                 <Link
-                  href={getAuthAccessHref('/login', 'employer')}
+                  href={getAuthAccessHref('/login', 'student')}
                   className="inline-flex items-center justify-center rounded-full border border-white/72 bg-white/64 px-7 py-3 text-sm font-semibold text-[#111111] transition hover:bg-white/78"
                 >
-                  Sign in to workspace
+                  Login
                 </Link>
               </div>
               </motion.div>
@@ -188,14 +184,14 @@ export default function HomePage() {
               href={getAuthAccessHref('/register', 'student')}
               className="inline-flex items-center justify-center gap-2 rounded-full bg-[#111111] px-7 py-3 text-sm font-semibold text-white transition hover:bg-[#2a2a2a]"
             >
-              Create student account
+              Create Account
               <ArrowRight className="h-4 w-4" />
             </Link>
             <Link
-              href={getAuthAccessHref('/login', 'employer')}
+              href={getAuthAccessHref('/login', 'student')}
               className="inline-flex items-center justify-center rounded-full border border-white/72 bg-white/64 px-7 py-3 text-sm font-semibold text-[#111111] transition hover:bg-white/78"
             >
-              Sign in to workspace
+              Login
             </Link>
           </div>
         </section>

@@ -110,7 +110,7 @@ function LoginPageContent() {
         className="relative z-10 mx-auto mt-6 w-full max-w-md px-4 pb-12 sm:px-6"
       >
         <section className={`${panelClass} p-8 sm:p-10`}>
-          <h2 className="text-2xl font-semibold tracking-tight text-[#111111]">Sign in</h2>
+          <h2 className="text-2xl font-semibold tracking-tight text-[#111111]">Student Login</h2>
 
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
             {error && (

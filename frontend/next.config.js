@@ -18,6 +18,7 @@ const nextConfig = {
   poweredByHeader: false,
   compress: true,
   output: 'standalone',
+  outputFileTracingRoot: __dirname,
   experimental: {
     optimizePackageImports: ['lucide-react', 'framer-motion'],
   },

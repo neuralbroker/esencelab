@@ -1,11 +1,5 @@
 'use client';
 
-/**
- * Public landing page.
- *
- * This page introduces the product, highlights the core capabilities, and
- * redirects authenticated users into the dashboard area.
- */
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
@@ -13,47 +7,15 @@ import { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowRight, Sparkles } from 'lucide-react';
 import EsencelabLogo from '@/components/EsencelabLogo';
-import { getAuthAccessHref } from '@/lib/authAccess';
-
-const featureRows = [
-  {
-    title: 'AI Resume Parsing',
-    detail: 'Convert resumes into structured candidate data.',
-  },
-  {
-    title: 'Skill Match',
-    detail: 'Compare profiles with role requirements.',
-  },
-  {
-    title: 'Recruiter Ranking',
-    detail: 'Prioritize applicants with fit-based scoring.',
-  },
-];
-
-const steps = [
-  {
-    title: 'Upload and parse',
-    detail: 'Upload resume and extract key details.',
-  },
-  {
-    title: 'Analyze and match',
-    detail: 'Run role matching and identify gaps.',
-  },
-  {
-    title: 'Track and improve',
-    detail: 'Follow learning roadmap and apply to jobs.',
-  },
-];
 
 const panelClass =
   'rounded-[30px] border border-white/72 bg-white/72 shadow-[0_26px_58px_-46px_rgba(24,24,24,0.45)] backdrop-blur-md';
-const cardClass = 'rounded-2xl border border-white/72 bg-white/72 p-5';
-const navPillClass =
-  'rounded-full border border-white/72 bg-white/64 px-2 py-1 text-[0.72rem] font-semibold text-[#111111] shadow-[0_14px_28px_-22px_rgba(20,20,20,0.65)]';
 const ghostButtonClass =
   'rounded-full border border-white/72 bg-white/64 px-4 py-2 text-sm font-semibold text-[#111111] transition hover:bg-white/78';
 const primaryButtonClass =
   'inline-flex items-center gap-1.5 rounded-full bg-[#111111] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#2a2a2a]';
+const secondaryButtonClass =
+  'rounded-full border border-white/72 bg-white/64 px-4 py-2 text-sm font-semibold text-[#111111] transition hover:bg-white/78';
 
 export default function HomePage() {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -89,20 +51,14 @@ export default function HomePage() {
                 <EsencelabLogo />
               </Link>
 
-              <nav className={`hidden items-center gap-2 ${navPillClass} md:flex`}>
-                <a href="#features" className="rounded-full px-3 py-1.5 transition hover:bg-white/70">
-                  Features
-                </a>
-                <a href="#how" className="rounded-full px-3 py-1.5 transition hover:bg-white/70">
-                  Workflow
-                </a>
-              </nav>
-
               <div className="flex items-center gap-2">
-                <Link href={getAuthAccessHref('/login', 'student')} className={ghostButtonClass}>
-                  Login
+                <Link href="/login?role=student" className={ghostButtonClass}>
+                  Student Login
                 </Link>
-                <Link href={getAuthAccessHref('/register', 'student')} className={primaryButtonClass}>
+                <Link href="/login?role=employer" className={ghostButtonClass}>
+                  Recruiter Login
+                </Link>
+                <Link href="/register" className={primaryButtonClass}>
                   Sign Up
                   <ArrowRight className="h-4 w-4" />
                 </Link>
@@ -113,7 +69,7 @@ export default function HomePage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
-              className="mx-auto mt-10 w-full max-w-[760px] px-5 text-center sm:px-0"
+              className="mx-auto mt-16 w-full max-w-[760px] px-5 text-center sm:px-0"
             >
               <span className="inline-flex items-center gap-2 rounded-full border border-white/72 bg-white/64 px-4 py-1.5 text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-[#111111]">
                 <Sparkles className="h-3.5 w-3.5" />
@@ -125,74 +81,20 @@ export default function HomePage() {
               </h1>
               <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
                 <Link
-                  href={getAuthAccessHref('/register', 'student')}
+                  href="/register"
                   className="inline-flex items-center justify-center gap-2 rounded-full bg-[#111111] px-7 py-3 text-sm font-semibold text-white shadow-[0_18px_34px_-26px_rgba(30,30,30,0.8)] transition hover:bg-[#2a2a2a]"
                 >
                   Create Account
                   <ArrowRight className="h-4 w-4" />
                 </Link>
                 <Link
-                  href={getAuthAccessHref('/login', 'student')}
+                  href="/login?role=student"
                   className="inline-flex items-center justify-center rounded-full border border-white/72 bg-white/64 px-7 py-3 text-sm font-semibold text-[#111111] transition hover:bg-white/78"
                 >
                   Login
                 </Link>
               </div>
-              </motion.div>
-          </div>
-        </section>
-
-        <section id="features" className={`mt-8 p-6 sm:p-10 ${panelClass}`}>
-          <h2 className="text-3xl font-semibold tracking-tight text-[#111111] sm:text-4xl">Core capabilities</h2>
-          <div className="mt-7 grid gap-4 md:grid-cols-3">
-            {featureRows.map((feature, index) => (
-              <motion.article
-                key={feature.title}
-                initial={{ opacity: 0, y: 16 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, amount: 0.35 }}
-                transition={{ duration: 0.35, delay: index * 0.05 }}
-                className={cardClass}
-              >
-                <p className="text-lg font-semibold text-[#111111]">{feature.title}</p>
-                <p className="mt-2 text-sm leading-relaxed text-[#4a4a4a]/88">{feature.detail}</p>
-              </motion.article>
-            ))}
-          </div>
-        </section>
-
-        <section id="how" className={`mt-8 p-6 sm:p-10 ${panelClass}`}>
-          <h2 className="text-3xl font-semibold tracking-tight text-[#111111] sm:text-4xl">How it works</h2>
-          <ol className="mt-7 grid gap-4 md:grid-cols-3">
-            {steps.map((step, index) => (
-              <li key={step.title} className={cardClass}>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#4a4a4a]/75">
-                  Step {index + 1}
-                </p>
-                <p className="mt-2 text-base font-semibold text-[#111111]">{step.title}</p>
-                <p className="mt-1 text-sm leading-relaxed text-[#4a4a4a]/88">{step.detail}</p>
-              </li>
-            ))}
-          </ol>
-        </section>
-
-        <section className={`mt-8 px-7 py-10 sm:px-10 ${panelClass}`}>
-          <p className="text-center text-3xl font-semibold tracking-tight text-[#111111] sm:text-4xl">Built for real hiring outcomes.</p>
-          <p className="mx-auto mt-3 max-w-2xl text-center text-sm text-[#4a4a4a]/88 sm:text-base">Turn resumes into clear insights, role-fit scores, and faster hiring decisions.</p>
-          <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Link
-              href={getAuthAccessHref('/register', 'student')}
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-[#111111] px-7 py-3 text-sm font-semibold text-white transition hover:bg-[#2a2a2a]"
-            >
-              Create Account
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-            <Link
-              href={getAuthAccessHref('/login', 'student')}
-              className="inline-flex items-center justify-center rounded-full border border-white/72 bg-white/64 px-7 py-3 text-sm font-semibold text-[#111111] transition hover:bg-white/78"
-            >
-              Login
-            </Link>
+            </motion.div>
           </div>
         </section>
       </main>

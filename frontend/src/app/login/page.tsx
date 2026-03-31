@@ -1,11 +1,5 @@
 'use client';
 
-/**
- * Login page.
- *
- * This page signs users in and routes successful logins into the correct
- * dashboard flow.
- */
 import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -13,8 +7,11 @@ import { ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import EsencelabLogo from '@/components/EsencelabLogo';
-import { getAuthAccessHref } from '@/lib/authAccess';
-import { sanitizeNextPath } from '@/lib/routeAccess';
+
+const roles = [
+  { value: 'student', label: 'Student' },
+  { value: 'employer', label: 'Recruiter' },
+];
 
 const panelClass =
   'rounded-[30px] border border-white/72 bg-white/72 shadow-[0_26px_58px_-46px_rgba(24,24,24,0.45)] backdrop-blur-md';
@@ -27,8 +24,8 @@ const getAuthError = (error: any) => {
   const status = error?.response?.status;
   const serverMessage = error?.response?.data?.message;
 
-  if (status === 401) return 'Invalid credentials. Please check your email and password.';
-  if (!error?.response) return 'Cannot reach backend API. Please try again later.';
+  if (status === 401) return 'Invalid email or password.';
+  if (!error?.response) return 'Unable to connect. Please try again later.';
   return serverMessage || 'Login failed. Please try again.';
 };
 
@@ -43,15 +40,25 @@ function LoginPageContent() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedRole, setSelectedRole] = useState('student');
 
   const { login, isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const nextPath = sanitizeNextPath(searchParams.get('next'));
+  const nextPath = searchParams.get('next') || '/dashboard';
+
+  useEffect(() => {
+    const roleParam = searchParams.get('role');
+    if (roleParam === 'employer' || roleParam === 'recruiter') {
+      setSelectedRole('employer');
+    } else {
+      setSelectedRole('student');
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
-      router.replace(nextPath || '/dashboard');
+      router.replace(nextPath);
     }
   }, [authLoading, isAuthenticated, nextPath, router]);
 
@@ -69,7 +76,7 @@ function LoginPageContent() {
 
     try {
       await login({ email: normalizedEmail, password: normalizedPassword });
-      router.replace(nextPath || '/dashboard');
+      router.replace(nextPath);
     } catch (err: any) {
       setError(getAuthError(err));
     } finally {
@@ -110,7 +117,24 @@ function LoginPageContent() {
         className="relative z-10 mx-auto mt-6 w-full max-w-md px-4 pb-12 sm:px-6"
       >
         <section className={`${panelClass} p-8 sm:p-10`}>
-          <h2 className="text-2xl font-semibold tracking-tight text-[#111111]">Student Login</h2>
+          <div className="mb-6 flex gap-2">
+            {roles.map((role) => (
+              <button
+                key={role.value}
+                type="button"
+                onClick={() => setSelectedRole(role.value)}
+                className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-medium transition ${
+                  selectedRole === role.value
+                    ? 'bg-[#111111] text-white'
+                    : 'border border-white/72 bg-white/64 text-[#111111] hover:bg-white/78'
+                }`}
+              >
+                {role.label}
+              </button>
+            ))}
+          </div>
+
+          <h2 className="text-2xl font-semibold tracking-tight text-[#111111]">Sign in</h2>
 
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
             {error && (
@@ -128,7 +152,7 @@ function LoginPageContent() {
                 type="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                placeholder="name@company.com"
+                placeholder="name@example.com"
                 autoComplete="email"
                 required
                 className={inputClass}
@@ -160,6 +184,13 @@ function LoginPageContent() {
               {!isLoading && <ArrowRight className="h-4 w-4" />}
             </button>
           </form>
+
+          <div className="mt-6 text-center text-sm text-[#4a4a4a]/88">
+            Don&apos;t have an account?{' '}
+            <Link href="/register" className="font-semibold text-[#111111] transition hover:text-[#111111]">
+              Sign up
+            </Link>
+          </div>
         </section>
       </motion.main>
     </div>
@@ -173,4 +204,3 @@ export default function LoginPage() {
     </Suspense>
   );
 }
-

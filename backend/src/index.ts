@@ -87,8 +87,6 @@ const ALLOW_INSECURE_PASSWORD_RESET_TOKEN_RESPONSE = toBooleanEnv(
 const DATA_PROVIDER = String(process.env.DATA_PROVIDER || 'memory')
   .trim()
   .toLowerCase();
-const DEFAULT_BOOTSTRAP_EMAILS = new Set(['admin@esencelab.com', 'recruiter@esencelab.com']);
-const DEFAULT_BOOTSTRAP_PASSWORDS = new Set(['changethispassword123!', 'admin@esencelab2026', 'password123456']);
 
 const parseEnvList = (rawValue: string) =>
   rawValue
@@ -156,11 +154,8 @@ const assertProductionSafety = () => {
     if (!email || !password) {
       throw new Error(`${prefix}_EMAIL and ${prefix}_PASSWORD must both be set when bootstrapping users in production.`);
     }
-    if (DEFAULT_BOOTSTRAP_EMAILS.has(email)) {
-      throw new Error(`${prefix}_EMAIL must be changed before running in production.`);
-    }
-    if (DEFAULT_BOOTSTRAP_PASSWORDS.has(password.toLowerCase()) || password.length < 12) {
-      throw new Error(`${prefix}_PASSWORD must be a unique production password with at least 12 characters.`);
+    if (password.length < 12) {
+      throw new Error(`${prefix}_PASSWORD must be at least 12 characters.`);
     }
   }
 };

@@ -60,7 +60,7 @@ Supabase/Postgres persistence
 | --- | --- |
 | Frontend | Next.js 15, React 18, TypeScript, Tailwind CSS, Framer Motion, Lucide React |
 | Backend | Node.js, Express, TypeScript, JWT, bcryptjs, multer, compression, helmet, rate limiting |
-| AI service | FastAPI, Python, pdfplumber, PyPDF2 |
+| AI service | FastAPI, Python, pdfplumber, pypdf |
 | Data | Supabase/Postgres persistence with local in-memory runtime state |
 | Tooling | PowerShell run scripts, npm, TypeScript compiler, ESLint |
 
@@ -458,5 +458,4 @@ The frontend app router lives under [frontend/src/app](C:/Dev/Projects/Esencelab
 
 ## License
 
-No license file is currently included in this repository.
-# Deployment trigger
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

@@ -71,9 +71,9 @@ Esencelab/
 |- frontend/              # Next.js app
 |- backend/               # Express API and data-provider layer
 |- ai-service/            # FastAPI AI and resume processing service
+|- supabase/              # Supabase config and schema
 |- docs/                  # Build specs and implementation plans
 |- scripts/               # Deployment, smoke-test, and validation scripts
-|- supabase-schema.sql    # Schema for persistent mode
 |- SPEC.md                # Product and system specification
 ```
 
@@ -329,7 +329,7 @@ Required changes:
 
 1. Set `DATA_PROVIDER=supabase` in `backend/.env`.
 2. Configure `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.
-3. Apply [supabase-schema.sql](C:/Dev/Projects/Esencelab/supabase-schema.sql).
+3. Apply [supabase-schema.sql](supabase/supabase-schema.sql).
 
 ## Validation and Testing
 

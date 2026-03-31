@@ -104,7 +104,7 @@ To persist data:
 1. Set `DATA_PROVIDER=supabase`
 2. Configure `SUPABASE_URL`
 3. Configure `SUPABASE_SERVICE_ROLE_KEY`
-4. Apply `supabase-schema.sql`
+4. Apply `supabase/supabase-schema.sql`
 5. Apply only the schema and any environment-specific bootstrap records you intend to own long term.
 
 ## 5. Frontend API routing

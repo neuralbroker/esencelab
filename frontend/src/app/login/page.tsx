@@ -28,7 +28,7 @@ const getAuthError = (error: any) => {
   const serverMessage = error?.response?.data?.message;
 
   if (status === 401) return 'Invalid credentials. Please check your email and password.';
-  if (!error?.response) return 'Cannot reach backend API. Start backend on http://localhost:3001.';
+  if (!error?.response) return 'Cannot reach backend API. Please try again later.';
   return serverMessage || 'Login failed. Please try again.';
 };
 

@@ -53,9 +53,11 @@ except Exception:  # pragma: no cover
     pdfplumber = None
 
 try:
-    import PyPDF2
+    import pypdf
 except Exception:  # pragma: no cover
-    PyPDF2 = None
+    pypdf = None
+
+PyPDF2 = pypdf  # Alias for backward compatibility
 
 try:
     import spacy
@@ -366,9 +368,9 @@ def extract_text_from_pdf_bytes(content: bytes) -> str:
         except Exception:
             pass
 
-    if PyPDF2 is not None:
+    if pypdf is not None:
         try:
-            reader = PyPDF2.PdfReader(io.BytesIO(content))
+            reader = pypdf.PdfReader(io.BytesIO(content))
             for page in reader.pages:
                 text_chunks.append(page.extract_text() or "")
             return "\n".join(text_chunks).strip()
@@ -974,7 +976,7 @@ async def parse_resume_endpoint(request: Request, file: UploadFile = File(...)):
             parsed_data = empty_parsed_resume()
 
         return ResumeParseResponse(parsedData=parsed_data, skills=parsed_data.get("skills", []))
-    except Exception as exc:
+except Exception as exc:
         if isinstance(exc, HTTPException):
             raise exc
         _log_event(
@@ -983,7 +985,7 @@ async def parse_resume_endpoint(request: Request, file: UploadFile = File(...)):
             requestId=getattr(request.state, "request_id", None),
             error=_serialize_error(exc),
         )
-        raise HTTPException(status_code=500, detail="Failed to parse resume")
+        raise HTTPException(status_code=422, detail="Could not parse resume. Please ensure the file is a valid PDF with extractable text.")
 
 
 @app.post("/ai/match", response_model=MatchResponse)

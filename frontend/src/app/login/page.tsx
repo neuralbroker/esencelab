@@ -8,11 +8,6 @@ import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import EsencelabLogo from '@/components/EsencelabLogo';
 
-const roles = [
-  { value: 'student', label: 'Student' },
-  { value: 'employer', label: 'Recruiter' },
-];
-
 const panelClass =
   'rounded-[30px] border border-white/72 bg-white/72 shadow-[0_26px_58px_-46px_rgba(24,24,24,0.45)] backdrop-blur-md';
 const ghostButtonClass =
@@ -40,21 +35,11 @@ function LoginPageContent() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedRole, setSelectedRole] = useState('student');
 
   const { login, isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = searchParams.get('next') || '/dashboard';
-
-  useEffect(() => {
-    const roleParam = searchParams.get('role');
-    if (roleParam === 'employer' || roleParam === 'recruiter') {
-      setSelectedRole('employer');
-    } else {
-      setSelectedRole('student');
-    }
-  }, [searchParams]);
 
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
@@ -117,24 +102,7 @@ function LoginPageContent() {
         className="relative z-10 mx-auto mt-6 w-full max-w-md px-4 pb-12 sm:px-6"
       >
         <section className={`${panelClass} p-8 sm:p-10`}>
-          <div className="mb-6 flex gap-2">
-            {roles.map((role) => (
-              <button
-                key={role.value}
-                type="button"
-                onClick={() => setSelectedRole(role.value)}
-                className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-medium transition ${
-                  selectedRole === role.value
-                    ? 'bg-[#111111] text-white'
-                    : 'border border-white/72 bg-white/64 text-[#111111] hover:bg-white/78'
-                }`}
-              >
-                {role.label}
-              </button>
-            ))}
-          </div>
-
-          <h2 className="text-2xl font-semibold tracking-tight text-[#111111]">Sign in</h2>
+          <h2 className="text-2xl font-semibold tracking-tight text-[#111111]">Login</h2>
 
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
             {error && (

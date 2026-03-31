@@ -52,11 +52,8 @@ export default function HomePage() {
               </Link>
 
               <div className="flex items-center gap-2">
-                <Link href="/login?role=student" className={ghostButtonClass}>
-                  Student Login
-                </Link>
-                <Link href="/login?role=employer" className={ghostButtonClass}>
-                  Recruiter Login
+                <Link href="/login" className={ghostButtonClass}>
+                  Login
                 </Link>
                 <Link href="/register" className={primaryButtonClass}>
                   Sign Up
@@ -88,7 +85,7 @@ export default function HomePage() {
                   <ArrowRight className="h-4 w-4" />
                 </Link>
                 <Link
-                  href="/login?role=student"
+                  href="/login"
                   className="inline-flex items-center justify-center rounded-full border border-white/72 bg-white/64 px-7 py-3 text-sm font-semibold text-[#111111] transition hover:bg-white/78"
                 >
                   Login

@@ -1950,7 +1950,7 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
   }
   if (requestedRole && requestedRole !== 'student') {
     return res.status(403).json({
-      message: 'Student accounts can self-register. Employer and admin access must be provisioned before sign-in.',
+      message: 'Only student accounts can register. Employers and admins please login.',
     });
   }
   if (password.length < 6) {

@@ -15,35 +15,35 @@ export const AUTH_ACCESS_OPTIONS: Record<AuthAccessRole, AuthAccessOption> = {
   student: {
     role: 'student',
     label: 'Student',
-    accessMode: 'Self-serve signup',
+    accessMode: 'Sign up',
     landingDescription:
-      'Students can create accounts directly and land in the upskilling, resume, and job-matching flow.',
+      'Students can create accounts and access the upskilling, resume, and job-matching flow.',
     loginDescription:
-      'Students sign in here with the same form as every other role. Your existing account decides the dashboard you land in.',
+      'Students sign in with their registered account.',
     registerDescription:
-      'Public signup creates a student workspace. Use this if you want resume analysis, roadmap planning, and job recommendations.',
+      'Create a student account for resume analysis, roadmap planning, and job recommendations.',
   },
   employer: {
     role: 'employer',
     label: 'Employer',
-    accessMode: 'Provisioned access',
+    accessMode: 'Login',
     landingDescription:
-      'Employers sign in with an existing recruiter account to post jobs, review matches, and manage applicants.',
+      'Employers sign in to post jobs, review matches, and manage applicants.',
     loginDescription:
-      'Employers use the same sign-in form. If your recruiter account already exists, the app will route you into the recruiter dashboard automatically.',
+      'Employers sign in to access the recruiter dashboard.',
     registerDescription:
-      'Employer accounts are not created from the public signup page. They must be provisioned before sign-in.',
+      'Please use the login page to sign in.',
   },
   admin: {
     role: 'admin',
     label: 'Admin',
-    accessMode: 'Provisioned access',
+    accessMode: 'Login',
     landingDescription:
-      'Admins sign in with organization-provisioned credentials to manage users, moderation, and platform monitoring.',
+      'Admins sign in to manage users, moderation, and platform monitoring.',
     loginDescription:
-      'Admins use the same sign-in form. Existing admin accounts are routed into the control and monitoring views automatically.',
+      'Admins sign in to access the control and monitoring views.',
     registerDescription:
-      'Admin accounts are not created from the public signup page. They must be provisioned before sign-in.',
+      'Please use the login page to sign in.',
   },
 };
 

@@ -102,7 +102,7 @@ export default function AdminResumesPage() {
   if (!hasAllowedRole) return null;
 
   return (
-    <div className="space-y-6">
+    <div className="layout-container section-spacing space-y-6 max-w-7xl mx-auto">
       <div>
         <h1 className="text-2xl font-bold text-black">Resume Monitoring</h1>
         <p className="text-secondary">Review parsing quality and moderate inappropriate uploads.</p>

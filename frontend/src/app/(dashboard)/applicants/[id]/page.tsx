@@ -57,7 +57,7 @@ const summarizeRecord = (value: Record<string, unknown>) => {
   const parts = Object.entries(value || {})
     .filter(([, entryValue]) => entryValue !== null && entryValue !== undefined && String(entryValue).trim() !== '')
     .map(([key, entryValue]) => `${key}: ${typeof entryValue === 'object' ? JSON.stringify(entryValue) : String(entryValue)}`);
-  return parts.join(' • ');
+  return parts.join(' | ');
 };
 
 export default function ApplicantProfilePage() {
@@ -225,7 +225,7 @@ export default function ApplicantProfilePage() {
         <Card hoverable={false} className="p-6 space-y-4">
           <h2 className="text-lg font-semibold text-primary">Skill Match Breakdown</h2>
           <p className="text-sm text-secondary">
-            {profile.matchBreakdown.title} • {Math.round(profile.matchBreakdown.matchScore || 0)}% match
+            {profile.matchBreakdown.title} | {Math.round(profile.matchBreakdown.matchScore || 0)}% match
           </p>
           {profile.matchBreakdown.matchedSkills?.length > 0 && (
             <div>

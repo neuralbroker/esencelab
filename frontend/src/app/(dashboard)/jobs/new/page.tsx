@@ -21,6 +21,7 @@ export default function NewJobPage() {
   const router = useRouter();
   const { hasAllowedRole, isCheckingAccess } = useRoleAccess({ allowedRoles: ['employer', 'admin'] });
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     title: '',
     company: '',
@@ -37,6 +38,7 @@ export default function NewJobPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
 
     try {
       await api.post('/jobs', {
@@ -46,7 +48,7 @@ export default function NewJobPage() {
       });
       router.push('/jobs');
     } catch (error: any) {
-      alert(error.response?.data?.message || 'Failed to create job');
+      setError(error.response?.data?.message || 'Failed to create job');
     } finally {
       setLoading(false);
     }
@@ -71,6 +73,11 @@ export default function NewJobPage() {
       </div>
 
       <Card hoverable={false} className="p-6 md:p-10 border border-border">
+        {error && (
+          <div className="mb-6 rounded-xl border border-gray-300 bg-gray-100 px-4 py-3 text-sm text-gray-800">
+            {error}
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="space-y-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Input

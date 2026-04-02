@@ -1,0 +1,72 @@
+services:
+  - type: web
+    name: esencelab-backend
+    runtime: docker
+    plan: free
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATA_PROVIDER
+        value: supabase
+      - key: FRONTEND_URL
+        value: https://esencelab.vercel.app
+      - key: FRONTEND_URLS
+        value: https://esencelab.vercel.app
+      - key: TRUST_PROXY
+        value: "1"
+      - key: ALLOW_INSECURE_PASSWORD_RESET_TOKEN_RESPONSE
+        value: "false"
+      - key: MAX_RESUME_FILE_SIZE_MB
+        value: "4"
+      - key: JWT_SECRET
+        sync: false
+      - key: AI_SERVICE_URL
+        sync: false
+      - key: AI_INTERNAL_AUTH_TOKEN
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: INITIAL_ADMIN_EMAIL
+        sync: false
+      - key: INITIAL_ADMIN_PASSWORD
+        sync: false
+      - key: INITIAL_ADMIN_NAME
+        value: Platform Admin
+      - key: INITIAL_RECRUITER_EMAIL
+        sync: false
+      - key: INITIAL_RECRUITER_PASSWORD
+        sync: false
+      - key: INITIAL_RECRUITER_NAME
+        value: Initial Recruiter
+
+  - type: web
+    name: esencelab-ai
+    runtime: docker
+    plan: free
+    rootDir: ai-service
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: AI_ALLOWED_ORIGINS
+        value: https://esencelab.vercel.app
+      - key: AI_MAX_UPLOAD_MB
+        value: "4"
+      - key: AI_INTERNAL_AUTH_TOKEN
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
+      - key: GROQ_REASONING_EFFORT
+        value: high
+      - key: GROQ_SERVICE_TIER
+        value: auto

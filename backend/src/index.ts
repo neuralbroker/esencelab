@@ -840,9 +840,11 @@ const withApplicationDetails = (applications: any[]) => {
   return applications.map((application) => {
     const job = db.jobs.find((entry: any) => entry.id === application.jobId);
     const student = db.profiles.find((entry: any) => entry.id === application.candidateId);
+    const candidateProfile = db.candidates.find((entry: any) => entry.userId === application.candidateId) || null;
     const resume = db.resumes.find((entry: any) => entry.userId === application.candidateId);
     return {
       ...withTrackerStatus(application),
+      candidateProfileId: candidateProfile?.id || null,
       job,
       student: student ? sanitizeUser(student) : null,
       resume,
@@ -2808,9 +2810,31 @@ app.get('/api/candidates/:id', async (req, res) => {
     return res.status(403).json({ message: 'Not authorized' });
   }
 
-  const candidate = db.candidates.find(
-    (c: any) => c.id === req.params.id || c.userId === req.params.id
-  );
+  const candidate =
+    db.candidates.find((c: any) => c.id === req.params.id || c.userId === req.params.id) ||
+    (() => {
+      const fallbackProfile = db.profiles.find(
+        (entry: any) => entry.id === req.params.id && roleMatches(entry.role, 'student')
+      );
+      if (!fallbackProfile) return null;
+
+      const resume = db.resumes.find((entry: any) => entry.userId === fallbackProfile.id) || null;
+      const parsedData = normalizeResumeParsedData(resume?.parsedData || {}, fallbackProfile);
+
+      return {
+        id: fallbackProfile.id,
+        userId: fallbackProfile.id,
+        name: fallbackProfile.name,
+        email: fallbackProfile.email,
+        role: 'Student',
+        skills: JSON.stringify(parsedData.skills || []),
+        education: JSON.stringify(parsedData.education || []),
+        experience: JSON.stringify(parsedData.experience || []),
+        parsedData,
+        createdAt: fallbackProfile.createdAt,
+        updatedAt: fallbackProfile.updatedAt || fallbackProfile.createdAt,
+      };
+    })();
   if (!candidate) return res.status(404).json({ message: 'Candidate not found' });
   const selectedJobId = String(req.query?.jobId || '').trim();
   const selectedJob = selectedJobId ? db.jobs.find((entry: any) => entry.id === selectedJobId) : null;

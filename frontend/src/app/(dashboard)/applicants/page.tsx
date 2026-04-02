@@ -118,6 +118,10 @@ export default function ApplicantsPage() {
     return <Badge variant={variants[status] || 'secondary'}>{status}</Badge>;
   };
 
+  const getApplicantDetailHref = (application: Application) => {
+    return `/applicants/${application.candidateProfileId || application.candidateId}?jobId=${application.jobId}`;
+  };
+
   const filteredApplications = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
     if (!query) return applications;
@@ -153,7 +157,7 @@ export default function ApplicantsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="layout-container section-spacing space-y-6 max-w-6xl mx-auto">
       <div>
         <h1 className="text-2xl font-bold text-black">Applicants</h1>
         <p className="text-secondary">Review and manage job applications</p>
@@ -242,7 +246,7 @@ export default function ApplicantsPage() {
                       <p className="font-medium text-black">{match.name}</p>
                       <p className="text-sm text-secondary">{match.email}</p>
                       <p className="text-xs text-secondary mt-1">
-                        Resume: {Math.round(match.resumeScore || 0)}% • Experience: {match.experienceYears || 0} yrs
+                        Resume: {Math.round(match.resumeScore || 0)}% | Experience: {match.experienceYears || 0} yrs
                       </p>
                     </div>
                     <Badge variant={match.matchScore >= 70 ? 'success' : match.matchScore >= 50 ? 'warning' : 'secondary'}>
@@ -335,7 +339,7 @@ export default function ApplicantsPage() {
                   {getStatusBadge(app.status)}
                   <div className="flex space-x-2">
                     <button
-                      onClick={() => router.push(`/applicants/${app.candidateId}?jobId=${app.jobId}`)}
+                      onClick={() => router.push(getApplicantDetailHref(app))}
                       className="px-3 py-1 border border-border rounded-lg text-sm hover:bg-black/5"
                     >
                       View Profile

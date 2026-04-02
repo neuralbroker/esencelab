@@ -8,12 +8,20 @@ import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import EsencelabLogo from '@/components/EsencelabLogo';
 
+const shellClass =
+  'rounded-[34px] border border-[#ececec] bg-white/62 shadow-[0_30px_80px_-54px_rgba(17,17,17,0.32)] backdrop-blur-[18px]';
 const panelClass =
-  'rounded-[30px] border border-white/72 bg-white/72 shadow-[0_26px_58px_-46px_rgba(24,24,24,0.45)] backdrop-blur-md';
-const ghostButtonClass =
-  'rounded-full border border-white/72 bg-white/64 px-4 py-2 text-sm font-semibold text-[#111111] transition hover:bg-white/78';
+  'rounded-[30px] border border-[#ececec] bg-white/68 p-7 shadow-[0_18px_44px_-34px_rgba(17,17,17,0.22)] sm:p-9';
+const chipClass =
+  'inline-flex rounded-full border border-[#ececec] bg-white/72 px-3 py-1.5 text-[0.76rem] font-semibold uppercase tracking-[0.22em] text-[#757575]';
 const inputClass =
-  'w-full rounded-2xl border border-white/78 bg-white/74 px-4 py-3 text-base text-[#111111] outline-none transition focus:border-[#4b4b4b] focus:ring-2 focus:ring-[#4b4b4b]/20';
+  'mt-2 w-full rounded-[18px] border border-[#ececec] bg-white px-5 py-3.5 text-base text-[#111111] outline-none transition placeholder:text-[#b3b8c3] focus:border-[#d8d8d8] focus:ring-2 focus:ring-[#e9e9e9]';
+
+const pageFallback = (
+  <div className="flex min-h-screen items-center justify-center bg-[#f4f4f2]">
+    <div className="h-10 w-10 animate-spin rounded-full border-2 border-black/15 border-t-[#111111]" />
+  </div>
+);
 
 const getAuthError = (error: any) => {
   const status = error?.response?.status;
@@ -23,12 +31,6 @@ const getAuthError = (error: any) => {
   if (!error?.response) return 'Unable to connect. Please try again later.';
   return serverMessage || 'Login failed. Please try again.';
 };
-
-const pageFallback = (
-  <div className="flex min-h-screen items-center justify-center bg-[#f2f2f2]">
-    <div className="h-10 w-10 animate-spin rounded-full border-2 border-black/20 border-t-primary" />
-  </div>
-);
 
 function LoginPageContent() {
   const [email, setEmail] = useState('');
@@ -47,9 +49,11 @@ function LoginPageContent() {
     }
   }, [authLoading, isAuthenticated, nextPath, router]);
 
-  const runLogin = async (nextEmail: string, nextPassword: string) => {
-    const normalizedEmail = nextEmail.trim().toLowerCase();
-    const normalizedPassword = nextPassword.trim();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedPassword = password.trim();
 
     if (!normalizedEmail || !normalizedPassword) {
       setError('Email and password are required.');
@@ -69,98 +73,109 @@ function LoginPageContent() {
     }
   };
 
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    await runLogin(email, password);
-  };
-
   if (authLoading || isAuthenticated) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[#f2f2f2]">
-        <div className="h-10 w-10 animate-spin rounded-full border-2 border-black/20 border-t-primary" />
-      </div>
-    );
+    return pageFallback;
   }
 
   return (
-    <div className="min-h-screen bg-[#f2f2f2] text-[#111111]">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_0%_0%,rgba(200,200,200,0.33),transparent_38%),radial-gradient(circle_at_100%_5%,rgba(245,245,245,0.88),transparent_32%),linear-gradient(180deg,#f2f2f2_0%,#f5f5f5_52%,#fafafa_100%)]" />
+    <div className="min-h-screen bg-[#f4f4f2] text-[#111111]">
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_0%_0%,rgba(210,210,210,0.42),transparent_34%),radial-gradient(circle_at_100%_0%,rgba(245,245,245,0.94),transparent_34%),linear-gradient(180deg,#efefed_0%,#f5f5f3_55%,#f8f8f6_100%)]" />
 
-      <header className="relative z-10 mx-auto flex w-full max-w-5xl items-center justify-between px-4 pt-8 sm:px-6">
-        <Link href="/" className="inline-flex">
-          <EsencelabLogo />
-        </Link>
-        <Link href="/" className={ghostButtonClass}>
-          Back to home
-        </Link>
-      </header>
+      <div className="relative z-10 mx-auto flex w-full max-w-[1040px] flex-col px-4 py-7 sm:px-6 lg:px-0 lg:py-8">
+        <header className="mb-5 flex items-center justify-between">
+          <Link href="/" className="inline-flex">
+            <EsencelabLogo textClassName="tracking-[0.18em]" />
+          </Link>
+          <Link
+            href="/"
+            className="inline-flex items-center justify-center rounded-full border border-[#ececec] bg-white/72 px-5 py-2.5 text-[0.98rem] font-semibold text-[#111111] transition hover:bg-white"
+          >
+            Back to home
+          </Link>
+        </header>
 
-      <motion.main
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.45 }}
-        className="relative z-10 mx-auto mt-6 w-full max-w-md px-4 pb-12 sm:px-6"
-      >
-        <section className={`${panelClass} p-8 sm:p-10`}>
-          <h2 className="text-2xl font-semibold tracking-tight text-[#111111]">Login</h2>
+        <motion.main
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35 }}
+          className={`${shellClass} grid gap-4 p-4 sm:p-5 lg:grid-cols-[1fr_1.12fr]`}
+        >
+          <section className={`${panelClass} flex min-h-[430px] flex-col justify-start`}>
+            <span className={chipClass}>Sign in</span>
+            <h1 className="mt-7 max-w-[330px] text-[3rem] font-semibold leading-[0.97] tracking-[-0.06em] text-[#111111] sm:text-[3.7rem]">
+              Welcome back.
+            </h1>
+            <p className="mt-4 max-w-[380px] text-[1.02rem] leading-[1.55] text-[#5f5f5f]">
+              Access your Esencelab dashboard, resume analysis, and role-fit workflows.
+            </p>
+          </section>
 
-          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-            {error && (
-              <div className="rounded-xl border border-gray-300 bg-gray-100 px-4 py-3 text-sm text-gray-800">
-                {error}
+          <section className={`${panelClass} min-h-[430px]`}>
+            <h2 className="text-[2.1rem] font-semibold tracking-[-0.05em] text-[#111111]">
+              Account login
+            </h2>
+            <p className="mt-2 text-[1.02rem] text-[#5f5f5f]">
+              Enter your credentials to continue.
+            </p>
+
+            <form onSubmit={handleSubmit} className="mt-7 space-y-5">
+              {error && (
+                <div className="rounded-[18px] border border-[#ececec] bg-white px-4 py-3 text-sm text-[#565656]">
+                  {error}
+                </div>
+              )}
+
+              <div>
+                <label htmlFor="login-email" className="text-[0.98rem] font-semibold text-[#444444]">
+                  Email
+                </label>
+                <input
+                  id="login-email"
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="you@example.com"
+                  autoComplete="email"
+                  required
+                  className={inputClass}
+                />
               </div>
-            )}
 
-            <div>
-              <label htmlFor="login-email" className="mb-2 block text-sm font-medium text-[#4a4a4a]/88">
-                Email
-              </label>
-              <input
-                id="login-email"
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="name@example.com"
-                autoComplete="email"
-                required
-                className={inputClass}
-              />
-            </div>
+              <div>
+                <label htmlFor="login-password" className="text-[0.98rem] font-semibold text-[#444444]">
+                  Password
+                </label>
+                <input
+                  id="login-password"
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="********"
+                  autoComplete="current-password"
+                  required
+                  className={inputClass}
+                />
+              </div>
 
-            <div>
-              <label htmlFor="login-password" className="mb-2 block text-sm font-medium text-[#4a4a4a]/88">
-                Password
-              </label>
-              <input
-                id="login-password"
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder="********"
-                autoComplete="current-password"
-                required
-                className={inputClass}
-              />
-            </div>
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-[20px] bg-[#111111] px-6 py-3.5 text-[1.02rem] font-semibold text-white transition hover:bg-[#1d1d1d] disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {isLoading ? 'Signing in...' : 'Continue'}
+                {!isLoading && <ArrowRight className="h-4 w-4" />}
+              </button>
+            </form>
 
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#111111] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#2a2a2a] disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              {isLoading ? 'Signing in...' : 'Continue'}
-              {!isLoading && <ArrowRight className="h-4 w-4" />}
-            </button>
-          </form>
-
-          <div className="mt-6 text-center text-sm text-[#4a4a4a]/88">
-            Don&apos;t have an account?{' '}
-            <Link href="/register" className="font-semibold text-[#111111] transition hover:text-[#111111]">
-              Sign up
-            </Link>
-          </div>
-        </section>
-      </motion.main>
+            <p className="mt-5 text-[0.98rem] text-[#505050]">
+              New to Esencelab?{' '}
+              <Link href="/register" className="font-semibold text-[#111111]">
+                Create an account
+              </Link>
+            </p>
+          </section>
+        </motion.main>
+      </div>
     </div>
   );
 }

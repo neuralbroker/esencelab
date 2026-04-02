@@ -102,6 +102,7 @@ export interface Application {
   id: string;
   jobId: string;
   candidateId: string;
+  candidateProfileId?: string | null;
   status: 'pending' | 'shortlisted' | 'rejected' | 'interview' | 'applied' | 'interviewing' | 'offer';
   trackerStatus?: 'applied' | 'interviewing' | 'offer' | 'rejected';
   storageStatus?: 'pending' | 'shortlisted' | 'interview' | 'rejected';

@@ -972,11 +972,11 @@ async def parse_resume_endpoint(request: Request, file: UploadFile = File(...)):
                 requestId=getattr(request.state, "request_id", None),
                 error=_serialize_error(exc),
             )
-        # Do not fail the full flow for malformed or scanned PDFs.
+            # Do not fail the full flow for malformed or scanned PDFs.
             parsed_data = empty_parsed_resume()
 
         return ResumeParseResponse(parsedData=parsed_data, skills=parsed_data.get("skills", []))
-except Exception as exc:
+    except Exception as exc:
         if isinstance(exc, HTTPException):
             raise exc
         _log_event(

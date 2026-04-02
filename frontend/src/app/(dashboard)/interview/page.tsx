@@ -264,7 +264,7 @@ export default function MockInterviewPage() {
                 <p className="text-sm font-medium text-primary">{session.question}</p>
                 <p className="mt-1 line-clamp-2 text-sm text-secondary">{session.answer}</p>
                 <p className="mt-2 text-xs text-secondary">
-                  Rating: {session.rating}/5 · {new Date(session.createdAt).toLocaleString()}
+                  Rating: {session.rating}/5 | {new Date(session.createdAt).toLocaleString()}
                 </p>
               </div>
             ))}

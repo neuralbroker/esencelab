@@ -112,7 +112,7 @@ export default function UsersPage() {
   const pageEnd = meta.total === 0 ? 0 : Math.min(meta.page * meta.limit, meta.total);
 
   return (
-    <div className="space-y-6">
+    <div className="layout-container section-spacing space-y-6 max-w-7xl mx-auto">
       <div>
         <h1 className="text-2xl font-bold text-black">User Management</h1>
         <p className="text-secondary">Moderate accounts and platform access</p>

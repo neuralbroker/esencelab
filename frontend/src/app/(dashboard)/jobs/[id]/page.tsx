@@ -28,6 +28,8 @@ export default function JobDetailPage() {
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState(false);
   const [hasApplied, setHasApplied] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchJob = useCallback(async () => {
     if (!jobId) return;
@@ -67,12 +69,14 @@ export default function JobDetailPage() {
     if (!user?.id || !jobId) return;
 
     setApplying(true);
+    setFeedback(null);
+    setError(null);
     try {
       await api.post('/applications', { jobId });
       setHasApplied(true);
-      alert('Application submitted successfully!');
+      setFeedback('Application submitted successfully.');
     } catch (error: any) {
-      alert(error.response?.data?.message || 'Failed to apply. Please try again.');
+      setError(error.response?.data?.message || 'Failed to apply. Please try again.');
     } finally {
       setApplying(false);
     }
@@ -95,6 +99,16 @@ export default function JobDetailPage() {
 
   return (
     <div className="layout-container section-spacing max-w-6xl mx-auto">
+      {feedback && (
+        <div className="mb-6 rounded-xl border border-gray-300 bg-gray-100 px-4 py-3 text-sm text-gray-800">
+          {feedback}
+        </div>
+      )}
+      {error && (
+        <div className="mb-6 rounded-xl border border-gray-300 bg-gray-100 px-4 py-3 text-sm text-gray-800">
+          {error}
+        </div>
+      )}
       <Link href="/jobs" className="inline-flex items-center text-sm font-medium text-secondary hover:text-primary transition-colors mb-8 group">
         <div className="bg-background border border-border group-hover:bg-accent-soft group-hover:text-accent group-hover:border-accent-soft p-1.5 rounded-lg mr-3 transition-colors">
           <ChevronLeft className="w-4 h-4" />

@@ -844,7 +844,9 @@ const withApplicationDetails = (applications: any[]) => {
     const resume = db.resumes.find((entry: any) => entry.userId === application.candidateId);
     return {
       ...withTrackerStatus(application),
-      candidateProfileId: candidateProfile?.id || null,
+      // Keep recruiter/admin navigation stable even when a student has not
+      // uploaded a resume yet and therefore has no dedicated candidate row.
+      candidateProfileId: candidateProfile?.id || application.candidateId || null,
       job,
       student: student ? sanitizeUser(student) : null,
       resume,
@@ -3177,7 +3179,9 @@ app.get('/api/recommendations', async (req, res) => {
       ? `You are matching ${recommendedJobs[0].explanationMeta?.matchedCount || 0} out of ${
           recommendedJobs[0].explanationMeta?.totalRequired || 0
         } key skills for your top role.`
-      : 'Upload your resume to start receiving recommendations.',
+      : activeJobs.length === 0
+        ? 'Your resume is parsed. Recommendations will appear once active jobs are available.'
+        : 'Your resume is parsed. Keep improving your missing skills to unlock stronger recommendations.',
   };
   studentRecommendationCache.set(recommendationCacheKey, {
     expiresAt: Date.now() + STUDENT_RECOMMENDATIONS_CACHE_TTL_MS,
@@ -4029,6 +4033,9 @@ const ensureBootstrapUsers = async () => {
         didChange = true;
       }
       if (!existing.passwordHash) {
+        existing.passwordHash = await bcrypt.hash(bootstrapUser.password, 10);
+        didChange = true;
+      } else if (!(await bcrypt.compare(bootstrapUser.password, existing.passwordHash))) {
         existing.passwordHash = await bcrypt.hash(bootstrapUser.password, 10);
         didChange = true;
       }

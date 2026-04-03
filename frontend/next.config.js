@@ -49,6 +49,10 @@ const nextConfig = {
     }
     if (aiProxyTarget) {
       rules.push({
+        source: '/ai/health',
+        destination: `${aiProxyTarget}/health`,
+      });
+      rules.push({
         source: '/ai/:path*',
         destination: `${aiProxyTarget}/ai/:path*`,
       });

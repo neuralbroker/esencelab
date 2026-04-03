@@ -161,9 +161,16 @@ export default function ApplicantProfilePage() {
   }
 
   return (
-    <div className="layout-container section-spacing space-y-6 max-w-5xl mx-auto">
+    <div className="layout-container section-spacing space-y-8 max-w-5xl mx-auto">
       <section className="space-y-2">
-        <h1 className="text-3xl font-bold text-primary">{profile.name}</h1>
+        <button
+          type="button"
+          onClick={() => router.back()}
+          className="text-sm font-medium text-secondary transition-colors hover:text-primary"
+        >
+          Back to applicants
+        </button>
+        <h1 className="text-3xl font-bold tracking-tight text-primary">{profile.name}</h1>
         <p className="text-secondary">{profile.email}</p>
       </section>
 
@@ -225,7 +232,7 @@ export default function ApplicantProfilePage() {
         <Card hoverable={false} className="p-6 space-y-4">
           <h2 className="text-lg font-semibold text-primary">Skill Match Breakdown</h2>
           <p className="text-sm text-secondary">
-            {profile.matchBreakdown.title} | {Math.round(profile.matchBreakdown.matchScore || 0)}% match
+            {profile.matchBreakdown.title} - {Math.round(profile.matchBreakdown.matchScore || 0)}% match
           </p>
           {profile.matchBreakdown.matchedSkills?.length > 0 && (
             <div>

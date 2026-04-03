@@ -183,7 +183,11 @@ async def request_logging_middleware(request: Request, call_next):
     request_id = request.headers.get("x-request-id", "").strip() or uuid4().hex
     request.state.request_id = request_id
 
-    if AI_INTERNAL_AUTH_TOKEN and request.url.path.startswith("/ai/"):
+    if (
+        AI_INTERNAL_AUTH_TOKEN
+        and request.url.path.startswith("/ai/")
+        and request.url.path != "/ai/health"
+    ):
         provided_token = request.headers.get("x-internal-service-token", "").strip()
         if provided_token != AI_INTERNAL_AUTH_TOKEN:
             _log_event(
@@ -944,6 +948,11 @@ async def health():
         "allowedOriginsConfigured": 0 if ALLOWED_ORIGINS == ["*"] else len(ALLOWED_ORIGINS),
         "assistantCacheSize": len(_assistant_cache),
     }
+
+
+@app.get("/ai/health")
+async def ai_health_alias():
+    return await health()
 
 
 @app.post("/ai/parse-resume", response_model=ResumeParseResponse)

@@ -442,6 +442,13 @@ The frontend app router lives under [frontend/src/app](C:/Dev/Projects/Esencelab
 - [VERCEL_DEPLOYMENT.md](C:/Dev/Projects/Esencelab/docs/VERCEL_DEPLOYMENT.md)
 - [SPEC.md](C:/Dev/Projects/Esencelab/SPEC.md)
 
+## AI Workflow
+
+Use these two root-level guides when working with AI coding and planning tools:
+
+- [PROMPTS.md](/C:/Dev/esencelab/PROMPTS.md) for a reusable engineering prompt library covering planning, build, testing, debugging, security, review, release, and maintenance work.
+- [ESENCELAB_EXECUTION_GUIDE.md](/C:/Dev/esencelab/ESENCELAB_EXECUTION_GUIDE.md) for Esencelab-specific workflows tailored to the current repo structure, role-based product flows, deployment setup, and competition prep.
+
 ## Operational Notes
 
 - Local development can use `memory` mode, but hosted environments should use `supabase`.

@@ -228,8 +228,8 @@ export default function DashboardPage() {
     return (
       <div className="layout-container section-spacing space-y-12">
         <section>
-          <h1 className="text-4xl md:text-5xl font-serif font-bold text-primary mb-3 tracking-tight">Recruiter Command Center</h1>
-          <p className="text-lg font-sans text-secondary font-light">AI-assisted hiring with ranked candidate insights and job-level analytics.</p>
+          <h1 className="text-4xl md:text-5xl font-serif font-bold text-primary mb-3 tracking-tight">Recruiter Dashboard</h1>
+          <p className="text-lg font-sans text-secondary font-light">Post roles, review ranked applicants, and monitor hiring activity from one workspace.</p>
         </section>
 
         {message && (
@@ -356,7 +356,7 @@ export default function DashboardPage() {
               </div>
               <Button type="submit" isLoading={postingJob} className="w-full justify-center h-12 rounded-full font-serif text-lg bg-primary text-white hover:bg-black/80 transition-all">
                 <PlusCircle className="mr-2 h-5 w-5" />
-                Deploy Job Profile
+                Publish Job
               </Button>
             </form>
           </div>
@@ -433,7 +433,7 @@ export default function DashboardPage() {
             {loadingMatches ? (
               <div className="flex items-center justify-center gap-3 py-16 text-sm font-sans font-medium text-secondary">
                 <Loader2 className="h-6 w-6 animate-spin text-accent" />
-                <span>Running candidate analysis matrix...</span>
+                <span>Loading ranked candidates...</span>
               </div>
             ) : topCandidateMatches.length > 0 ? (
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -478,7 +478,7 @@ export default function DashboardPage() {
                         )}
                         {candidate.hasApplied && (
                           <Badge variant="secondary" className="w-fit">
-                            Applied • {candidate.applicationStatus || 'pending'}
+                            Applied - {candidate.applicationStatus || 'pending'}
                           </Badge>
                         )}
                       </div>
@@ -533,7 +533,7 @@ export default function DashboardPage() {
                   <div key={entry.jobId} className="rounded-xl border border-border bg-white/70 p-3 space-y-1">
                     <p className="text-sm font-semibold text-primary">{entry.title}</p>
                     <p className="text-xs text-secondary">
-                      Applicants: {entry.totalApplicants} • Avg match: {entry.averageMatch}% • Highest: {entry.highestMatchCandidate?.matchScore || 0}%
+                      Applicants: {entry.totalApplicants} - Avg match: {entry.averageMatch}% - Highest: {entry.highestMatchCandidate?.matchScore || 0}%
                     </p>
                     {entry.mostMissingSkill && (
                       <p className="text-xs text-secondary">
@@ -567,8 +567,8 @@ export default function DashboardPage() {
   return (
     <div className="layout-container section-spacing space-y-10">
       <section>
-        <h1 className="text-4xl md:text-5xl font-serif font-bold text-primary mb-3 tracking-tight">System Control Center</h1>
-        <p className="text-lg font-sans text-secondary font-light">Platform governance, moderation, and health telemetry.</p>
+        <h1 className="text-4xl md:text-5xl font-serif font-bold text-primary mb-3 tracking-tight">Admin Dashboard</h1>
+        <p className="text-lg font-sans text-secondary font-light">Monitor platform health, user activity, and moderation signals.</p>
       </section>
 
       {message && (
@@ -581,7 +581,7 @@ export default function DashboardPage() {
         <Card hoverable={false} className="p-5 text-center">
           <p className="text-xs uppercase tracking-[0.12em] text-secondary mb-1">Total Users</p>
           <p className="text-3xl font-semibold text-primary">{stats?.totalUsers || 0}</p>
-          <p className="text-xs text-secondary mt-1">Students {stats?.totalStudents || 0} • Recruiters {stats?.totalRecruiters || 0}</p>
+          <p className="text-xs text-secondary mt-1">Students {stats?.totalStudents || 0} - Recruiters {stats?.totalRecruiters || 0}</p>
         </Card>
         <Card hoverable={false} className="p-5 text-center">
           <p className="text-xs uppercase tracking-[0.12em] text-secondary mb-1">Resumes</p>
@@ -591,7 +591,7 @@ export default function DashboardPage() {
         <Card hoverable={false} className="p-5 text-center">
           <p className="text-xs uppercase tracking-[0.12em] text-secondary mb-1">Jobs</p>
           <p className="text-3xl font-semibold text-primary">{stats?.totalJobs || 0}</p>
-          <p className="text-xs text-secondary mt-1">Active {stats?.activeJobs || 0} • Closed {stats?.closedJobs || 0}</p>
+          <p className="text-xs text-secondary mt-1">Active {stats?.activeJobs || 0} - Closed {stats?.closedJobs || 0}</p>
         </Card>
         <Card hoverable={false} className="p-5 text-center">
           <p className="text-xs uppercase tracking-[0.12em] text-secondary mb-1">Applications</p>
@@ -646,7 +646,7 @@ export default function DashboardPage() {
             <div className="space-y-2">
               {stats.platformHealth.slowEndpoints.slice(0, 3).map((entry) => (
                 <div key={entry.endpoint} className="rounded-lg border border-border bg-white p-2 text-xs text-secondary">
-                  <span className="font-semibold text-primary">{entry.endpoint}</span> • avg {entry.avgDurationMs}ms
+                  <span className="font-semibold text-primary">{entry.endpoint}</span> - avg {entry.avgDurationMs}ms
                 </div>
               ))}
             </div>
@@ -685,7 +685,7 @@ export default function DashboardPage() {
             <div className="space-y-2">
               {stats.recentAdminActions.slice(0, 6).map((entry) => (
                 <div key={entry.id} className="rounded-lg border border-border bg-white p-2 text-xs text-secondary">
-                  <span className="font-semibold text-primary">{entry.actionType}</span> • {entry.targetType} • {new Date(entry.createdAt).toLocaleString()}
+                  <span className="font-semibold text-primary">{entry.actionType}</span> - {entry.targetType} - {new Date(entry.createdAt).toLocaleString()}
                 </div>
               ))}
             </div>

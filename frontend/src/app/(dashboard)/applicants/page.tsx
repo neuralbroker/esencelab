@@ -157,36 +157,36 @@ export default function ApplicantsPage() {
   };
 
   return (
-    <div className="layout-container section-spacing space-y-6 max-w-6xl mx-auto">
-      <div>
-        <h1 className="text-2xl font-bold text-black">Applicants</h1>
-        <p className="text-secondary">Review and manage job applications</p>
+    <div className="layout-container section-spacing space-y-8 max-w-6xl mx-auto">
+      <div className="space-y-2">
+        <h1 className="text-3xl font-bold tracking-tight text-primary">Applicants</h1>
+        <p className="text-secondary">Review applications, compare ranked candidates, and move hiring forward.</p>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="text-center">
-          <Users className="w-6 h-6 text-black mx-auto mb-2" />
-          <p className="text-2xl font-bold text-black">{stats.total}</p>
+        <Card hoverable={false} className="text-center p-5">
+          <Users className="w-6 h-6 text-primary mx-auto mb-2" />
+          <p className="text-2xl font-bold text-primary">{stats.total}</p>
           <p className="text-sm text-secondary">Total</p>
         </Card>
-        <Card className="text-center">
-          <Clock className="w-6 h-6 text-gray-600 mx-auto mb-2" />
-          <p className="text-2xl font-bold text-gray-700">{stats.pending}</p>
+        <Card hoverable={false} className="text-center p-5">
+          <Clock className="w-6 h-6 text-primary mx-auto mb-2" />
+          <p className="text-2xl font-bold text-primary">{stats.pending}</p>
           <p className="text-sm text-secondary">Pending</p>
         </Card>
-        <Card className="text-center">
-          <CheckCircle className="w-6 h-6 text-gray-600 mx-auto mb-2" />
-          <p className="text-2xl font-bold text-gray-700">{stats.shortlisted}</p>
+        <Card hoverable={false} className="text-center p-5">
+          <CheckCircle className="w-6 h-6 text-primary mx-auto mb-2" />
+          <p className="text-2xl font-bold text-primary">{stats.shortlisted}</p>
           <p className="text-sm text-secondary">Shortlisted</p>
         </Card>
-        <Card className="text-center">
-          <Briefcase className="w-6 h-6 text-black mx-auto mb-2" />
-          <p className="text-2xl font-bold text-black">{stats.interview}</p>
+        <Card hoverable={false} className="text-center p-5">
+          <Briefcase className="w-6 h-6 text-primary mx-auto mb-2" />
+          <p className="text-2xl font-bold text-primary">{stats.interview}</p>
           <p className="text-sm text-secondary">Interview</p>
         </Card>
       </div>
 
-      <Card title="AI Candidate Ranking" subtitle="Similarity score based on job skills and resume skills">
+      <Card hoverable={false} title="AI Candidate Ranking" subtitle="Review the best-fit candidates for each active role.">
         <div className="space-y-4">
           <div className="grid gap-3 md:grid-cols-3">
             <div className="md:col-span-2">
@@ -194,7 +194,7 @@ export default function ApplicantsPage() {
               <select
                 value={selectedJobId}
                 onChange={(event) => setSelectedJobId(event.target.value)}
-                className="field-3d w-full rounded-xl px-4 py-2.5 focus:outline-none"
+                className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-primary focus:outline-none focus:ring-1 focus:ring-primary"
               >
                 {jobs.length === 0 && <option value="">No active jobs</option>}
                 {jobs.map((job) => (
@@ -209,7 +209,7 @@ export default function ApplicantsPage() {
               <select
                 value={sortBy}
                 onChange={(event) => setSortBy(event.target.value as 'match' | 'resume' | 'experience')}
-                className="field-3d w-full rounded-xl px-4 py-2.5 focus:outline-none"
+                className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-primary focus:outline-none focus:ring-1 focus:ring-primary"
               >
                 <option value="match">Highest Match %</option>
                 <option value="resume">Resume Score</option>
@@ -221,7 +221,7 @@ export default function ApplicantsPage() {
               <select
                 value={sortOrder}
                 onChange={(event) => setSortOrder(event.target.value as 'asc' | 'desc')}
-                className="field-3d w-full rounded-xl px-4 py-2.5 focus:outline-none"
+                className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-primary focus:outline-none focus:ring-1 focus:ring-primary"
               >
                 <option value="desc">High to Low</option>
                 <option value="asc">Low to High</option>
@@ -240,10 +240,10 @@ export default function ApplicantsPage() {
           ) : candidateMatches.length > 0 ? (
             <div className="space-y-3">
               {candidateMatches.slice(0, 8).map((match) => (
-                <div key={match.candidateId} className="p-4 bg-black/5 rounded-xl border border-border">
+                <div key={match.candidateId} className="rounded-2xl border border-border bg-white/70 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="font-medium text-black">{match.name}</p>
+                      <p className="font-medium text-primary">{match.name}</p>
                       <p className="text-sm text-secondary">{match.email}</p>
                       <p className="text-xs text-secondary mt-1">
                         Resume: {Math.round(match.resumeScore || 0)}% | Experience: {match.experienceYears || 0} yrs
@@ -270,7 +270,7 @@ export default function ApplicantsPage() {
                   )}
                   <button
                     onClick={() => router.push(`/applicants/${match.candidateId}?jobId=${selectedJobId}`)}
-                    className="mt-3 rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium text-primary hover:bg-black/5"
+                    className="mt-3 rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-gray-50"
                   >
                     View Profile
                   </button>
@@ -285,7 +285,7 @@ export default function ApplicantsPage() {
         </div>
       </Card>
 
-      <Card>
+      <Card hoverable={false}>
         <div className="flex items-center space-x-4 mb-6">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-secondary w-4 h-4" />
@@ -294,13 +294,13 @@ export default function ApplicantsPage() {
               placeholder="Search by name or job..."
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
-              className="field-3d w-full rounded-xl py-2.5 pl-10 pr-4 focus:outline-none"
+              className="w-full rounded-xl border border-border bg-white py-2.5 pl-10 pr-4 text-sm text-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="field-3d rounded-xl px-4 py-2.5 focus:outline-none"
+            className="rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-primary focus:outline-none focus:ring-1 focus:ring-primary"
           >
             <option value="">All Status</option>
             <option value="pending">Pending</option>
@@ -315,21 +315,21 @@ export default function ApplicantsPage() {
             {filteredApplications.map((app) => (
               <div
                 key={app.id}
-                className="flex items-center justify-between p-4 bg-black/5 rounded-xl hover:bg-black/5 transition-colors"
+                className="flex items-center justify-between rounded-2xl border border-border bg-white/70 p-4 transition-colors hover:bg-white"
               >
                 <div className="flex items-center space-x-4">
-                  <div className="w-12 h-12 bg-black/5 rounded-full flex items-center justify-center">
-                    <span className="text-black font-medium">
+                  <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
+                    <span className="text-primary font-medium">
                       {app.student?.name?.charAt(0)?.toUpperCase() || 'U'}
                     </span>
                   </div>
                   <div>
-                    <h4 className="font-medium text-black">{app.student?.name}</h4>
+                    <h4 className="font-medium text-primary">{app.student?.name}</h4>
                     <p className="text-sm text-secondary">
                       {app.job?.title} at {app.job?.company}
                     </p>
                     {app.matchScore && (
-                      <p className="text-xs text-black">
+                      <p className="text-xs text-primary">
                         Match: {Math.round(app.matchScore)}%
                       </p>
                     )}
@@ -340,7 +340,7 @@ export default function ApplicantsPage() {
                   <div className="flex space-x-2">
                     <button
                       onClick={() => router.push(getApplicantDetailHref(app))}
-                      className="px-3 py-1 border border-border rounded-lg text-sm hover:bg-black/5"
+                      className="px-3 py-1 border border-border rounded-lg text-sm text-primary transition-colors hover:bg-gray-50"
                     >
                       View Profile
                     </button>

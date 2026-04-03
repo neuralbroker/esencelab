@@ -102,10 +102,10 @@ export default function AdminResumesPage() {
   if (!hasAllowedRole) return null;
 
   return (
-    <div className="layout-container section-spacing space-y-6 max-w-7xl mx-auto">
-      <div>
-        <h1 className="text-2xl font-bold text-black">Resume Monitoring</h1>
-        <p className="text-secondary">Review parsing quality and moderate inappropriate uploads.</p>
+    <div className="layout-container section-spacing space-y-8 max-w-7xl mx-auto">
+      <div className="space-y-2">
+        <h1 className="text-3xl font-bold tracking-tight text-primary">Resume Monitoring</h1>
+        <p className="text-secondary">Review parsing quality, inspect flagged uploads, and moderate student resumes.</p>
       </div>
 
       {error && (
@@ -133,19 +133,19 @@ export default function AdminResumesPage() {
         </Card>
       </section>
 
-      <Card>
+      <Card hoverable={false}>
         <div className="grid gap-3 md:grid-cols-4 mb-5">
           <input
             type="text"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search name, email, skill..."
-            className="field-3d rounded-xl px-4 py-2.5 focus:outline-none md:col-span-2"
+            className="rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-primary focus:outline-none focus:ring-1 focus:ring-primary md:col-span-2"
           />
           <select
             value={parseStatus}
             onChange={(event) => setParseStatus(event.target.value as 'success' | 'failed' | '')}
-            className="field-3d rounded-xl px-4 py-2.5 focus:outline-none"
+            className="rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-primary focus:outline-none focus:ring-1 focus:ring-primary"
           >
             <option value="">All Parse States</option>
             <option value="success">Success</option>

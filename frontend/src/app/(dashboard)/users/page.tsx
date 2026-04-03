@@ -112,10 +112,10 @@ export default function UsersPage() {
   const pageEnd = meta.total === 0 ? 0 : Math.min(meta.page * meta.limit, meta.total);
 
   return (
-    <div className="layout-container section-spacing space-y-6 max-w-7xl mx-auto">
-      <div>
-        <h1 className="text-2xl font-bold text-black">User Management</h1>
-        <p className="text-secondary">Moderate accounts and platform access</p>
+    <div className="layout-container section-spacing space-y-8 max-w-7xl mx-auto">
+      <div className="space-y-2">
+        <h1 className="text-3xl font-bold tracking-tight text-primary">User Management</h1>
+        <p className="text-secondary">Search accounts, adjust access, and keep the platform healthy.</p>
       </div>
 
       {error && (
@@ -124,7 +124,7 @@ export default function UsersPage() {
         </Card>
       )}
 
-      <Card>
+      <Card hoverable={false}>
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5 mb-5">
           <div className="relative lg:col-span-2">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-secondary w-4 h-4" />
@@ -133,13 +133,13 @@ export default function UsersPage() {
               placeholder="Search users..."
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
-              className="field-3d w-full rounded-xl py-2.5 pl-10 pr-4 focus:outline-none"
+              className="w-full rounded-xl border border-border bg-white py-2.5 pl-10 pr-4 text-sm text-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
           <select
             value={roleFilter}
             onChange={(event) => setRoleFilter(event.target.value)}
-            className="field-3d rounded-xl px-4 py-2.5 focus:outline-none"
+            className="rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-primary focus:outline-none focus:ring-1 focus:ring-primary"
           >
             <option value="">All Roles</option>
             <option value="student">Student</option>
@@ -149,7 +149,7 @@ export default function UsersPage() {
           <select
             value={sortBy}
             onChange={(event) => setSortBy(event.target.value as 'createdAt' | 'name' | 'email' | 'role' | 'applications' | 'jobs' | 'resumeScore')}
-            className="field-3d rounded-xl px-4 py-2.5 focus:outline-none"
+            className="rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-primary focus:outline-none focus:ring-1 focus:ring-primary"
           >
             <option value="createdAt">Sort by Join Date</option>
             <option value="name">Sort by Name</option>
@@ -162,7 +162,7 @@ export default function UsersPage() {
           <select
             value={order}
             onChange={(event) => setOrder(event.target.value as 'asc' | 'desc')}
-            className="field-3d rounded-xl px-4 py-2.5 focus:outline-none"
+            className="rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-primary focus:outline-none focus:ring-1 focus:ring-primary"
           >
             <option value="desc">Descending</option>
             <option value="asc">Ascending</option>
@@ -188,15 +188,15 @@ export default function UsersPage() {
                 </thead>
                 <tbody>
                   {users.map((entry) => (
-                    <tr key={entry.id} className="border-b border-border hover:bg-black/5">
+                    <tr key={entry.id} className="border-b border-border transition-colors hover:bg-gray-50">
                       <td className="py-3 px-4">
                         <div className="flex items-center space-x-3">
-                          <div className="w-8 h-8 bg-black/5 rounded-full flex items-center justify-center">
-                            <span className="text-black text-sm font-medium">
+                          <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
+                            <span className="text-primary text-sm font-medium">
                               {entry.name?.charAt(0)?.toUpperCase() || 'U'}
                             </span>
                           </div>
-                          <span className="font-medium text-black">{entry.name}</span>
+                          <span className="font-medium text-primary">{entry.name}</span>
                         </div>
                       </td>
                       <td className="py-3 px-4 text-secondary">{entry.email}</td>

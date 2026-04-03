@@ -98,7 +98,7 @@ export default function JobDetailPage() {
   }
 
   return (
-    <div className="layout-container section-spacing max-w-6xl mx-auto">
+    <div className="layout-container section-spacing max-w-6xl mx-auto overflow-x-hidden">
       {feedback && (
         <div className="mb-6 rounded-xl border border-gray-300 bg-gray-100 px-4 py-3 text-sm text-gray-800">
           {feedback}
@@ -109,7 +109,7 @@ export default function JobDetailPage() {
           {error}
         </div>
       )}
-      <Link href="/jobs" className="inline-flex items-center text-sm font-medium text-secondary hover:text-primary transition-colors mb-8 group">
+      <Link href="/jobs" className="mb-6 inline-flex items-center text-sm font-medium text-secondary transition-colors hover:text-primary sm:mb-8 group">
         <div className="bg-background border border-border group-hover:bg-accent-soft group-hover:text-accent group-hover:border-accent-soft p-1.5 rounded-lg mr-3 transition-colors">
           <ChevronLeft className="w-4 h-4" />
         </div>
@@ -125,8 +125,8 @@ export default function JobDetailPage() {
           <div className="mb-6">
             <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-4">
               <div>
-                <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-primary mb-2 leading-tight">{job.title}</h1>
-                <p className="text-xl font-medium text-secondary flex items-center">
+                <h1 className="text-2xl md:text-4xl font-bold tracking-tight text-primary mb-2 leading-tight">{job.title}</h1>
+                <p className="flex items-center text-lg font-medium text-secondary sm:text-xl">
                   <Building className="w-5 h-5 mr-2.5 text-secondary" />
                   {job.company}
                 </p>
@@ -136,17 +136,17 @@ export default function JobDetailPage() {
               </Badge>
             </div>
 
-            <div className="flex flex-wrap gap-4 py-6 border-y border-border my-8">
-              <div className="flex items-center text-secondary bg-background px-4 py-2 rounded-xl border border-border">
+            <div className="my-8 flex flex-wrap gap-3 border-y border-border py-6">
+              <div className="flex min-h-[44px] items-center text-secondary bg-background px-4 py-2 rounded-xl border border-border">
                 <MapPin className="w-4 h-4 mr-2.5 text-accent" />
                 <span className="text-sm font-medium">{job.location}</span>
               </div>
-              <div className="flex items-center text-secondary bg-background px-4 py-2 rounded-xl border border-border">
+              <div className="flex min-h-[44px] items-center text-secondary bg-background px-4 py-2 rounded-xl border border-border">
                 <Briefcase className="w-4 h-4 mr-2.5 text-accent" />
                 <span className="text-sm font-medium capitalize">{job.jobType?.replace('_', ' ')}</span>
               </div>
               {(job.salaryMin || job.salaryMax) && (
-                <div className="flex items-center text-secondary bg-background px-4 py-2 rounded-xl border border-border">
+                <div className="flex min-h-[44px] items-center text-secondary bg-background px-4 py-2 rounded-xl border border-border">
                   <DollarSign className="w-4 h-4 mr-2.5 text-accent" />
                   <span className="text-sm font-medium">
                     {job.salaryMin && job.salaryMax
@@ -157,7 +157,7 @@ export default function JobDetailPage() {
                   </span>
                 </div>
               )}
-              <div className="flex items-center text-secondary bg-background px-4 py-2 rounded-xl border border-border">
+              <div className="flex min-h-[44px] items-center text-secondary bg-background px-4 py-2 rounded-xl border border-border">
                 <Clock className="w-4 h-4 mr-2.5 text-accent" />
                 <span className="text-sm font-medium">{new Date(job.createdAt).toLocaleDateString()}</span>
               </div>
@@ -240,31 +240,31 @@ export default function JobDetailPage() {
 
           <Card hoverable={false} className="bg-background border-none shadow-none p-0">
             <h3 className="font-bold text-primary text-lg mb-4">Quick Overview</h3>
-            <div className="space-y-4 text-sm bg-white p-6 rounded-2xl border border-border">
-              <div className="grid grid-cols-[100px_1fr] items-center">
+            <div className="space-y-4 text-sm bg-white p-5 sm:p-6 rounded-2xl border border-border">
+              <div className="grid gap-1 sm:grid-cols-[100px_1fr] sm:items-center">
                 <span className="text-secondary font-medium">Job Type</span>
-                <span className="font-semibold text-primary text-right capitalize">{job.jobType?.replace('_', ' ')}</span>
+                <span className="font-semibold text-primary sm:text-right capitalize">{job.jobType?.replace('_', ' ')}</span>
               </div>
               <div className="w-full h-px bg-border"></div>
-              <div className="grid grid-cols-[100px_1fr] items-center">
+              <div className="grid gap-1 sm:grid-cols-[100px_1fr] sm:items-center">
                 <span className="text-secondary font-medium">Location</span>
-                <span className="font-semibold text-primary text-right">{job.location}</span>
+                <span className="font-semibold text-primary sm:text-right">{job.location}</span>
               </div>
               {(job.salaryMin || job.salaryMax) && (
                 <>
                   <div className="w-full h-px bg-border"></div>
-                  <div className="grid grid-cols-[100px_1fr] items-center">
+                  <div className="grid gap-1 sm:grid-cols-[100px_1fr] sm:items-center">
                     <span className="text-secondary font-medium">Salary</span>
-                    <span className="font-semibold text-primary text-right">
+                    <span className="font-semibold text-primary sm:text-right">
                       ${job.salaryMin?.toLocaleString()} - ${job.salaryMax?.toLocaleString()}
                     </span>
                   </div>
                 </>
               )}
               <div className="w-full h-px bg-border"></div>
-              <div className="grid grid-cols-[100px_1fr] items-center">
+              <div className="grid gap-1 sm:grid-cols-[100px_1fr] sm:items-center">
                 <span className="text-secondary font-medium">Posted</span>
-                <span className="font-semibold text-primary text-right">{new Date(job.createdAt).toLocaleDateString()}</span>
+                <span className="font-semibold text-primary sm:text-right">{new Date(job.createdAt).toLocaleDateString()}</span>
               </div>
             </div>
           </Card>

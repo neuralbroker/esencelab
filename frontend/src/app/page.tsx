@@ -1,9 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, Sparkles } from 'lucide-react';
+import { ArrowRight, Menu, Sparkles, X } from 'lucide-react';
 import { motion } from 'framer-motion';
 import EsencelabLogo from '@/components/EsencelabLogo';
 import { useAuth } from '@/contexts/AuthContext';
@@ -45,6 +45,7 @@ export default function HomePage() {
   const { isAuthenticated, isLoading, user } = useAuth();
   const router = useRouter();
   const year = new Date().getFullYear();
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   useEffect(() => {
     if (!isLoading && isAuthenticated && user) {
@@ -65,11 +66,21 @@ export default function HomePage() {
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_0%_0%,rgba(210,210,210,0.42),transparent_34%),radial-gradient(circle_at_100%_0%,rgba(245,245,245,0.94),transparent_34%),linear-gradient(180deg,#efefed_0%,#f5f5f3_55%,#f8f8f6_100%)]" />
 
       <main className="relative z-10 mx-auto flex w-full max-w-[1380px] flex-col gap-8 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-        <section id="features" className={`${shellClass} px-5 pb-7 pt-5 sm:px-9 sm:pb-9 sm:pt-7 lg:px-12 lg:pb-10`}>
+        <section id="features" className={`${shellClass} px-4 pb-6 pt-4 sm:px-9 sm:pb-9 sm:pt-7 lg:px-12 lg:pb-10`}>
           <header className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-            <Link href="/" className="inline-flex">
-              <EsencelabLogo textClassName="tracking-[0.18em]" />
-            </Link>
+            <div className="flex items-center justify-between gap-3">
+              <Link href="/" className="inline-flex">
+                <EsencelabLogo textClassName="tracking-[0.18em]" />
+              </Link>
+              <button
+                type="button"
+                onClick={() => setIsMenuOpen((current) => !current)}
+                className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full border border-[#ececec] bg-white/72 text-[#111111] transition hover:bg-white lg:hidden"
+                aria-label="Toggle navigation menu"
+              >
+                {isMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+              </button>
+            </div>
 
             <nav className="hidden items-center justify-center gap-12 text-base font-medium text-[#181818] lg:flex">
               <a href="#features" className="transition hover:opacity-70">
@@ -80,7 +91,7 @@ export default function HomePage() {
               </a>
             </nav>
 
-            <div className="flex items-center gap-3">
+            <div className="hidden items-center gap-3 lg:flex">
               <Link href="/login" className="px-3 py-2 text-base font-semibold text-[#111111] transition hover:opacity-70">
                 Login
               </Link>
@@ -91,34 +102,52 @@ export default function HomePage() {
             </div>
           </header>
 
+          {isMenuOpen && (
+            <div className="mt-2 space-y-2 rounded-[24px] border border-[#ececec] bg-white/78 p-3 lg:hidden">
+              <a href="#features" className="block rounded-xl px-4 py-3 text-sm font-medium text-[#181818] transition hover:bg-white">
+                Features
+              </a>
+              <a href="#workflow" className="block rounded-xl px-4 py-3 text-sm font-medium text-[#181818] transition hover:bg-white">
+                Workflow
+              </a>
+              <Link href="/login" className="block rounded-xl px-4 py-3 text-sm font-medium text-[#181818] transition hover:bg-white">
+                Login
+              </Link>
+              <Link href="/register" className={`${darkButtonClass} w-full px-6 py-3 text-sm`}>
+                Start now
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+          )}
+
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.45 }}
-            className="mx-auto flex max-w-[760px] flex-col items-center px-2 pb-7 pt-10 text-center sm:pt-14 lg:pb-10 lg:pt-16"
+            className="mx-auto flex max-w-[760px] flex-col items-center px-1 pb-5 pt-8 text-center sm:px-2 sm:pt-14 lg:pb-10 lg:pt-16"
           >
             <span className={chipClass}>
               <Sparkles className="h-3.5 w-3.5" />
               AI Career Platform
             </span>
 
-            <h1 className="mt-7 max-w-[700px] text-[2.9rem] font-semibold leading-[0.97] tracking-[-0.06em] text-[#111111] sm:text-[4.1rem] lg:text-[4.7rem]">
+            <h1 className="mt-6 max-w-[700px] text-[2.35rem] font-semibold leading-[0.98] tracking-[-0.06em] text-[#111111] min-[420px]:text-[2.6rem] sm:text-[4.1rem] lg:text-[4.7rem]">
               Esencelab{' '}
               <span className="font-serif text-[0.9em] italic tracking-[-0.05em]">
                 Career Intelligence
               </span>
             </h1>
 
-            <p className="mt-6 max-w-[700px] text-lg font-normal text-[#666666] sm:text-[1.5rem] sm:leading-[1.38] lg:text-[1.7rem]">
+            <p className="mt-5 max-w-[700px] text-base font-normal leading-[1.55] text-[#666666] sm:text-[1.5rem] sm:leading-[1.38] lg:text-[1.7rem]">
               Built for resume parsing, skill-gap analysis, and candidate ranking.
             </p>
 
-            <div className="mt-8 flex flex-col items-center gap-4 sm:flex-row">
-              <Link href="/register" className={darkButtonClass}>
+            <div className="mt-8 flex w-full flex-col items-stretch gap-3 sm:w-auto sm:flex-row sm:items-center sm:justify-center sm:gap-4">
+              <Link href="/register" className={`${darkButtonClass} w-full sm:w-auto`}>
                 Get started
                 <ArrowRight className="h-4 w-4" />
               </Link>
-              <Link href="/login?next=%2Fdashboard" className={lightButtonClass}>
+              <Link href="/login?next=%2Fdashboard" className={`${lightButtonClass} w-full sm:w-auto`}>
                 Explore dashboard
               </Link>
             </div>

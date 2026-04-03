@@ -81,8 +81,8 @@ function LoginPageContent() {
     <div className="min-h-screen bg-[#f4f4f2] text-[#111111]">
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_0%_0%,rgba(210,210,210,0.42),transparent_34%),radial-gradient(circle_at_100%_0%,rgba(245,245,245,0.94),transparent_34%),linear-gradient(180deg,#efefed_0%,#f5f5f3_55%,#f8f8f6_100%)]" />
 
-      <div className="relative z-10 mx-auto flex w-full max-w-[1040px] flex-col px-4 py-7 sm:px-6 lg:px-0 lg:py-8">
-        <header className="mb-5 flex items-center justify-between">
+      <div className="relative z-10 mx-auto flex w-full max-w-[1040px] flex-col px-4 py-5 sm:px-6 sm:py-7 lg:px-0 lg:py-8">
+        <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <Link href="/" className="inline-flex">
             <EsencelabLogo textClassName="tracking-[0.18em]" />
           </Link>
@@ -98,20 +98,20 @@ function LoginPageContent() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35 }}
-          className={`${shellClass} grid gap-4 p-4 sm:p-5 lg:grid-cols-[1fr_1.12fr]`}
+          className={`${shellClass} grid gap-4 overflow-hidden p-3 sm:p-5 lg:grid-cols-[1fr_1.12fr]`}
         >
-          <section className={`${panelClass} flex min-h-[430px] flex-col justify-start`}>
+          <section className={`${panelClass} flex min-h-[320px] flex-col justify-start sm:min-h-[430px]`}>
             <span className={chipClass}>Sign in</span>
-            <h1 className="mt-7 max-w-[330px] text-[3rem] font-semibold leading-[0.97] tracking-[-0.06em] text-[#111111] sm:text-[3.7rem]">
+            <h1 className="mt-6 max-w-[330px] text-[2.35rem] font-semibold leading-[0.98] tracking-[-0.06em] text-[#111111] sm:mt-7 sm:text-[3.7rem]">
               Welcome back.
             </h1>
-            <p className="mt-4 max-w-[380px] text-[1.02rem] leading-[1.55] text-[#5f5f5f]">
+            <p className="mt-4 max-w-[380px] text-[0.98rem] leading-[1.55] text-[#5f5f5f] sm:text-[1.02rem]">
               Access your Esencelab dashboard, resume analysis, and role-fit workflows.
             </p>
           </section>
 
-          <section className={`${panelClass} min-h-[430px]`}>
-            <h2 className="text-[2.1rem] font-semibold tracking-[-0.05em] text-[#111111]">
+          <section className={`${panelClass} min-h-[320px] sm:min-h-[430px]`}>
+            <h2 className="text-[1.9rem] font-semibold tracking-[-0.05em] text-[#111111] sm:text-[2.1rem]">
               Account login
             </h2>
             <p className="mt-2 text-[1.02rem] text-[#5f5f5f]">

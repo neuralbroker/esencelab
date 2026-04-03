@@ -20,7 +20,7 @@ interface ButtonProps extends HTMLMotionProps<"button"> {
 const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className = '', variant = 'primary', size = 'md', isLoading, children, disabled, type = 'button', ...props }, ref) => {
     const baseStyles =
-      'inline-flex items-center justify-center rounded-xl font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#4b4b4b]/30 disabled:opacity-50 disabled:cursor-not-allowed';
+      'inline-flex min-h-[44px] items-center justify-center rounded-xl text-center font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#4b4b4b]/30 disabled:opacity-50 disabled:cursor-not-allowed';
 
     const variants = {
       primary: 'bg-[#111111] text-white hover:bg-[#2a2a2a]',

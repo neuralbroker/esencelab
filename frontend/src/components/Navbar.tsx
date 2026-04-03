@@ -85,7 +85,7 @@ export default function Navbar() {
             <EsencelabLogo />
           </Link>
 
-          <div className="hidden items-center gap-1 rounded-full border border-white/72 bg-white/64 px-2 py-1 text-[0.72rem] font-semibold text-[#111111] shadow-[0_14px_28px_-22px_rgba(20,20,20,0.65)] md:flex">
+          <div className="hidden items-center gap-1 rounded-full border border-white/72 bg-white/64 px-2 py-1 text-[0.72rem] font-semibold text-[#111111] shadow-[0_14px_28px_-22px_rgba(20,20,20,0.65)] lg:flex">
             {navLinks.map((link) => {
               const isActive = pathname === link.href || pathname.startsWith(link.href + '/');
               return (
@@ -102,11 +102,11 @@ export default function Navbar() {
             })}
           </div>
 
-          <div className="hidden items-center md:flex" ref={profileRef}>
+          <div className="hidden items-center lg:flex" ref={profileRef}>
             <div className="relative">
               <button
                 onClick={() => setIsProfileOpen(!isProfileOpen)}
-                className="flex items-center space-x-2.5 rounded-full border border-white/72 bg-white/64 pl-1.5 pr-3 py-1 transition-colors hover:bg-white/78"
+                className="flex min-h-[44px] items-center space-x-2.5 rounded-full border border-white/72 bg-white/64 pl-1.5 pr-3 py-1 transition-colors hover:bg-white/78"
                 aria-expanded={isProfileOpen}
                 aria-haspopup="true"
               >
@@ -145,7 +145,7 @@ export default function Navbar() {
 
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="rounded-lg p-2 text-primary transition-colors hover:bg-white/70 md:hidden"
+            className="rounded-lg p-2.5 text-primary transition-colors hover:bg-white/70 lg:hidden"
             aria-label="Toggle menu"
           >
             {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -159,16 +159,20 @@ export default function Navbar() {
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="md:hidden border-b border-white/72 bg-white/82 backdrop-blur-md overflow-hidden"
+            className="overflow-hidden border-b border-white/72 bg-white/82 backdrop-blur-md lg:hidden"
           >
             <div className="space-y-1 px-4 pb-4 pt-2">
+              <div className="mb-2 rounded-2xl border border-white/72 bg-white/72 px-4 py-3">
+                <p className="truncate text-sm font-semibold text-primary">{user?.name}</p>
+                <p className="mt-1 text-xs capitalize text-secondary">{user?.role}</p>
+              </div>
               {navLinks.map((link) => {
                 const isActive = pathname === link.href || pathname.startsWith(link.href + '/');
                 return (
                   <Link
                     key={link.href}
                     href={link.href}
-                    className={`block rounded-xl px-4 py-3 text-sm font-medium transition-colors ${
+                    className={`block min-h-[44px] rounded-xl px-4 py-3 text-sm font-medium transition-colors ${
                       isActive ? 'bg-white/84 text-primary' : 'text-secondary hover:bg-white/74 hover:text-primary'
                     }`}
                   >
@@ -180,7 +184,7 @@ export default function Navbar() {
 <button
                 onClick={handleLogout}
                 aria-label="Logout from your account"
-                className="flex w-full items-center space-x-3 rounded-xl px-4 py-3 text-left text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100"
+                className="flex min-h-[44px] w-full items-center space-x-3 rounded-xl px-4 py-3 text-left text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100"
               >
                 <LogOut className="h-4 w-4" />
                 <span>Logout</span>

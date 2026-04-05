@@ -21,6 +21,7 @@ import crypto from 'crypto';
 import { createServer, Server } from 'http';
 import { Socket } from 'net';
 import { SupabaseStore } from './supabaseStore';
+import { buildDefaultCourses } from './defaultCourseCatalog';
 import {
   CAREER_ROLES,
   buildRecommendationExplanation,
@@ -975,6 +976,24 @@ const normalizeSkillList = (value: unknown): string[] => {
     if (!unique.has(key)) unique.set(key, cleaned);
   }
   return Array.from(unique.values());
+};
+
+const COURSE_SKILL_ALIASES: Record<string, string[]> = {
+  'data visualization': ['data visualization', 'power bi'],
+  'power bi': ['power bi', 'data visualization'],
+  'c programming': ['c programming', 'embedded c'],
+  'embedded c': ['embedded c', 'c programming'],
+  'microcontrollers': ['microcontrollers', 'iot'],
+  iot: ['iot', 'microcontrollers'],
+  'circuit analysis': ['circuit analysis', 'analog electronics'],
+  'analog electronics': ['analog electronics', 'circuit analysis'],
+};
+
+const courseSkillMatches = (courseSkills: string[], skill: string) => {
+  const normalizedSkill = String(skill || '').trim().toLowerCase();
+  if (!normalizedSkill) return false;
+  const aliases = COURSE_SKILL_ALIASES[normalizedSkill] || [normalizedSkill];
+  return courseSkills.some((entry) => aliases.includes(String(entry || '').trim().toLowerCase()));
 };
 
 const parseJsonArray = (value: unknown): any[] => {
@@ -3140,7 +3159,7 @@ app.get('/api/recommendations', async (req, res) => {
   const recommendedCourses = db.courses
     .map((course: any) => {
       const courseSkills = toSkillList(course.skills).map((entry) => entry.toLowerCase());
-      const matchedMissing = missingSkills.filter((skill) => courseSkills.includes(skill));
+      const matchedMissing = missingSkills.filter((skill) => courseSkillMatches(courseSkills, skill));
       return {
         ...course,
         matchedMissingSkills: matchedMissing,
@@ -4062,6 +4081,22 @@ const ensureBootstrapUsers = async () => {
   }
 };
 
+const ensureDefaultCourses = async () => {
+  const existingIds = new Set(db.courses.map((entry: any) => String(entry.id || '').trim()));
+  const existingUrls = new Set(
+    db.courses.map((entry: any) => String(entry.url || '').trim().toLowerCase()).filter(Boolean)
+  );
+
+  const defaultsToInsert = buildDefaultCourses().filter(
+    (entry) => !existingIds.has(entry.id) && !existingUrls.has(entry.url.toLowerCase())
+  );
+
+  for (const course of defaultsToInsert) {
+    db.courses.push(course);
+    await supabaseStore.upsertCourse(course);
+  }
+};
+
 const initializeRuntime = async () => {
   const bootstrap = await supabaseStore.bootstrap(db);
   if (bootstrap.mode === 'supabase' && bootstrap.loaded) {
@@ -4072,6 +4107,7 @@ const initializeRuntime = async () => {
     logEvent('info', 'runtime.bootstrap.memory_empty_store');
   }
 
+  await ensureDefaultCourses();
   await ensureBootstrapUsers();
 };
 

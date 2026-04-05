@@ -234,6 +234,10 @@ export interface StudentResource {
   skills: string[];
   roleIds: string[];
   whyItHelps: string;
+  branchTags?: string[];
+  recommendedYears?: string[];
+  roadmapSource?: string;
+  isOfficial?: boolean;
 }
 
 export interface ResumeScoreEntry {
@@ -262,6 +266,10 @@ export interface CareerRole {
   requiredSkills: string[];
   suggestedTools: string[];
   growthPath: string[];
+  track?: string;
+  recommendedFor?: string[];
+  roadmapSource?: string;
+  yearGuidance?: string[];
 }
 
 export interface RoadmapItem {

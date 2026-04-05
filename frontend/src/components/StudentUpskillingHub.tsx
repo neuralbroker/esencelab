@@ -29,6 +29,7 @@ import Badge from '@/components/Badge';
 import { CircularProgress, ProgressBar } from '@/components/Progress';
 import { Skeleton } from '@/components/Skeleton';
 import {
+  CareerRole,
   CareerOverview,
   LearningPlan,
   Resume,
@@ -39,12 +40,14 @@ import {
 import {
   askStudentAICoach,
   clearRecommendationCache,
+  getCareerRoles,
   getCareerOverview,
   getLearningPlan,
   getReadableErrorMessage,
   getResume,
   regenerateLearningPlan,
   saveJobForLater,
+  setTargetRole,
   updateRoadmapSkill,
   uploadResume,
 } from '@/lib/dashboardApi';
@@ -149,10 +152,12 @@ export default function StudentUpskillingHub({
   const [uploadProgress, setUploadProgress] = useState(0);
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const [overview, setOverview] = useState<CareerOverview | null>(null);
+  const [availableRoles, setAvailableRoles] = useState<CareerRole[]>([]);
   const [learningPlan, setLearningPlan] = useState<LearningPlan | null>(null);
   const [learningDuration, setLearningDuration] = useState<30 | 60>(30);
   const [loadingLearningPlan, setLoadingLearningPlan] = useState(false);
   const [regeneratingPlan, setRegeneratingPlan] = useState(false);
+  const [switchingRole, setSwitchingRole] = useState(false);
   const [updatingSkill, setUpdatingSkill] = useState<string | null>(null);
   const [savingJobId, setSavingJobId] = useState<string | null>(null);
   const [aiFeature, setAiFeature] = useState<
@@ -218,6 +223,23 @@ export default function StudentUpskillingHub({
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadRoles = async () => {
+      try {
+        const roles = await getCareerRoles();
+        if (!cancelled) setAvailableRoles(roles);
+      } catch {
+        if (!cancelled) setAvailableRoles([]);
+      }
+    };
+
+    void loadRoles();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!resume?.id || !overview?.roleId) {
@@ -466,6 +488,28 @@ export default function StudentUpskillingHub({
     }
   };
 
+  const handleTargetRoleChange = async (roleId: string) => {
+    if (!overview || switchingRole || roleId === overview.roleId) return;
+    setSwitchingRole(true);
+    try {
+      await setTargetRole(roleId);
+      if (user?.id) clearRecommendationCache(user.id);
+      setAiCoachResponse(null);
+      await Promise.all([onRefresh(), loadData()]);
+      setFeedback({
+        tone: 'success',
+        text: 'Learning track updated. Your roadmap and support resources have been refreshed.',
+      });
+    } catch (error: any) {
+      setFeedback({
+        tone: 'error',
+        text: getReadableErrorMessage(error, 'Unable to switch learning track right now.'),
+      });
+    } finally {
+      setSwitchingRole(false);
+    }
+  };
+
   const handleSaveJob = async (jobId: string) => {
     if (savingJobId) return;
     setSavingJobId(jobId);
@@ -620,6 +664,69 @@ export default function StudentUpskillingHub({
             `Track your readiness, close skill gaps, and target better roles as a ${targetRole} candidate.`}
         </p>
       </section>
+
+      {overview?.role && (
+        <section>
+          <Card hoverable={false} className="p-6 space-y-5">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary">Learning track</Badge>
+                  {overview.role.track ? (
+                    <Badge variant="secondary" className="capitalize">
+                      {overview.role.track}
+                    </Badge>
+                  ) : null}
+                </div>
+                <h2 className="text-2xl font-serif text-primary">{overview.role.name}</h2>
+                <p className="max-w-3xl text-sm text-secondary">{overview.role.description}</p>
+              </div>
+
+              <div className="w-full max-w-sm space-y-2">
+                <label className="block text-xs uppercase tracking-[0.12em] text-secondary">
+                  Switch your target track
+                </label>
+                <select
+                  value={overview.roleId}
+                  onChange={(event) => void handleTargetRoleChange(event.target.value)}
+                  disabled={switchingRole || availableRoles.length === 0}
+                  className="w-full rounded-2xl border border-border bg-white px-4 py-3 text-sm text-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {(availableRoles.length > 0 ? availableRoles : [overview.role]).map((role) => (
+                    <option key={role.id} value={role.id}>
+                      {role.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-secondary">
+                  Change this when you want Esencelab to rebuild your roadmap, learning plan, and resource suggestions for another path.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="rounded-2xl border border-border bg-white/70 p-4">
+                <p className="text-xs uppercase tracking-[0.12em] text-secondary">Best fit for</p>
+                <p className="mt-2 text-sm font-medium text-primary">
+                  {overview.role.recommendedFor?.join(', ') || 'All motivated students'}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border bg-white/70 p-4">
+                <p className="text-xs uppercase tracking-[0.12em] text-secondary">Roadmap source</p>
+                <p className="mt-2 text-sm font-medium text-primary">
+                  {overview.role.roadmapSource || 'Esencelab curated path'}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border bg-white/70 p-4">
+                <p className="text-xs uppercase tracking-[0.12em] text-secondary">Year guidance</p>
+                <p className="mt-2 text-sm font-medium text-primary">
+                  {overview.role.yearGuidance?.[0] || 'Build fundamentals early and convert them into projects before placement season.'}
+                </p>
+              </div>
+            </div>
+          </Card>
+        </section>
+      )}
 
       <AnimatePresence>
         {feedback && (

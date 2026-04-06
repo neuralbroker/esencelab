@@ -8,7 +8,6 @@
  */
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import api from '@/lib/api';
 import Card from '@/components/Card';
 import Button from '@/components/Button';
 import Input from '@/components/Input';
@@ -16,6 +15,7 @@ import Select from '@/components/Select';
 import Loading from '@/components/Loading';
 import { Briefcase } from 'lucide-react';
 import { useRoleAccess } from '@/lib/useRoleAccess';
+import { createJob, getReadableErrorMessage } from '@/lib/dashboardApi';
 
 export default function NewJobPage() {
   const router = useRouter();
@@ -41,14 +41,21 @@ export default function NewJobPage() {
     setError(null);
 
     try {
-      await api.post('/jobs', {
-        ...formData,
-        salaryMin: formData.salaryMin ? parseInt(formData.salaryMin) : null,
-        salaryMax: formData.salaryMax ? parseInt(formData.salaryMax) : null,
+      await createJob({
+        title: formData.title,
+        company: formData.company,
+        description: formData.description,
+        location: formData.location,
+        requirements: formData.requirements,
+        experienceLevel: formData.experienceLevel as 'entry' | 'junior' | 'mid' | 'senior' | 'lead',
+        jobType: formData.jobType as 'full_time' | 'part_time' | 'internship' | 'contract',
+        status: formData.status as 'active' | 'closed',
+        salaryMin: formData.salaryMin ? parseInt(formData.salaryMin, 10) : null,
+        salaryMax: formData.salaryMax ? parseInt(formData.salaryMax, 10) : null,
       });
-      router.push('/jobs');
+      router.push('/jobs?posted=1');
     } catch (error: any) {
-      setError(error.response?.data?.message || 'Failed to create job');
+      setError(getReadableErrorMessage(error, 'Failed to create job.'));
     } finally {
       setLoading(false);
     }
@@ -115,7 +122,8 @@ export default function NewJobPage() {
               onChange={(e) => setFormData({ ...formData, requirements: e.target.value })}
               rows={4}
               className="w-full bg-transparent px-3 pb-2 text-primary focus:outline-none resize-y min-h-[100px]"
-              placeholder="List the key skills and requirements..."
+              placeholder="List the key skills and requirements, separated by commas..."
+              required
             />
           </div>
 

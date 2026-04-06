@@ -7,6 +7,7 @@
  * same page to manage jobs they own or oversee.
  */
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import api from '@/lib/api';
 import { Job } from '@/types';
@@ -23,6 +24,7 @@ import { getReadableErrorMessage } from '@/lib/dashboardApi';
 
 export default function JobsPage() {
   const { user } = useAuth();
+  const searchParams = useSearchParams();
   const userRole = user?.role;
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,6 +34,7 @@ export default function JobsPage() {
   const [location, setLocation] = useState('');
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionJobId, setActionJobId] = useState<string | null>(null);
+  const showPostedMessage = searchParams.get('posted') === '1';
 
   const fetchJobs = useCallback(async () => {
     if (!user) return;
@@ -133,6 +136,12 @@ export default function JobsPage() {
       {actionError && (
         <Card hoverable={false} className="border border-gray-300 bg-gray-100 p-4 text-sm text-gray-800">
           {actionError}
+        </Card>
+      )}
+
+      {showPostedMessage && !actionError && (
+        <Card hoverable={false} className="border border-gray-300 bg-gray-100 p-4 text-sm text-gray-800">
+          Job posted successfully.
         </Card>
       )}
 

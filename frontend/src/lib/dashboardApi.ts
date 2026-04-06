@@ -291,6 +291,9 @@ export const createJob = async (payload: {
   description?: string;
   experienceLevel?: 'entry' | 'junior' | 'mid' | 'senior' | 'lead';
   jobType?: 'full_time' | 'part_time' | 'internship' | 'contract';
+  status?: 'active' | 'closed';
+  salaryMin?: number | null;
+  salaryMax?: number | null;
 }) => {
   const requirements = payload.requirements
     .split(',')
@@ -308,7 +311,9 @@ export const createJob = async (payload: {
     skills: safeRequirements,
     experienceLevel: payload.experienceLevel || 'mid',
     jobType: payload.jobType || 'full_time',
-    status: 'active',
+    status: payload.status || 'active',
+    salaryMin: payload.salaryMin ?? null,
+    salaryMax: payload.salaryMax ?? null,
   });
   invalidateApiCache('/jobs');
   invalidateApiCache('/recruiter/overview');

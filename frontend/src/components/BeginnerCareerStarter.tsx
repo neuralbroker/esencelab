@@ -17,11 +17,11 @@ type BeginnerAnswers = {
 
 interface BeginnerCareerStarterProps {
   onUseUploadFlow: () => void;
-  onSavedTrack?: (message: string) => void;
+  onSavedTrack?: (payload: { message: string; track: BeginnerBlueprint }) => void;
   onError?: (message: string) => void;
 }
 
-interface BeginnerBlueprint {
+export interface BeginnerBlueprint {
   id: string;
   name: string;
   overview: string;
@@ -216,9 +216,10 @@ export default function BeginnerCareerStarter({
     setSavingTrack(true);
     try {
       await setTargetRole(primaryTrack.id);
-      onSavedTrack?.(
-        `${primaryTrack.name} saved as your learning path. You can now build a starter resume around it.`
-      );
+      onSavedTrack?.({
+        message: `${primaryTrack.name} saved as your learning path. Continue with your first resume draft now.`,
+        track: primaryTrack,
+      });
     } catch (error: any) {
       onError?.(getReadableErrorMessage(error, 'Unable to save this learning path right now.'));
     } finally {

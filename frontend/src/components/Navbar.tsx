@@ -51,6 +51,7 @@ export default function Navbar() {
           { href: '/dashboard', label: 'Dashboard' },
           { href: '/jobs', label: 'Jobs' },
           { href: '/courses', label: 'Courses' },
+          { href: '/roadmaps', label: 'Roadmaps' },
           { href: '/resume', label: 'Resume' },
           { href: '/applications', label: 'Applications' },
         ];

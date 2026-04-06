@@ -7,6 +7,7 @@
  * latest stored resume insights for the signed-in student.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
   AlertCircle,
@@ -23,7 +24,7 @@ import { Resume } from '@/types';
 import Card from '@/components/Card';
 import Button from '@/components/Button';
 import Badge from '@/components/Badge';
-import BeginnerCareerStarter from '@/components/BeginnerCareerStarter';
+import BeginnerCareerStarter, { BeginnerBlueprint } from '@/components/BeginnerCareerStarter';
 import Loading from '@/components/Loading';
 import { Skeleton } from '@/components/Skeleton';
 import {
@@ -83,6 +84,7 @@ export default function ResumeUploadPage() {
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const [loading, setLoading] = useState(true);
   const [entryMode, setEntryMode] = useState<EntryMode>('upload');
+  const [selectedBeginnerTrack, setSelectedBeginnerTrack] = useState<BeginnerBlueprint | null>(null);
 
   const fetchResume = useCallback(async () => {
     try {
@@ -253,12 +255,16 @@ export default function ResumeUploadPage() {
                 <h1 className="text-3xl font-bold tracking-tight text-primary md:text-4xl">
                   {resume
                     ? 'Upload your resume and review the extracted profile.'
-                    : 'Choose your starting point for placement preparation.'}
+                    : selectedBeginnerTrack
+                      ? `Build your first resume for ${selectedBeginnerTrack.name}.`
+                      : 'Choose your starting point for placement preparation.'}
                 </h1>
                 <p className="mt-3 max-w-2xl text-base text-secondary">
                   {resume
                     ? 'This is the source for your career recommendations, role match insights, and recruiter visibility. Use a clean text-based PDF for the best results.'
-                    : 'If you already have a resume, upload it normally. If you are just starting out, discover a likely-fit domain first and build your first resume with the right structure.'}
+                    : selectedBeginnerTrack
+                      ? `Your path is saved as ${selectedBeginnerTrack.name}. Create a one-page starter resume around this track, then upload it here to continue with the normal Esencelab flow.`
+                      : 'If you already have a resume, upload it normally. If you are just starting out, discover a likely-fit domain first and build your first resume with the right structure.'}
                 </p>
               </div>
             </div>
@@ -379,7 +385,11 @@ export default function ResumeUploadPage() {
       {!resume && entryMode === 'discover' && (
         <BeginnerCareerStarter
           onUseUploadFlow={() => setEntryMode('upload')}
-          onSavedTrack={(text) => setFeedback({ tone: 'success', text })}
+          onSavedTrack={({ message, track }) => {
+            setSelectedBeginnerTrack(track);
+            setEntryMode('upload');
+            setFeedback({ tone: 'success', text: message });
+          }}
           onError={(text) => setFeedback({ tone: 'error', text })}
         />
       )}
@@ -475,7 +485,65 @@ export default function ResumeUploadPage() {
               {resume ? 'Current profile snapshot' : 'Starter resume guidance'}
             </h2>
             {!resume ? (
-              entryMode === 'discover' ? (
+              selectedBeginnerTrack ? (
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-border bg-white/70 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-secondary">
+                          Saved beginner path
+                        </p>
+                        <p className="mt-2 text-lg font-semibold text-primary">
+                          {selectedBeginnerTrack.name}
+                        </p>
+                        <p className="mt-2 text-sm leading-6 text-secondary">
+                          {selectedBeginnerTrack.fitSummary}
+                        </p>
+                      </div>
+                      <Badge variant="secondary">Path saved</Badge>
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-border bg-white/70 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-secondary">
+                      Skills to include or start learning
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {selectedBeginnerTrack.starterSkills.map((skill) => (
+                        <span
+                          key={skill}
+                          className="rounded-full border border-border bg-white px-3 py-1 text-xs font-medium text-primary"
+                        >
+                          {skill}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-border bg-white/70 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-secondary">
+                      First resume checklist
+                    </p>
+                    <ul className="mt-3 space-y-2 text-sm text-secondary">
+                      {selectedBeginnerTrack.resumeSections.map((section) => (
+                        <li key={section}>{section}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    <Link href={`/roadmaps?focus=${selectedBeginnerTrack.id}`}>
+                      <Button variant="outline">Open recommended roadmaps</Button>
+                    </Link>
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        setSelectedBeginnerTrack(null);
+                        setEntryMode('discover');
+                      }}
+                    >
+                      Change path
+                    </Button>
+                  </div>
+                </div>
+              ) : entryMode === 'discover' ? (
                 <div className="space-y-4">
                   <div className="rounded-2xl border border-border bg-white/70 p-4">
                     <p className="text-xs font-semibold uppercase tracking-[0.14em] text-secondary">

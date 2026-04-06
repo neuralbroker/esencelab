@@ -234,6 +234,7 @@ export interface StudentResource {
   skills: string[];
   roleIds: string[];
   whyItHelps: string;
+  supportFocus?: 'learn' | 'practice' | 'build' | 'interview_prep';
   branchTags?: string[];
   recommendedYears?: string[];
   roadmapSource?: string;

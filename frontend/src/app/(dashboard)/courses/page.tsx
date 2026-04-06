@@ -6,9 +6,9 @@
  * This page lists learning resources and recommended courses that support the
  * student skill-gap and roadmap workflows.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import api from '@/lib/api';
-import { Course } from '@/types';
+import { Course, StudentResource } from '@/types';
 import Card from '@/components/Card';
 import Badge from '@/components/Badge';
 import Button from '@/components/Button';
@@ -17,6 +17,7 @@ import { GraduationCap, ExternalLink, User, Star, BookOpen } from 'lucide-react'
 import { Skeleton } from '@/components/Skeleton';
 import { motion } from 'framer-motion';
 import { getReadableErrorMessage } from '@/lib/dashboardApi';
+import { getResourceCatalog } from '@/lib/studentResources';
 import { useRoleAccess } from '@/lib/useRoleAccess';
 
 export default function CoursesPage() {
@@ -24,6 +25,7 @@ export default function CoursesPage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const fallbackResources = useMemo(() => getResourceCatalog(), []);
 
   useEffect(() => {
     if (!hasAllowedRole) return;
@@ -64,8 +66,8 @@ export default function CoursesPage() {
     <div className="layout-container section-spacing space-y-10 max-w-6xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-primary mb-2">Learning Courses</h1>
-          <p className="text-base text-secondary">Upskill with curated courses to bridge your skill gaps.</p>
+          <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-primary mb-2">Learning Resources</h1>
+          <p className="text-base text-secondary">Use trusted resources to strengthen your roadmap, projects, and interview readiness.</p>
         </div>
       </div>
 
@@ -139,15 +141,83 @@ export default function CoursesPage() {
           ))}
         </motion.div>
       ) : (
-        <Card hoverable={false} className="text-center py-16 flex flex-col items-center">
-          <div className="w-16 h-16 bg-accent-soft rounded-full flex items-center justify-center mb-6">
-            <GraduationCap className="w-8 h-8 text-accent" />
-          </div>
-          <h3 className="text-xl font-medium text-primary mb-2">No courses available</h3>
-          <p className="text-secondary">Check back later for new curated learning materials.</p>
-        </Card>
+        <div className="space-y-6">
+          <Card hoverable={false} className="flex flex-col items-center py-12 text-center">
+            <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-accent-soft">
+              <GraduationCap className="h-8 w-8 text-accent" />
+            </div>
+            <h3 className="mb-2 text-xl font-medium text-primary">Using the trusted resource library instead</h3>
+            <p className="max-w-2xl text-secondary">
+              There are no admin-curated course records right now, so Esencelab is showing the built-in trusted external resource library.
+            </p>
+          </Card>
+
+          <motion.div
+            className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3"
+            initial="hidden"
+            animate="visible"
+            variants={{
+              hidden: { opacity: 0 },
+              visible: { opacity: 1, transition: { staggerChildren: 0.04 } },
+            }}
+          >
+            {fallbackResources.map((resource) => (
+              <motion.div
+                key={resource.id}
+                variants={{ hidden: { opacity: 0, scale: 0.97 }, visible: { opacity: 1, scale: 1 } }}
+              >
+                <ResourceCard resource={resource} />
+              </motion.div>
+            ))}
+          </motion.div>
+        </div>
       )}
     </div>
+  );
+}
+
+function ResourceCard({ resource }: { resource: StudentResource }) {
+  return (
+    <Card hoverable className="flex h-full flex-col p-6">
+      <div className="h-32 rounded-2xl border border-border bg-accent-soft mb-6 flex items-center justify-center">
+        <BookOpen className="h-10 w-10 text-accent/80" />
+      </div>
+
+      <div>
+        <h3 className="mb-2 line-clamp-2 text-lg font-semibold text-primary" title={resource.title}>
+          {resource.title}
+        </h3>
+        <p className="mb-5 line-clamp-3 text-sm text-secondary">{resource.description}</p>
+      </div>
+
+      <div className="mb-6 flex flex-wrap gap-2 mt-auto">
+        {resource.skills.slice(0, 3).map((skill) => (
+          <Badge key={`${resource.id}-${skill}`} variant="secondary" className="px-2.5 py-1 font-normal">
+            {skill}
+          </Badge>
+        ))}
+        {resource.skills.length > 3 && (
+          <Badge variant="secondary" className="px-2.5 py-1 font-normal">
+            +{resource.skills.length - 3}
+          </Badge>
+        )}
+      </div>
+
+      <div className="mb-6 mt-auto flex items-center justify-between border-t border-border pt-4 text-sm text-secondary">
+        <div className="flex items-center">
+          <User className="mr-2 h-4 w-4" />
+          <span className="line-clamp-1">{resource.provider}</span>
+        </div>
+        <span className="font-medium capitalize">{resource.supportFocus?.replace('_', ' ') || resource.format.replace('_', ' ')}</span>
+      </div>
+
+      <a href={resource.url} target="_blank" rel="noopener noreferrer" className="mt-auto">
+        <Button variant="primary" className="w-full justify-center">
+          <span className="mr-2">Open Resource</span>
+          <ExternalLink className="h-4 w-4" />
+        </Button>
+      </a>
+    </Card>
   );
 }
 

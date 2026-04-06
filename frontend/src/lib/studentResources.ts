@@ -8,6 +8,7 @@
 import { StudentResource } from '@/types';
 
 const normalizeSkill = (value: string) => value.trim().toLowerCase();
+type StudentResourceFocus = NonNullable<StudentResource['supportFocus']>;
 
 const skillAliases: Record<string, string[]> = {
   'node.js': ['node.js', 'node', 'backend', 'api'],
@@ -58,8 +59,25 @@ const resourceCatalog: StudentResource[] = [
     skills: ['HTML', 'CSS', 'JavaScript', 'React', 'Responsive Design'],
     roleIds: ['frontend_developer'],
     whyItHelps: 'It gives students a clean progression path from browser basics to job-ready frontend work.',
+    supportFocus: 'learn',
     branchTags: ['CSE', 'IT', 'ECE'],
     recommendedYears: ['1st year', '2nd year', '3rd year'],
+    roadmapSource: 'roadmap.sh',
+  },
+  {
+    id: 'roadmap-frontend-projects',
+    title: 'roadmap.sh Frontend Projects',
+    provider: 'roadmap.sh',
+    url: 'https://roadmap.sh/frontend/projects',
+    description: 'A project list that turns frontend concepts into recruiter-visible portfolio work.',
+    format: 'reference',
+    level: 'beginner',
+    skills: ['HTML', 'CSS', 'JavaScript', 'React'],
+    roleIds: ['frontend_developer', 'full_stack_developer'],
+    whyItHelps: 'It gives students concrete build ideas instead of stopping at tutorials.',
+    supportFocus: 'build',
+    branchTags: ['CSE', 'IT', 'ECE'],
+    recommendedYears: ['2nd year', '3rd year', '4th year'],
     roadmapSource: 'roadmap.sh',
   },
   {
@@ -73,6 +91,7 @@ const resourceCatalog: StudentResource[] = [
     skills: ['HTML', 'CSS', 'JavaScript', 'Responsive Design'],
     roleIds: ['frontend_developer', 'full_stack_developer'],
     whyItHelps: 'It builds strong fundamentals before students move into frameworks and portfolio apps.',
+    supportFocus: 'learn',
     branchTags: ['CSE', 'IT', 'ECE'],
     recommendedYears: ['1st year', '2nd year'],
     isOfficial: true,
@@ -88,6 +107,7 @@ const resourceCatalog: StudentResource[] = [
     skills: ['React', 'JavaScript'],
     roleIds: ['frontend_developer', 'full_stack_developer'],
     whyItHelps: 'It maps directly to frontend interview expectations and project work.',
+    supportFocus: 'learn',
     branchTags: ['CSE', 'IT', 'ECE'],
     recommendedYears: ['2nd year', '3rd year'],
     isOfficial: true,
@@ -103,6 +123,7 @@ const resourceCatalog: StudentResource[] = [
     skills: ['TypeScript', 'JavaScript'],
     roleIds: ['frontend_developer', 'backend_developer', 'full_stack_developer'],
     whyItHelps: 'It helps students write safer, more professional code across the stack.',
+    supportFocus: 'learn',
     branchTags: ['CSE', 'IT', 'ECE'],
     recommendedYears: ['2nd year', '3rd year', '4th year'],
     isOfficial: true,
@@ -118,6 +139,7 @@ const resourceCatalog: StudentResource[] = [
     skills: ['Responsive Design', 'CSS'],
     roleIds: ['frontend_developer', 'full_stack_developer'],
     whyItHelps: 'It turns static layouts into mobile-friendly projects recruiters expect.',
+    supportFocus: 'practice',
     branchTags: ['CSE', 'IT', 'ECE'],
     recommendedYears: ['2nd year', '3rd year'],
   },
@@ -132,6 +154,23 @@ const resourceCatalog: StudentResource[] = [
     skills: ['Node.js', 'REST API', 'PostgreSQL', 'Docker', 'Git'],
     roleIds: ['backend_developer', 'full_stack_developer'],
     whyItHelps: 'It helps students understand how backend topics connect instead of learning them in isolation.',
+    supportFocus: 'learn',
+    branchTags: ['CSE', 'IT', 'ECE'],
+    recommendedYears: ['2nd year', '3rd year', '4th year'],
+    roadmapSource: 'roadmap.sh',
+  },
+  {
+    id: 'roadmap-backend-projects',
+    title: 'roadmap.sh Backend Projects',
+    provider: 'roadmap.sh',
+    url: 'https://roadmap.sh/backend/projects',
+    description: 'Backend-focused project ideas for APIs, auth, databases, and deployment practice.',
+    format: 'reference',
+    level: 'beginner',
+    skills: ['Node.js', 'REST API', 'PostgreSQL', 'Docker'],
+    roleIds: ['backend_developer', 'full_stack_developer'],
+    whyItHelps: 'It helps students prove backend skills with projects instead of just theory.',
+    supportFocus: 'build',
     branchTags: ['CSE', 'IT', 'ECE'],
     recommendedYears: ['2nd year', '3rd year', '4th year'],
     roadmapSource: 'roadmap.sh',
@@ -147,6 +186,7 @@ const resourceCatalog: StudentResource[] = [
     skills: ['Node.js', 'JavaScript'],
     roleIds: ['backend_developer', 'full_stack_developer'],
     whyItHelps: 'It builds the runtime foundation for backend JavaScript roles and API work.',
+    supportFocus: 'learn',
     branchTags: ['CSE', 'IT', 'ECE'],
     recommendedYears: ['2nd year', '3rd year'],
     isOfficial: true,
@@ -162,6 +202,7 @@ const resourceCatalog: StudentResource[] = [
     skills: ['Express', 'REST API', 'Node.js'],
     roleIds: ['backend_developer', 'full_stack_developer'],
     whyItHelps: 'It gives students a fast path to building interview-ready API projects.',
+    supportFocus: 'learn',
     branchTags: ['CSE', 'IT', 'ECE'],
     recommendedYears: ['2nd year', '3rd year'],
     isOfficial: true,
@@ -177,6 +218,7 @@ const resourceCatalog: StudentResource[] = [
     skills: ['SQL', 'PostgreSQL'],
     roleIds: ['backend_developer', 'data_analyst', 'full_stack_developer'],
     whyItHelps: 'It covers real querying skills used in both project work and interviews.',
+    supportFocus: 'learn',
     branchTags: ['CSE', 'IT', 'ECE', 'EEE'],
     recommendedYears: ['2nd year', '3rd year'],
     isOfficial: true,
@@ -192,6 +234,7 @@ const resourceCatalog: StudentResource[] = [
     skills: ['REST API', 'HTTP'],
     roleIds: ['backend_developer', 'frontend_developer', 'full_stack_developer'],
     whyItHelps: 'Understanding HTTP makes debugging API integrations much easier.',
+    supportFocus: 'learn',
     branchTags: ['CSE', 'IT', 'ECE'],
     recommendedYears: ['2nd year', '3rd year'],
   },
@@ -206,6 +249,7 @@ const resourceCatalog: StudentResource[] = [
     skills: ['Docker'],
     roleIds: ['backend_developer', 'full_stack_developer'],
     whyItHelps: 'Container skills make projects easier to ship and discuss in interviews.',
+    supportFocus: 'practice',
     branchTags: ['CSE', 'IT'],
     recommendedYears: ['3rd year', '4th year'],
     isOfficial: true,
@@ -221,6 +265,7 @@ const resourceCatalog: StudentResource[] = [
     skills: ['React', 'Node.js', 'SQL', 'Git', 'Docker'],
     roleIds: ['full_stack_developer'],
     whyItHelps: 'It helps students build a cohesive skill stack instead of isolated frontend and backend fragments.',
+    supportFocus: 'learn',
     branchTags: ['CSE', 'IT', 'ECE'],
     recommendedYears: ['3rd year', '4th year'],
     roadmapSource: 'roadmap.sh',
@@ -236,6 +281,7 @@ const resourceCatalog: StudentResource[] = [
     skills: ['Python'],
     roleIds: ['data_analyst', 'backend_developer'],
     whyItHelps: 'It gives a clean language base for analytics work, scripting, and automation.',
+    supportFocus: 'learn',
     branchTags: ['CSE', 'IT', 'ECE', 'EEE'],
     recommendedYears: ['1st year', '2nd year'],
     isOfficial: true,
@@ -251,6 +297,7 @@ const resourceCatalog: StudentResource[] = [
     skills: ['Pandas', 'Data Analysis', 'Python'],
     roleIds: ['data_analyst'],
     whyItHelps: 'It turns raw Python knowledge into real dataframe and analysis skills.',
+    supportFocus: 'practice',
     branchTags: ['CSE', 'IT', 'ECE', 'EEE'],
     recommendedYears: ['2nd year', '3rd year'],
     isOfficial: true,
@@ -266,6 +313,7 @@ const resourceCatalog: StudentResource[] = [
     skills: ['Data Visualization'],
     roleIds: ['data_analyst'],
     whyItHelps: 'It helps students demonstrate business-facing reporting skills, not only raw analysis code.',
+    supportFocus: 'practice',
     branchTags: ['CSE', 'IT', 'ECE', 'EEE'],
     recommendedYears: ['2nd year', '3rd year', '4th year'],
     isOfficial: true,
@@ -281,6 +329,7 @@ const resourceCatalog: StudentResource[] = [
     skills: ['Statistics'],
     roleIds: ['data_analyst'],
     whyItHelps: 'It strengthens the reasoning behind analysis work, not just the tooling.',
+    supportFocus: 'learn',
     branchTags: ['CSE', 'IT', 'ECE', 'EEE'],
     recommendedYears: ['1st year', '2nd year'],
   },
@@ -295,9 +344,71 @@ const resourceCatalog: StudentResource[] = [
     skills: ['Python', 'SQL', 'Data Analysis', 'Statistics', 'Data Visualization'],
     roleIds: ['data_analyst'],
     whyItHelps: 'It gives students a placement-oriented sequence instead of random analytics tutorials.',
+    supportFocus: 'learn',
     branchTags: ['CSE', 'IT', 'ECE', 'EEE'],
     recommendedYears: ['2nd year', '3rd year', '4th year'],
     roadmapSource: 'roadmap.sh',
+  },
+  {
+    id: 'roadmap-data-projects',
+    title: 'roadmap.sh Data Analyst Projects',
+    provider: 'roadmap.sh',
+    url: 'https://roadmap.sh/data-analyst/projects',
+    description: 'Project ideas for dashboards, reporting, SQL analysis, and business-style case work.',
+    format: 'reference',
+    level: 'beginner',
+    skills: ['Data Analysis', 'SQL', 'Data Visualization'],
+    roleIds: ['data_analyst'],
+    whyItHelps: 'It turns learning into case-study style projects students can discuss in interviews.',
+    supportFocus: 'build',
+    branchTags: ['CSE', 'IT', 'ECE', 'EEE'],
+    recommendedYears: ['2nd year', '3rd year', '4th year'],
+    roadmapSource: 'roadmap.sh',
+  },
+  {
+    id: 'github-skills',
+    title: 'GitHub Skills',
+    provider: 'GitHub',
+    url: 'https://skills.github.com/',
+    description: 'Short interactive labs for Git, GitHub, markdown, collaboration, and repository workflows.',
+    format: 'hands_on',
+    level: 'beginner',
+    skills: ['Git', 'GitHub', 'Version Control'],
+    roleIds: ['frontend_developer', 'backend_developer', 'full_stack_developer', 'data_analyst'],
+    whyItHelps: 'It gives students hands-on practice with the workflow they will need for projects and placements.',
+    supportFocus: 'practice',
+    branchTags: ['CSE', 'IT', 'ECE', 'EEE'],
+    recommendedYears: ['1st year', '2nd year', '3rd year', '4th year'],
+  },
+  {
+    id: 'leetcode-core',
+    title: 'LeetCode Practice',
+    provider: 'LeetCode',
+    url: 'https://leetcode.com/problemset/',
+    description: 'Problem-solving practice for coding rounds, patterns, and interview revision.',
+    format: 'hands_on',
+    level: 'all_levels',
+    skills: ['Problem Solving', 'Algorithms', 'Data Structures'],
+    roleIds: ['frontend_developer', 'backend_developer', 'full_stack_developer', 'data_analyst'],
+    whyItHelps: 'It supports interview preparation once students have the basics in place.',
+    supportFocus: 'interview_prep',
+    branchTags: ['CSE', 'IT', 'ECE', 'EEE'],
+    recommendedYears: ['2nd year', '3rd year', '4th year'],
+  },
+  {
+    id: 'hackerrank-sql',
+    title: 'HackerRank SQL Practice',
+    provider: 'HackerRank',
+    url: 'https://www.hackerrank.com/domains/sql',
+    description: 'Structured SQL exercises that help students move from reading queries to writing them under pressure.',
+    format: 'hands_on',
+    level: 'beginner',
+    skills: ['SQL', 'PostgreSQL', 'Data Analysis'],
+    roleIds: ['backend_developer', 'full_stack_developer', 'data_analyst'],
+    whyItHelps: 'It improves database confidence quickly for both placement tests and real projects.',
+    supportFocus: 'practice',
+    branchTags: ['CSE', 'IT', 'ECE', 'EEE'],
+    recommendedYears: ['2nd year', '3rd year', '4th year'],
   },
   {
     id: 'arduino-learn',
@@ -310,6 +421,7 @@ const resourceCatalog: StudentResource[] = [
     skills: ['C Programming', 'Microcontrollers', 'Embedded C', 'IoT'],
     roleIds: ['embedded_systems_engineer', 'electronics_communication_engineer'],
     whyItHelps: 'It gives ECE and EEE students a practical entry point into device projects and embedded thinking.',
+    supportFocus: 'practice',
     branchTags: ['ECE', 'EEE', 'CSE'],
     recommendedYears: ['1st year', '2nd year', '3rd year'],
     isOfficial: true,
@@ -325,6 +437,7 @@ const resourceCatalog: StudentResource[] = [
     skills: ['Embedded C', 'RTOS', 'Microcontrollers', 'IoT'],
     roleIds: ['embedded_systems_engineer', 'electronics_communication_engineer'],
     whyItHelps: 'It helps students move from hobby prototyping into structured firmware development.',
+    supportFocus: 'practice',
     branchTags: ['ECE', 'EEE', 'CSE'],
     recommendedYears: ['2nd year', '3rd year', '4th year'],
     isOfficial: true,
@@ -340,6 +453,7 @@ const resourceCatalog: StudentResource[] = [
     skills: ['Circuit Analysis', 'Analog Electronics'],
     roleIds: ['electronics_communication_engineer', 'electrical_core_engineer'],
     whyItHelps: 'It turns circuit theory into simulation-backed understanding and project evidence.',
+    supportFocus: 'practice',
     branchTags: ['ECE', 'EEE'],
     recommendedYears: ['2nd year', '3rd year'],
     isOfficial: true,
@@ -355,10 +469,26 @@ const resourceCatalog: StudentResource[] = [
     skills: ['Digital Electronics', 'Signals and Systems', 'Communication Systems', 'Microcontrollers'],
     roleIds: ['electronics_communication_engineer', 'embedded_systems_engineer', 'electrical_core_engineer'],
     whyItHelps: 'It gives Indian engineering students semester-style high-trust learning from a familiar academic platform.',
+    supportFocus: 'learn',
     branchTags: ['ECE', 'EEE'],
     recommendedYears: ['1st year', '2nd year', '3rd year', '4th year'],
     roadmapSource: 'SWAYAM NPTEL',
     isOfficial: true,
+  },
+  {
+    id: 'arduino-project-hub',
+    title: 'Arduino Project Hub',
+    provider: 'Arduino',
+    url: 'https://projecthub.arduino.cc/',
+    description: 'Real embedded and electronics projects students can adapt for mini projects and final-year demos.',
+    format: 'hands_on',
+    level: 'beginner',
+    skills: ['Microcontrollers', 'IoT', 'Embedded C'],
+    roleIds: ['embedded_systems_engineer', 'electronics_communication_engineer', 'electrical_core_engineer'],
+    whyItHelps: 'It gives students project proof, not just notes and theory.',
+    supportFocus: 'build',
+    branchTags: ['ECE', 'EEE'],
+    recommendedYears: ['2nd year', '3rd year', '4th year'],
   },
   {
     id: 'scilab-tutorials',
@@ -371,6 +501,7 @@ const resourceCatalog: StudentResource[] = [
     skills: ['MATLAB', 'Control Systems'],
     roleIds: ['electrical_core_engineer', 'electronics_communication_engineer'],
     whyItHelps: 'It gives students a practical path for simulation and control work even without expensive licensed tools.',
+    supportFocus: 'practice',
     branchTags: ['EEE', 'ECE'],
     recommendedYears: ['2nd year', '3rd year', '4th year'],
   },
@@ -382,12 +513,19 @@ const resourceMatchesSkill = (resource: StudentResource, skill: string) => {
   return resource.skills.some((entry) => aliases.includes(normalizeSkill(entry)));
 };
 
+const resolveSupportFocus = (resource: StudentResource): StudentResourceFocus => {
+  if (resource.supportFocus) return resource.supportFocus;
+  if (resource.format === 'hands_on') return 'practice';
+  return 'learn';
+};
+
 const scoreResource = (resource: StudentResource, roleId: string, missingSkills: string[]) => {
   let score = 0;
   if (resource.roleIds.includes(roleId)) score += 8;
   if (resource.level === 'beginner') score += 2;
   if (resource.format === 'official_docs' || resource.format === 'guided_course') score += 2;
   if (resource.isOfficial) score += 2;
+  if (resolveSupportFocus(resource) === 'build') score += 1;
   for (const skill of missingSkills) {
     if (resourceMatchesSkill(resource, skill)) score += 5;
   }
@@ -421,6 +559,32 @@ export const getSkillGapResources = (roleId: string, missingSkills: string[], li
 
 export const getTopResourceRecommendation = (roleId: string, missingSkills: string[]) => {
   return getSkillGapResources(roleId, missingSkills, 1)[0] || null;
+};
+
+export const getSupportPlanResources = (roleId: string, missingSkills: string[]) => {
+  const rankedResources = getSkillGapResources(roleId, missingSkills, resourceCatalog.length);
+
+  const pick = (focus: StudentResourceFocus, limit = 2) => {
+    const primary = rankedResources.filter((resource) => resolveSupportFocus(resource) === focus);
+    if (primary.length >= limit) return primary.slice(0, limit);
+
+    const fallback = rankedResources.filter((resource) => {
+      const resourceFocus = resolveSupportFocus(resource);
+      if (resourceFocus === focus) return false;
+      if (focus === 'build') return resourceFocus === 'practice' || resource.roadmapSource === 'roadmap.sh';
+      if (focus === 'interview_prep') return resourceFocus === 'practice';
+      return resourceFocus === 'learn';
+    });
+
+    return uniqueById([...primary, ...fallback]).slice(0, limit);
+  };
+
+  return {
+    learn: pick('learn'),
+    practice: pick('practice'),
+    build: pick('build'),
+    interviewPrep: pick('interview_prep'),
+  };
 };
 
 export const getResourceCatalog = () => resourceCatalog;

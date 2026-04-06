@@ -7,8 +7,10 @@
  * latest stored resume insights for the signed-in student.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   AlertCircle,
+  Compass,
   CheckCircle,
   FileText,
   Loader2,
@@ -21,6 +23,7 @@ import { Resume } from '@/types';
 import Card from '@/components/Card';
 import Button from '@/components/Button';
 import Badge from '@/components/Badge';
+import BeginnerCareerStarter from '@/components/BeginnerCareerStarter';
 import Loading from '@/components/Loading';
 import { Skeleton } from '@/components/Skeleton';
 import {
@@ -32,6 +35,7 @@ import {
 import { useRoleAccess } from '@/lib/useRoleAccess';
 
 type FeedbackTone = 'success' | 'error' | 'info';
+type EntryMode = 'upload' | 'discover';
 
 interface FeedbackState {
   tone: FeedbackTone;
@@ -69,6 +73,7 @@ const formatEducationItem = (item: Record<string, any>) => {
 };
 
 export default function ResumeUploadPage() {
+  const searchParams = useSearchParams();
   const { hasAllowedRole, isCheckingAccess } = useRoleAccess({ allowedRoles: ['student'] });
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -77,6 +82,7 @@ export default function ResumeUploadPage() {
   const [dragActive, setDragActive] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const [loading, setLoading] = useState(true);
+  const [entryMode, setEntryMode] = useState<EntryMode>('upload');
 
   const fetchResume = useCallback(async () => {
     try {
@@ -96,6 +102,11 @@ export default function ResumeUploadPage() {
     if (!hasAllowedRole) return;
     void fetchResume();
   }, [fetchResume, hasAllowedRole]);
+
+  useEffect(() => {
+    if (resume) return;
+    setEntryMode(searchParams.get('mode') === 'discover' ? 'discover' : 'upload');
+  }, [resume, searchParams]);
 
   const validatePdf = useCallback((candidate: File) => {
     const isPdf =
@@ -240,11 +251,14 @@ export default function ResumeUploadPage() {
               </Badge>
               <div>
                 <h1 className="text-3xl font-bold tracking-tight text-primary md:text-4xl">
-                  Upload your resume and review the extracted profile.
+                  {resume
+                    ? 'Upload your resume and review the extracted profile.'
+                    : 'Choose your starting point for placement preparation.'}
                 </h1>
                 <p className="mt-3 max-w-2xl text-base text-secondary">
-                  This is the source for your career recommendations, role match insights,
-                  and recruiter visibility. Use a clean text-based PDF for the best results.
+                  {resume
+                    ? 'This is the source for your career recommendations, role match insights, and recruiter visibility. Use a clean text-based PDF for the best results.'
+                    : 'If you already have a resume, upload it normally. If you are just starting out, discover a likely-fit domain first and build your first resume with the right structure.'}
                 </p>
               </div>
             </div>
@@ -279,15 +293,66 @@ export default function ResumeUploadPage() {
         </Card>
 
         <Card hoverable={false} className="p-8">
-          <div className="space-y-4">
-            <h2 className="text-xl font-semibold text-primary">Before you upload</h2>
-            <div className="space-y-3 text-sm text-secondary">
-              <p>Use PDF format only.</p>
-              <p>Keep the file under 5 MB.</p>
-              <p>Prefer selectable text over scanned image PDFs.</p>
-              <p>Include skills, education, and project or internship details.</p>
+          {resume ? (
+            <div className="space-y-4">
+              <h2 className="text-xl font-semibold text-primary">Before you upload</h2>
+              <div className="space-y-3 text-sm text-secondary">
+                <p>Use PDF format only.</p>
+                <p>Keep the file under 5 MB.</p>
+                <p>Prefer selectable text over scanned image PDFs.</p>
+                <p>Include skills, education, and project or internship details.</p>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="space-y-5">
+              <div>
+                <h2 className="text-xl font-semibold text-primary">How would you like to start?</h2>
+                <p className="mt-2 text-sm text-secondary">
+                  Keep the existing upload flow if you already have a resume. Use the beginner path only if you are still figuring out your domain.
+                </p>
+              </div>
+              <div className="grid gap-3">
+                <button
+                  type="button"
+                  onClick={() => setEntryMode('upload')}
+                  className={`rounded-2xl border p-4 text-left transition ${
+                    entryMode === 'upload'
+                      ? 'border-primary bg-white shadow-sm'
+                      : 'border-border bg-white/70 hover:bg-white'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <UploadCloud className="mt-0.5 h-5 w-5 text-primary" />
+                    <div>
+                      <p className="font-semibold text-primary">I already have a resume</p>
+                      <p className="mt-1 text-sm text-secondary">
+                        Upload your PDF and continue with the existing Esencelab workflow.
+                      </p>
+                    </div>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEntryMode('discover')}
+                  className={`rounded-2xl border p-4 text-left transition ${
+                    entryMode === 'discover'
+                      ? 'border-primary bg-white shadow-sm'
+                      : 'border-border bg-white/70 hover:bg-white'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <Compass className="mt-0.5 h-5 w-5 text-primary" />
+                    <div>
+                      <p className="font-semibold text-primary">I am new and need direction</p>
+                      <p className="mt-1 text-sm text-secondary">
+                        Discover a likely domain, then build a fresher-friendly resume around that path.
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              </div>
+            </div>
+          )}
         </Card>
       </section>
 
@@ -310,6 +375,14 @@ export default function ResumeUploadPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {!resume && entryMode === 'discover' && (
+        <BeginnerCareerStarter
+          onUseUploadFlow={() => setEntryMode('upload')}
+          onSavedTrack={(text) => setFeedback({ tone: 'success', text })}
+          onError={(text) => setFeedback({ tone: 'error', text })}
+        />
+      )}
 
       <section className="grid gap-6 xl:grid-cols-[1.05fr,0.95fr]">
         <Card hoverable={false} className="p-8">
@@ -398,12 +471,33 @@ export default function ResumeUploadPage() {
 
         <Card hoverable={false} className="p-8">
           <div className="space-y-4">
-            <h2 className="text-xl font-semibold text-primary">Current profile snapshot</h2>
+            <h2 className="text-xl font-semibold text-primary">
+              {resume ? 'Current profile snapshot' : 'Starter resume guidance'}
+            </h2>
             {!resume ? (
-              <p className="text-sm text-secondary">
-                No resume uploaded yet. Once you upload one, this page will show your
-                parsed contact details, summary, skills, and extracted experience.
-              </p>
+              entryMode === 'discover' ? (
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-border bg-white/70 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-secondary">
+                      What your first resume should include
+                    </p>
+                    <ul className="mt-3 space-y-2 text-sm text-secondary">
+                      <li>One clean page with education, skills, projects, and links.</li>
+                      <li>Projects should highlight your contribution, tools, and the result.</li>
+                      <li>Only list technologies you can explain clearly.</li>
+                      <li>Upload your first version here once it is ready.</li>
+                    </ul>
+                  </div>
+                  <div className="rounded-2xl border border-border bg-white/70 p-4 text-sm leading-6 text-secondary">
+                    The normal Esencelab resume-analysis flow will continue exactly as usual after you upload your first draft.
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-secondary">
+                  No resume uploaded yet. Once you upload one, this page will show your
+                  parsed contact details, summary, skills, and extracted experience.
+                </p>
+              )
             ) : hasParsedContent ? (
               <>
                 <div className="rounded-2xl border border-border bg-white/70 p-4">

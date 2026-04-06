@@ -113,7 +113,7 @@ export default function UsersPage() {
 
   return (
     <div className="layout-container section-spacing space-y-8 max-w-7xl mx-auto">
-      <div className="space-y-2">
+      <div className="max-w-3xl space-y-2">
         <h1 className="text-3xl font-bold tracking-tight text-primary">User Management</h1>
         <p className="text-secondary">Search accounts, adjust access, and keep the platform healthy.</p>
       </div>
@@ -124,8 +124,8 @@ export default function UsersPage() {
         </Card>
       )}
 
-      <Card hoverable={false}>
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5 mb-5">
+      <Card hoverable={false} className="space-y-5 p-5 sm:p-6">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
           <div className="relative lg:col-span-2">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-secondary w-4 h-4" />
             <input
@@ -171,7 +171,7 @@ export default function UsersPage() {
 
         {users.length > 0 ? (
           <div className="space-y-4">
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto rounded-2xl border border-border">
               <table className="w-full min-w-[920px]">
                 <thead>
                   <tr className="border-b border-gray-200">
@@ -209,9 +209,7 @@ export default function UsersPage() {
                       <td className="py-3 px-4">
                         <button
                           onClick={() => handleToggleStatus(entry.id, !!entry.isActive)}
-                          className={`px-2 py-1 rounded text-xs font-medium ${
-                            entry.isActive ? 'bg-gray-200 text-gray-800' : 'bg-gray-200 text-gray-800'
-                          }`}
+                          className="min-h-[36px] rounded px-3 py-1 text-xs font-medium text-gray-800 transition hover:bg-gray-100"
                         >
                           {entry.isActive ? 'Active' : 'Inactive'}
                         </button>
@@ -234,7 +232,7 @@ export default function UsersPage() {
               </table>
             </div>
 
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-secondary">
                 Showing {pageStart}-{pageEnd} of {meta.total}
               </p>

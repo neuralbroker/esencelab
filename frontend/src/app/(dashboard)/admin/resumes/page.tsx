@@ -103,7 +103,7 @@ export default function AdminResumesPage() {
 
   return (
     <div className="layout-container section-spacing space-y-8 max-w-7xl mx-auto">
-      <div className="space-y-2">
+      <div className="max-w-3xl space-y-2">
         <h1 className="text-3xl font-bold tracking-tight text-primary">Resume Monitoring</h1>
         <p className="text-secondary">Review parsing quality, inspect flagged uploads, and moderate student resumes.</p>
       </div>
@@ -133,8 +133,8 @@ export default function AdminResumesPage() {
         </Card>
       </section>
 
-      <Card hoverable={false}>
-        <div className="grid gap-3 md:grid-cols-4 mb-5">
+      <Card hoverable={false} className="space-y-5 p-5 sm:p-6">
+        <div className="grid gap-3 md:grid-cols-4">
           <input
             type="text"
             value={search}
@@ -162,7 +162,7 @@ export default function AdminResumesPage() {
           </label>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto rounded-2xl border border-border">
           <table className="w-full min-w-[980px]">
             <thead>
               <tr className="border-b border-border">
@@ -202,7 +202,7 @@ export default function AdminResumesPage() {
                     {new Date(resume.updatedAt || resume.createdAt).toLocaleDateString()}
                   </td>
                   <td className="py-3 px-4">
-                    <div className="flex items-center justify-end gap-2">
+                    <div className="flex flex-wrap items-center justify-end gap-2">
                       <Button size="sm" variant="ghost" onClick={() => handleModeration(resume.id, 'clean')}>
                         Clean
                       </Button>
@@ -230,7 +230,10 @@ export default function AdminResumesPage() {
           </table>
         </div>
 
-        <div className="mt-4 flex items-center justify-end gap-2">
+        <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:items-center sm:justify-end">
+          <p className="text-sm text-secondary sm:mr-auto">
+            Showing {records.length} resume{records.length === 1 ? '' : 's'} on this page
+          </p>
           <Button
             size="sm"
             variant="outline"

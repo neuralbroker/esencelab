@@ -52,6 +52,7 @@ import {
   uploadResume,
 } from '@/lib/dashboardApi';
 import {
+  getSupportPlanResources,
   getRoleStarterResources,
   getSkillGapResources,
   getTopResourceRecommendation,
@@ -272,6 +273,18 @@ export default function StudentUpskillingHub({
   const topResourceRecommendation = useMemo(() => {
     if (!overview?.roleId) return null;
     return getTopResourceRecommendation(overview.roleId, topMissingSkills);
+  }, [overview?.roleId, topMissingSkills]);
+
+  const supportPlanResources = useMemo(() => {
+    if (!overview?.roleId) {
+      return {
+        learn: [] as StudentResource[],
+        practice: [] as StudentResource[],
+        build: [] as StudentResource[],
+        interviewPrep: [] as StudentResource[],
+      };
+    }
+    return getSupportPlanResources(overview.roleId, topMissingSkills);
   }, [overview?.roleId, topMissingSkills]);
 
   const readiness = useMemo(() => {
@@ -577,59 +590,85 @@ export default function StudentUpskillingHub({
 
   if (!resume) {
     return (
-      <div className="layout-container section-spacing flex flex-col items-center justify-center min-h-[70vh]">
+      <div className="layout-container section-spacing flex min-h-[70vh] flex-col items-center justify-center">
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5 }}
-          className="w-full max-w-2xl"
+          className="w-full max-w-5xl"
         >
-          <div className="text-center mb-10">
-            <h2 className="text-3xl md:text-4xl font-serif font-semibold tracking-tight text-primary mb-3">
+          <div className="mb-10 text-center">
+            <h2 className="mb-3 text-3xl font-serif font-semibold tracking-tight text-primary md:text-4xl">
               Upload Your Resume
             </h2>
-            <p className="text-base text-secondary">Upload a PDF to generate career insights and role matching.</p>
+            <p className="mx-auto max-w-2xl text-base text-secondary">
+              Upload a PDF to generate career insights and role matching, or start with guided domain discovery if you are new and still exploring.
+            </p>
           </div>
 
-          <Card
-            hoverable={false}
-            className="border-dashed border-2 bg-transparent p-6 text-center transition-colors hover:bg-white/40 sm:p-8 md:p-12 flex flex-col items-center justify-center cursor-pointer"
-            onClick={() => !uploading && fileInputRef.current?.click()}
-          >
-            {uploading ? (
-              <div className="w-full max-w-sm space-y-4">
-                <div className="flex items-center justify-center gap-3 text-sm text-secondary">
-                  <Loader2 className="h-5 w-5 animate-spin text-accent" />
-                  <span>Analyzing your resume...</span>
+          <div className="grid gap-6 lg:grid-cols-[1.05fr,0.95fr]">
+            <Card
+              hoverable={false}
+              className="flex cursor-pointer flex-col items-center justify-center border-2 border-dashed bg-transparent p-6 text-center transition-colors hover:bg-white/40 sm:p-8 md:p-12"
+              onClick={() => !uploading && fileInputRef.current?.click()}
+            >
+              {uploading ? (
+                <div className="w-full max-w-sm space-y-4">
+                  <div className="flex items-center justify-center gap-3 text-sm text-secondary">
+                    <Loader2 className="h-5 w-5 animate-spin text-accent" />
+                    <span>Analyzing your resume...</span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-border">
+                    <div
+                      className="h-full bg-accent transition-all duration-300"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="h-2 overflow-hidden rounded-full bg-border">
-                  <div
-                    className="h-full bg-accent transition-all duration-300"
-                    style={{ width: `${uploadProgress}%` }}
-                  />
-                </div>
+              ) : (
+                <>
+                  <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-accent-soft text-accent">
+                    <UploadCloud className="h-8 w-8" />
+                  </div>
+                  <h3 className="mb-2 text-lg font-medium text-primary">I already have a resume</h3>
+                  <p className="mb-6 text-sm text-secondary">
+                    Upload a PDF up to {MAX_RESUME_FILE_SIZE_MB}MB and continue with the normal Esencelab flow.
+                  </p>
+                  <Button variant="primary">Browse Files</Button>
+                </>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf"
+                className="hidden"
+                onChange={(event) => {
+                  void processResumeUpload(event.target.files?.[0] || null);
+                  event.currentTarget.value = '';
+                }}
+              />
+            </Card>
+
+            <Card hoverable={false} className="space-y-5 p-6 sm:p-8">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-accent-soft text-accent">
+                <Compass className="h-7 w-7" />
               </div>
-            ) : (
-              <>
-                <div className="w-16 h-16 bg-accent-soft text-accent rounded-full flex items-center justify-center mb-6">
-                  <UploadCloud className="w-8 h-8" />
-                </div>
-                <h3 className="text-lg font-medium text-primary mb-2">Drag and drop your resume here</h3>
-                <p className="text-sm text-secondary mb-6">PDF files up to {MAX_RESUME_FILE_SIZE_MB}MB</p>
-                <Button variant="primary">Browse Files</Button>
-              </>
-            )}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf"
-              className="hidden"
-              onChange={(event) => {
-                void processResumeUpload(event.target.files?.[0] || null);
-                event.currentTarget.value = '';
-              }}
-            />
-          </Card>
+              <div className="space-y-2">
+                <h3 className="text-xl font-semibold text-primary">I am new and need help choosing a domain</h3>
+                <p className="text-sm leading-6 text-secondary">
+                  If you are a first-year student or still unsure about frontend, backend, data, ECE, or EEE paths, start with guided discovery before creating your first resume.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border bg-white/70 p-4 text-sm text-secondary">
+                Esencelab will suggest a likely-fit domain, starter skills, project ideas, and the resume sections to create first.
+              </div>
+              <Link href="/resume?mode=discover" className="inline-flex">
+                <Button variant="outline" className="min-h-[44px]">
+                  Start domain discovery
+                </Button>
+              </Link>
+            </Card>
+          </div>
 
           <AnimatePresence>
             {feedback && (
@@ -1096,14 +1135,14 @@ export default function StudentUpskillingHub({
           <Bot className="h-5 w-5 text-accent" />
           <h2 className="text-2xl font-serif text-primary">AI Career Coach</h2>
         </div>
-        <Card hoverable={false} className="p-6 space-y-4">
+        <Card hoverable={false} className="space-y-6 p-6">
           <div className="rounded-2xl border border-border bg-white/60 p-4 text-sm text-secondary">
             This coach uses your resume, roadmap, recommendations, and saved progress so the response is based on
             your actual student profile, not a generic prompt.
           </div>
-          <div className="grid gap-4 lg:grid-cols-[220px,1fr]">
+          <div className="grid gap-4 xl:grid-cols-[240px,1fr]">
             <div>
-              <label className="mb-1 block text-xs uppercase tracking-[0.12em] text-secondary">Feature</label>
+              <label className="mb-1.5 block text-xs uppercase tracking-[0.12em] text-secondary">Feature</label>
               <select
                 value={aiFeature}
                 onChange={(event) =>
@@ -1116,7 +1155,7 @@ export default function StudentUpskillingHub({
                       | 'study_plan'
                   )
                 }
-                className="w-full rounded-xl border border-border bg-white px-3 py-2 text-sm"
+                className="min-h-[44px] w-full rounded-xl border border-border bg-white px-3 py-2 text-sm"
               >
                 {aiCoachFeatures.map((entry) => (
                   <option key={entry.value} value={entry.value}>
@@ -1126,29 +1165,32 @@ export default function StudentUpskillingHub({
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs uppercase tracking-[0.12em] text-secondary">Prompt (optional)</label>
+              <label className="mb-1.5 block text-xs uppercase tracking-[0.12em] text-secondary">Prompt (optional)</label>
               <input
                 value={aiPrompt}
                 onChange={(event) => setAiPrompt(event.target.value)}
                 placeholder={aiPromptSuggestions[aiFeature][0]}
-                className="w-full rounded-xl border border-border bg-white px-3 py-2 text-sm"
+                className="min-h-[44px] w-full rounded-xl border border-border bg-white px-3 py-2 text-sm"
               />
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {aiPromptSuggestions[aiFeature].map((suggestion) => (
-              <button
-                key={suggestion}
-                type="button"
-                onClick={() => setAiPrompt(suggestion)}
-                className="rounded-full border border-border bg-white px-3 py-1.5 text-xs text-secondary transition hover:border-primary hover:text-primary"
-              >
-                {suggestion}
-              </button>
-            ))}
+          <div className="space-y-3 rounded-2xl border border-border bg-white/60 p-4">
+            <p className="text-xs uppercase tracking-[0.12em] text-secondary">Suggested prompts</p>
+            <div className="flex flex-wrap gap-2">
+              {aiPromptSuggestions[aiFeature].map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  onClick={() => setAiPrompt(suggestion)}
+                  className="rounded-full border border-border bg-white px-3 py-1.5 text-xs text-secondary transition hover:border-primary hover:text-primary"
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <Button isLoading={aiLoading} onClick={() => void handleRunAICoach()} className="rounded-full">
+            <Button isLoading={aiLoading} onClick={() => void handleRunAICoach()} className="min-h-[44px] rounded-full">
               Generate guidance
             </Button>
             {aiCoachResponse && (
@@ -1200,19 +1242,70 @@ export default function StudentUpskillingHub({
             <BookOpen className="h-5 w-5 text-accent" />
             <h2 className="text-2xl font-serif text-primary">Student Resource Library</h2>
           </div>
-          <Badge variant="secondary">Curated free resources from official and trusted sources</Badge>
+          <Badge variant="secondary">Resume-based support from trusted external resources</Badge>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {[
+            {
+              id: 'learn',
+              title: 'Learn now',
+              description: 'Start with structured explanations and official guidance.',
+              resources: supportPlanResources.learn,
+            },
+            {
+              id: 'practice',
+              title: 'Practice now',
+              description: 'Use guided exercises to turn theory into confidence.',
+              resources: supportPlanResources.practice,
+            },
+            {
+              id: 'build',
+              title: 'Build next',
+              description: 'Create something portfolio-ready so your resume improves.',
+              resources: supportPlanResources.build,
+            },
+            {
+              id: 'interview',
+              title: 'Prepare for interviews',
+              description: 'Sharpen problem solving and revision for hiring rounds.',
+              resources: supportPlanResources.interviewPrep,
+            },
+          ].map((group) => (
+            <Card key={group.id} hoverable={false} className="space-y-3 p-5">
+              <div>
+                <p className="text-sm font-semibold text-primary">{group.title}</p>
+                <p className="mt-1 text-sm text-secondary">{group.description}</p>
+              </div>
+              {group.resources[0] ? (
+                <a
+                  href={group.resources[0].url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block rounded-2xl border border-border bg-white/70 p-4 transition hover:bg-white"
+                >
+                  <p className="text-sm font-semibold text-primary">{group.resources[0].title}</p>
+                  <p className="mt-1 text-xs uppercase tracking-[0.12em] text-secondary">
+                    {group.resources[0].provider}
+                  </p>
+                </a>
+              ) : (
+                <div className="rounded-2xl border border-border bg-white/60 p-4 text-sm text-secondary">
+                  More support will appear as your missing skills become clearer.
+                </div>
+              )}
+            </Card>
+          ))}
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[1.2fr,0.8fr]">
           <Card hoverable={false} className="p-6 space-y-5">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-xs uppercase tracking-[0.12em] text-secondary">Best matches for your gaps</p>
                 <h3 className="text-xl font-serif text-primary">Start with these resources</h3>
               </div>
-              <Link href="/courses" className="text-sm font-semibold text-accent hover:underline">
-                Open courses page
-              </Link>
+              <span className="text-sm font-semibold text-secondary">Picked from your missing skills and target role</span>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">

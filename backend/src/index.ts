@@ -21,7 +21,6 @@ import crypto from 'crypto';
 import { createServer, Server } from 'http';
 import { Socket } from 'net';
 import { SupabaseStore } from './supabaseStore';
-import { buildDefaultCourses } from './defaultCourseCatalog';
 import {
   CAREER_ROLES,
   buildRecommendationExplanation,
@@ -4081,22 +4080,6 @@ const ensureBootstrapUsers = async () => {
   }
 };
 
-const ensureDefaultCourses = async () => {
-  const existingIds = new Set(db.courses.map((entry: any) => String(entry.id || '').trim()));
-  const existingUrls = new Set(
-    db.courses.map((entry: any) => String(entry.url || '').trim().toLowerCase()).filter(Boolean)
-  );
-
-  const defaultsToInsert = buildDefaultCourses().filter(
-    (entry) => !existingIds.has(entry.id) && !existingUrls.has(entry.url.toLowerCase())
-  );
-
-  for (const course of defaultsToInsert) {
-    db.courses.push(course);
-    await supabaseStore.upsertCourse(course);
-  }
-};
-
 const initializeRuntime = async () => {
   const bootstrap = await supabaseStore.bootstrap(db);
   if (bootstrap.mode === 'supabase' && bootstrap.loaded) {
@@ -4107,7 +4090,6 @@ const initializeRuntime = async () => {
     logEvent('info', 'runtime.bootstrap.memory_empty_store');
   }
 
-  await ensureDefaultCourses();
   await ensureBootstrapUsers();
 };
 

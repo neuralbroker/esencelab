@@ -141,6 +141,9 @@ export default function HomePage() {
             <p className="mt-5 max-w-[700px] text-base font-normal leading-[1.55] text-[#666666] sm:text-[1.5rem] sm:leading-[1.38] lg:text-[1.7rem]">
               Built for resume parsing, skill-gap analysis, and candidate ranking.
             </p>
+            <p className="mt-4 text-sm font-medium uppercase tracking-[0.18em] text-[#666666] sm:text-base">
+              From SNGCET, for SNGCET.
+            </p>
 
             <div className="mt-8 flex w-full flex-col items-stretch gap-3 sm:w-auto sm:flex-row sm:items-center sm:justify-center sm:gap-4">
               <Link href="/register" className={`${darkButtonClass} w-full sm:w-auto`}>
@@ -209,6 +212,9 @@ export default function HomePage() {
             </h2>
             <p className="mt-4 text-base text-[#5f5f5f] sm:text-[1.35rem] sm:leading-[1.4] lg:text-[1.5rem]">
               Turn resumes into clear insights, role-fit scores, and faster hiring decisions.
+            </p>
+            <p className="mt-4 text-sm italic text-[#666666] sm:text-base">
+              &quot;A clearer path from curiosity to career.&quot;
             </p>
             <div className="mt-7 flex flex-col items-center justify-center gap-4 sm:flex-row">
               <Link href="/register" className={darkButtonClass}>

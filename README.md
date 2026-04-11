@@ -2,7 +2,7 @@
 
 Esencelab is a full-stack AI-assisted hiring and career intelligence platform built around three role-based experiences:
 
-- Students upload resumes, measure readiness, identify skill gaps, follow learning plans, and track applications.
+- Students upload resumes, discover skill gaps, follow roadmaps and learning plans, and track applications.
 - Recruiters post jobs, rank candidates by fit, and review structured resume insights instead of screening manually.
 - Admins monitor users, resumes, applications, moderation flows, and platform health from a single control surface.
 
@@ -13,6 +13,7 @@ The project is split into a Next.js frontend, an Express API, and a FastAPI AI s
 ### Student module
 
 - Authentication, protected dashboard access, and profile management
+- Beginner onboarding with domain discovery and guided resume starting points
 - Resume upload, parsing, and structured profile extraction
 - Resume strength scoring and career readiness overview
 - Skill-gap analysis against target roles
@@ -62,20 +63,30 @@ Supabase/Postgres persistence
 | Backend | Node.js, Express, TypeScript, JWT, bcryptjs, multer, compression, helmet, rate limiting |
 | AI service | FastAPI, Python, pdfplumber, pypdf |
 | Data | Supabase/Postgres persistence with local in-memory runtime state |
-| Tooling | PowerShell run scripts, npm, TypeScript compiler, ESLint |
+| Tooling | PowerShell helper scripts, npm, TypeScript compiler, ESLint |
 
 ## Repository Layout
 
 ```text
 Esencelab/
-|- frontend/              # Next.js app
-|- backend/               # Express API and data-provider layer
-|- ai-service/            # FastAPI AI and resume processing service
-|- supabase/              # Supabase config and schema
-|- docs/                  # Build specs and implementation plans
-|- scripts/               # Deployment, smoke-test, and validation scripts
-|- SPEC.md                # Product and system specification
+|- frontend/                     # Next.js app
+|- backend/                      # Express API and data-provider layer
+|- ai-service/                   # FastAPI AI and resume processing service
+|- supabase/                     # Supabase config and schema
+|- render.yaml                   # Render service blueprint
+|- PROMPTS.md                    # Generic AI execution prompt library
+|- run-frontend-3100.ps1         # Local frontend launcher
+|- run-backend-3101.ps1          # Local backend launcher
+|- run-ai-3102.ps1               # Local AI launcher
 ```
+
+## Security Note
+
+No public demo credentials are documented in this repository.
+
+- Create local admin and recruiter users through backend bootstrap environment variables such as `INITIAL_ADMIN_*` and `INITIAL_RECRUITER_*`.
+- Create student accounts through the normal registration flow.
+- Do not commit or publish real passwords, demo login pairs, or production secrets in the README or any tracked file.
 
 ## Quick Start
 
@@ -85,190 +96,99 @@ Esencelab/
 - Python 3.11+ with `pip`
 - PowerShell on Windows
 
-The bundled scripts are optimized for Windows PowerShell. The fastest production-style validation flow is the direct deployment path below.
-
-### Production-style local run
-
-Copy the production env template, fill in real values, and start the stack:
-
-```powershell
-Copy-Item .\.env.production.example .\.env.production
-powershell -ExecutionPolicy Bypass -File .\scripts\direct-deploy.ps1 -EnvFile .env.production -InstallDeps -SmokeTest
-```
-
-Run again without reinstalling dependencies:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\direct-deploy.ps1 -EnvFile .env.production -SmokeTest
-```
-
-### Local URLs
-
-- Frontend: `http://localhost:3000`
-- Backend API: `http://localhost:3001/api`
-- AI service: `http://localhost:3002`
-
-## Live Deployment
-
-The repository now includes two production-ready deployment paths:
-
-- Direct process-based deployment without Docker
-- Container-based deployment with Docker Compose
-
-### Direct run
-
-Build and run the stack directly on the host machine:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\direct-deploy.ps1 -EnvFile .env.production -SmokeTest
-```
-
-That command:
-
-- builds frontend and backend in production mode
-- syntax-checks the AI service
-- starts `next start`, `node dist/index.js`, and `uvicorn`
-- runs the end-to-end smoke suite against the production-like stack
-
-### Direct run with live data
-
-For persistent data backed by Supabase:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\direct-live-data.ps1 -EnvFile .env.live-data
-```
-
-Fill in real Supabase values before running. The wrapper will stop if the env
-file is still using placeholder values.
-
-### Vercel deployment
-
-The stable Vercel setup for this repo uses three separate projects:
-
-- `frontend/` for the Next.js app
-- `backend/` for the Express API
-- `ai-service/` for the FastAPI AI service
-
-Use [VERCEL_DEPLOYMENT.md](C:/Dev/Projects/Esencelab/docs/VERCEL_DEPLOYMENT.md)
-for the exact env variables, project roots, and deploy order.
-
-### Docker path
-
-The container deployment assets are also included:
-
-- [docker-compose.production.yml](C:/Dev/Projects/Esencelab/docker-compose.production.yml)
-- [frontend/Dockerfile](C:/Dev/Projects/Esencelab/frontend/Dockerfile)
-- [backend/Dockerfile](C:/Dev/Projects/Esencelab/backend/Dockerfile)
-- [ai-service/Dockerfile](C:/Dev/Projects/Esencelab/ai-service/Dockerfile)
-- [.env.production.example](C:/Dev/Projects/Esencelab/.env.production.example)
-- [LIVE_DEPLOYMENT.md](C:/Dev/Projects/Esencelab/docs/LIVE_DEPLOYMENT.md)
-- [CODEBASE_GUIDE.md](C:/Dev/Projects/Esencelab/docs/CODEBASE_GUIDE.md)
-- [VERCEL_DEPLOYMENT.md](C:/Dev/Projects/Esencelab/docs/VERCEL_DEPLOYMENT.md)
-
-Quick production flow:
-
-```powershell
-Copy-Item .\.env.production.example .\.env.production
-docker compose --env-file .env.production -f .\docker-compose.production.yml up --build -d
-```
-
-Validate the production compose file before deploying:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\deployment-check.ps1 -EnvFile .env.production
-```
-
-Before deploying publicly:
-
-- Replace `JWT_SECRET`
-- Set `FRONTEND_URLS` to your real frontend domain
-- Set `AI_ALLOWED_ORIGINS` to your real frontend domain
-- Set the same strong `AI_INTERNAL_AUTH_TOKEN` in both `backend` and `ai-service`
-- Switch `DATA_PROVIDER=supabase` if you want persistent data
-
-## API Versioning And Contracts
-
-- The current public backend surface is the `/api/*` compatibility contract and should be treated as `v1`.
-- Any future breaking API changes should be introduced under `/api/v2/*` rather than changing existing `v1` payloads in place.
-- The AI service exposes a live OpenAPI/Swagger contract through FastAPI at `/docs` and `/openapi.json`.
-
-## Manual Development Setup
-
-### 1. Install dependencies
-
-```powershell
-cd .\frontend
-npm install
-```
-
-```powershell
-cd .\backend
-npm install
-```
-
-```powershell
-cd .\ai-service
-python -m pip install -r requirements.txt
-```
-
-### 2. Configure backend environment
-
-Use the env template as the base:
-
-```powershell
-Copy-Item .\backend\.env.example .\backend\.env
-```
-
-For the default local workflow, keep these values:
-
-```env
-PORT=3001
-AI_SERVICE_URL=http://localhost:3002
-FRONTEND_URL=http://localhost:3000
-DATA_PROVIDER=memory
-```
-
-### 3. Start each service
+### Install dependencies
 
 Frontend:
 
 ```powershell
 cd .\frontend
-npm run dev
+npm install
 ```
 
 Backend:
 
 ```powershell
 cd .\backend
-npm run dev
+npm install
 ```
 
 AI service:
 
 ```powershell
 cd .\ai-service
-python -m uvicorn app.main:app --host 0.0.0.0 --port 3002
+python -m pip install -r requirements.txt
 ```
+
+### Configure local environment
+
+Backend template:
+
+```powershell
+Copy-Item .\backend\.env.example .\backend\.env
+```
+
+Frontend template:
+
+```powershell
+Copy-Item .\frontend\.env.example .\frontend\.env.local
+```
+
+AI service template:
+
+```powershell
+Copy-Item .\ai-service\.env.example .\ai-service\.env
+```
+
+For the default local workflow, the root PowerShell launchers already use:
+
+```env
+FRONTEND=http://127.0.0.1:3100
+BACKEND=http://127.0.0.1:3101/api
+AI=http://127.0.0.1:3102
+DATA_PROVIDER=memory
+```
+
+### Run the local stack
+
+From the repo root:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\run-ai-3102.ps1
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\run-backend-3101.ps1
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\run-frontend-3100.ps1
+```
+
+### Local URLs
+
+- Frontend: `http://127.0.0.1:3100`
+- Backend API: `http://127.0.0.1:3101/api`
+- AI service: `http://127.0.0.1:3102`
 
 ## Environment Variables
 
 ### Backend
 
-Use [backend/.env.example](C:/Dev/Projects/Esencelab/backend/.env.example) as the starting point.
+Use [backend/.env.example](/C:/Dev/esencelab/backend/.env.example) as the starting point.
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `PORT` | No | API port, defaults to `3001` |
 | `JWT_SECRET` | Yes | JWT signing secret |
 | `AI_SERVICE_URL` | No | FastAPI base URL |
+| `AI_INTERNAL_AUTH_TOKEN` | Recommended | Shared backend-to-AI auth token |
 | `FRONTEND_URL` | No | Allowed frontend origin |
 | `FRONTEND_URLS` | Recommended for production | Comma-separated allowed frontend origins |
 | `TRUST_PROXY` | Recommended behind ingress | Enables correct proxy-aware request handling |
 | `DATA_PROVIDER` | Yes | `memory` for local-only mode, `supabase` for persistent mode |
 | `ALLOW_INSECURE_PASSWORD_RESET_TOKEN_RESPONSE` | No | Local-only reset token echo for test scripts |
-| `INITIAL_ADMIN_EMAIL` | Recommended for first hosted boot | Creates the first admin account if missing |
-| `INITIAL_ADMIN_PASSWORD` | Recommended for first hosted boot | Password for the first admin account |
+| `INITIAL_ADMIN_EMAIL` | Optional | Creates the first admin account if missing |
+| `INITIAL_ADMIN_PASSWORD` | Optional | Password for the first admin account |
 | `INITIAL_ADMIN_NAME` | No | Display name for the first admin account |
 | `INITIAL_RECRUITER_EMAIL` | Optional | Creates an initial recruiter account if missing |
 | `INITIAL_RECRUITER_PASSWORD` | Optional | Password for the initial recruiter account |
@@ -280,11 +200,12 @@ Use [backend/.env.example](C:/Dev/Projects/Esencelab/backend/.env.example) as th
 
 ### AI service
 
-Use [ai-service/.env.example](C:/Dev/Projects/Esencelab/ai-service/.env.example) for AI-specific deployment values.
+Use [ai-service/.env.example](/C:/Dev/esencelab/ai-service/.env.example) for AI-specific deployment values.
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `AI_ALLOWED_ORIGINS` | Recommended for production | Comma-separated origins allowed to call the AI service |
+| `AI_INTERNAL_AUTH_TOKEN` | Recommended | Shared backend-to-AI auth token |
 | `GROQ_API_KEY` | Optional | Enables the student AI coach using Groq |
 | `GROQ_MODEL` | Optional | Groq model name, defaults to `openai/gpt-oss-120b` |
 | `GROQ_REASONING_EFFORT` | Optional | Reasoning level for Groq models that support it |
@@ -293,23 +214,14 @@ Use [ai-service/.env.example](C:/Dev/Projects/Esencelab/ai-service/.env.example)
 
 ### Frontend
 
-Use [frontend/.env.example](C:/Dev/Projects/Esencelab/frontend/.env.example) for build-time frontend settings.
+Use [frontend/.env.example](/C:/Dev/esencelab/frontend/.env.example) for build-time frontend settings.
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `NEXT_PUBLIC_API_URL` | No | Public API base URL used by the browser |
 | `BACKEND_PROXY_TARGET` | If using same-domain proxy mode | Internal backend target for Next.js rewrites |
 | `AI_PROXY_TARGET` | If using same-domain proxy mode | Internal AI target for Next.js rewrites |
-
-PowerShell session variables:
-
-```powershell
-$env:GROQ_API_KEY="your_groq_api_key"
-$env:GROQ_MODEL="openai/gpt-oss-120b"
-$env:GROQ_REASONING_EFFORT="high"
-```
-
-If `GROQ_API_KEY` is not set, the AI coach falls back to local guidance logic instead of external completions.
+| `NEXT_PUBLIC_MAX_RESUME_FILE_SIZE_MB` | Optional | Client-side resume upload limit |
 
 ## Data Provider Modes
 
@@ -329,77 +241,77 @@ Required changes:
 
 1. Set `DATA_PROVIDER=supabase` in `backend/.env`.
 2. Configure `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.
-3. Apply [supabase-schema.sql](supabase/supabase-schema.sql).
+3. Apply [supabase/supabase-schema.sql](/C:/Dev/esencelab/supabase/supabase-schema.sql).
 
-## Validation and Testing
+## Deployment
 
-### Smoke test
+### Recommended hosted setup
 
-Starts from already-running services and verifies the core flows:
+This repo is currently designed to run best as:
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\local-smoke.ps1
-```
+- Frontend on Vercel
+- Backend on Render
+- AI service on Render
+- Database on Supabase
 
-Set these environment variables before running the smoke suite:
+Use these files as the starting point:
 
-```powershell
-$env:SMOKE_STUDENT_EMAIL="student@your-domain.com"
-$env:SMOKE_STUDENT_PASSWORD="..."
-$env:SMOKE_RECRUITER_EMAIL="recruiter@your-domain.com"
-$env:SMOKE_RECRUITER_PASSWORD="..."
-$env:SMOKE_ADMIN_EMAIL="admin@your-domain.com"
-$env:SMOKE_ADMIN_PASSWORD="..."
-```
+- [render.yaml](/C:/Dev/esencelab/render.yaml)
+- [frontend/vercel.json](/C:/Dev/esencelab/frontend/vercel.json)
+- [backend/vercel.json](/C:/Dev/esencelab/backend/vercel.json)
+- [ai-service/vercel.json](/C:/Dev/esencelab/ai-service/vercel.json)
 
-The smoke suite covers:
+### Container assets
 
-- Frontend, backend, and AI health checks
-- Student, recruiter, and admin authentication
-- Frontend route availability
-- Recommendations, career overview, roadmap, learning plan, and mock interview APIs
-- Recruiter job creation and candidate matching
-- Student application flow
-- Admin course and user management flows
-- Resume upload, retrieval, and deletion
-- Dashboard stats and AI skill extraction endpoints
+The repo also includes Dockerfiles for each service:
 
-Runs a wider set of feature checks on top of a running local stack:
+- [frontend/Dockerfile](/C:/Dev/esencelab/frontend/Dockerfile)
+- [backend/Dockerfile](/C:/Dev/esencelab/backend/Dockerfile)
+- [ai-service/Dockerfile](/C:/Dev/esencelab/ai-service/Dockerfile)
+
+## Validation And Testing
+
+### Static checks
+
+Frontend:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\full-feature-check.ps1
+cd .\frontend
+npm run build
 ```
 
-This goes beyond the normal smoke test and covers password reset, logout
-revocation, recruiter analytics, admin moderation, and deeper CRUD paths.
-
-### Full readiness check
-
-Runs static checks and runtime checks together:
+Backend:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\full-check.ps1
+cd .\backend
+npm run build
 ```
 
-Install dependencies as part of the run:
+AI service syntax check:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\full-check.ps1 -InstallDeps
+cd .\ai-service
+python -m py_compile .\app\main.py
 ```
 
-Keep services running after the checks:
+### Runtime checks
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\full-check.ps1 -KeepRunning
-```
+After starting the local stack, verify:
 
-`full-check.ps1` currently validates:
+- Frontend: [http://127.0.0.1:3100](http://127.0.0.1:3100)
+- Backend health: [http://127.0.0.1:3101/api/health](http://127.0.0.1:3101/api/health)
+- AI health: [http://127.0.0.1:3102/health](http://127.0.0.1:3102/health)
 
-- `frontend`: `npm run lint`
-- `frontend`: `npm run build`
-- `backend`: `npm run build`
-- `ai-service`: Python syntax compile
-- End-to-end runtime smoke tests
+Recommended manual workflow checks:
+
+- Student registration and login
+- Beginner onboarding and target-role save
+- Resume upload and parsed profile retrieval
+- Career overview, roadmap, learning plan, AI coach, and mock interview
+- Recruiter login and job creation
+- Student job visibility and application submission
+- Recruiter applicant visibility and status updates
+- Admin monitoring, users, and resume views
 
 ## API Overview
 
@@ -418,7 +330,7 @@ The backend currently exposes grouped endpoints for:
 - Admin monitoring: dashboard stats, application summary, monitoring, audit logs
 - Health: API health endpoint
 
-The main API implementation lives in [backend/src/index.ts](C:/Dev/Projects/Esencelab/backend/src/index.ts).
+The main API implementation lives in [backend/src/index.ts](/C:/Dev/esencelab/backend/src/index.ts).
 
 ## Frontend Surface
 
@@ -427,34 +339,22 @@ The frontend includes:
 - Public landing page
 - Login and registration
 - Shared dashboard shell
-- Student dashboard, resume, applications, courses, interview, and jobs pages
+- Student dashboard, resume, applications, courses, interview, jobs, and roadmaps
 - Recruiter applicants and job details pages
-- Admin resume review page
+- Admin resume review and user management pages
 
-The frontend app router lives under [frontend/src/app](C:/Dev/Projects/Esencelab/frontend/src/app).
+The frontend app router lives under [frontend/src/app](/C:/Dev/esencelab/frontend/src/app).
 
 ## Documentation
 
-- [MASTER_BUILD_SPEC.md](C:/Dev/Projects/Esencelab/docs/MASTER_BUILD_SPEC.md)
-- [CHUNKED_IMPLEMENTATION_PLAN.md](C:/Dev/Projects/Esencelab/docs/CHUNKED_IMPLEMENTATION_PLAN.md)
-- [STUDENT_AI_MODEL_PLAN.md](C:/Dev/Projects/Esencelab/docs/STUDENT_AI_MODEL_PLAN.md)
-- [LIVE_DEPLOYMENT.md](C:/Dev/Projects/Esencelab/docs/LIVE_DEPLOYMENT.md)
-- [VERCEL_DEPLOYMENT.md](C:/Dev/Projects/Esencelab/docs/VERCEL_DEPLOYMENT.md)
-- [SPEC.md](C:/Dev/Projects/Esencelab/SPEC.md)
-
-## AI Workflow
-
-Use these two root-level guides when working with AI coding and planning tools:
-
-- [PROMPTS.md](/C:/Dev/esencelab/PROMPTS.md) for a reusable engineering prompt library covering planning, build, testing, debugging, security, review, release, and maintenance work.
-- [ESENCELAB_EXECUTION_GUIDE.md](/C:/Dev/esencelab/ESENCELAB_EXECUTION_GUIDE.md) for Esencelab-specific workflows tailored to the current repo structure, role-based product flows, deployment setup, and competition prep.
+- [PROMPTS.md](/C:/Dev/esencelab/PROMPTS.md)
 
 ## Operational Notes
 
 - Local development can use `memory` mode, but hosted environments should use `supabase`.
 - The AI service is required for resume parsing and match-related flows.
 - JWT secrets and external API keys should be set through environment variables and never committed.
-- PowerShell scripts stop and restart ports `3000`, `3001`, and `3002` to keep the local stack predictable.
+- Use your own local users or bootstrap users through env vars; do not reintroduce public demo credentials into docs.
 
 ## Team
 

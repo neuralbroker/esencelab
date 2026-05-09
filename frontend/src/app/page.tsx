@@ -1,27 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type ComponentType } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  ArrowRight,
-  BarChart3,
-  Briefcase,
-  CheckCircle2,
-  FileText,
-  GraduationCap,
-  Lock,
-  Menu,
-  ShieldCheck,
-  Target,
-  Users,
-  X,
-} from "lucide-react";
 import { motion } from "framer-motion";
 import EsencelabLogo from "@/components/EsencelabLogo";
 import { useAuth } from "@/contexts/AuthContext";
-
-type Icon = ComponentType<{ className?: string }>;
 
 const navItems = [
   { label: "Product", href: "#product" },
@@ -31,87 +15,71 @@ const navItems = [
 ];
 
 const productPoints = [
-  "Parse resumes into structured profiles",
-  "Compare skills with roles and job requirements",
-  "Give students clear next steps",
-  "Help recruiters review candidates with context",
-  "Give admins visibility across the placement process",
+  "Parse resumes into structured student profiles",
+  "Compare skills with target roles and job requirements",
+  "Turn gaps into practical next steps",
+  "Give recruiters cleaner candidate summaries",
+  "Keep admin review and placement activity visible",
 ];
 
 const workflowSteps = [
   {
     step: "01",
-    title: "Upload the resume",
+    title: "Profile",
     description:
-      "Students add a resume. Esencelab extracts the useful details and turns them into a profile.",
+      "A resume becomes a structured profile with skills, education, experience, and projects.",
   },
   {
     step: "02",
-    title: "Find the gaps",
+    title: "Match",
     description:
-      "Skills are compared with target roles and posted jobs so the student can see what needs work.",
+      "The profile is compared with roles and jobs so strengths and gaps are easy to see.",
   },
   {
     step: "03",
-    title: "Move forward",
+    title: "Improve",
     description:
-      "Students follow a plan, recruiters review better candidate summaries, and admins track progress.",
+      "Students get a plan, recruiters review better summaries, and admins track the process.",
   },
 ];
 
-const roleCards: Array<{
-  title: string;
-  description: string;
-  icon: Icon;
-  bullets: string[];
-}> = [
+const roleCards = [
   {
     title: "Students",
     description:
-      "Know where you stand, what to improve, and how to prepare for the roles you want.",
-    icon: GraduationCap,
-    bullets: ["Resume parsing", "Skill gaps", "Learning plans"],
+      "Understand what is ready, what is missing, and what to work on next.",
+    details: ["Resume profile", "Skill gaps", "Learning plan"],
   },
   {
     title: "Recruiters",
     description:
-      "Post jobs, review applicants, and understand why a candidate may be a good fit.",
-    icon: Briefcase,
-    bullets: ["Job posting", "Candidate ranking", "Match details"],
+      "Review applicants with match context instead of reading every resume from scratch.",
+    details: ["Job posts", "Ranked applicants", "Match details"],
   },
   {
     title: "Admins",
     description:
       "Manage users, resumes, applications, moderation, and platform health from one place.",
-    icon: ShieldCheck,
-    bullets: ["User management", "Resume review", "Audit visibility"],
+    details: ["User control", "Resume review", "Audit view"],
   },
 ];
 
-const proofCards: Array<{
-  label: string;
-  value: string;
-  description: string;
-  icon: Icon;
-}> = [
+const proofCards = [
   {
     label: "Workspaces",
     value: "3",
     description: "Separate views for students, recruiters, and admins.",
-    icon: Users,
   },
   {
-    label: "Planning",
+    label: "Plans",
     value: "30/60",
     description: "Short learning plans that turn gaps into weekly work.",
-    icon: Target,
   },
   {
-    label: "Data",
+    label: "Record",
     value: "1",
     description:
       "A connected record of resumes, skills, jobs, and applications.",
-    icon: BarChart3,
   },
 ];
 
@@ -134,14 +102,25 @@ const faqs = [
   },
 ];
 
-const resumeSignals: Array<[string, number]> = [
-  ["Node.js", 92],
-  ["SQL", 86],
-  ["REST APIs", 78],
+const resumeSignals = [
+  { skill: "Node.js", score: 92 },
+  { skill: "SQL", score: 86 },
+  { skill: "REST APIs", score: 78 },
+];
+
+const candidates = [
+  { name: "Asha S.", role: "Backend Developer", match: "84", status: "Ready" },
+  {
+    name: "Harish K.",
+    role: "Full Stack Intern",
+    match: "76",
+    status: "Review",
+  },
+  { name: "Jiya P.", role: "Data Analyst", match: "71", status: "Plan" },
 ];
 
 const primaryButtonClass =
-  "group inline-flex min-h-[48px] items-center justify-center gap-2 rounded-full bg-[#111111] px-6 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-[#242424] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2";
+  "inline-flex min-h-[48px] items-center justify-center rounded-full bg-[#111111] px-6 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-[#242424] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2";
 const secondaryButtonClass =
   "inline-flex min-h-[48px] items-center justify-center rounded-full border border-black/10 bg-white/72 px-6 py-3 text-sm font-semibold text-[#161616] transition hover:-translate-y-0.5 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2";
 const panelClass =
@@ -187,7 +166,7 @@ export default function HomePage() {
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#f6f5f1] text-[#101010] antialiased">
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_12%_8%,rgba(255,255,255,0.95),transparent_30%),radial-gradient(circle_at_88%_4%,rgba(214,214,206,0.7),transparent_30%),linear-gradient(180deg,#f6f5f1_0%,#fbfaf7_48%,#f3f1ea_100%)]" />
-      <div className="pointer-events-none fixed inset-0 opacity-[0.22] [background-image:linear-gradient(to_right,rgba(20,20,20,0.055)_1px,transparent_1px),linear-gradient(to_bottom,rgba(20,20,20,0.055)_1px,transparent_1px)] [background-size:56px_56px] [mask-image:linear-gradient(to_bottom,black,transparent_82%)]" />
+      <div className="pointer-events-none fixed inset-0 opacity-[0.2] [background-image:linear-gradient(to_right,rgba(20,20,20,0.055)_1px,transparent_1px),linear-gradient(to_bottom,rgba(20,20,20,0.055)_1px,transparent_1px)] [background-size:56px_56px] [mask-image:linear-gradient(to_bottom,black,transparent_82%)]" />
       <motion.div
         className="pointer-events-none fixed left-[7%] top-[18%] h-28 w-28 rounded-full bg-white/50 blur-2xl"
         animate={{ x: [0, 18, 0], y: [0, -12, 0] }}
@@ -241,23 +220,17 @@ export default function HomePage() {
                 className={`${primaryButtonClass} min-h-[42px] px-5 py-2`}
               >
                 Start now
-                <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
               </Link>
             </div>
 
             <button
               type="button"
               onClick={() => setIsMenuOpen((current: boolean) => !current)}
-              className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full border border-black/10 bg-white/82 text-[#111111] transition hover:bg-white lg:hidden"
-              aria-label="Toggle navigation menu"
+              className="inline-flex min-h-[44px] items-center justify-center rounded-full border border-black/10 bg-white/82 px-4 text-sm font-semibold text-[#111111] transition hover:bg-white lg:hidden"
               aria-controls="mobile-navigation"
               aria-expanded={isMenuOpen}
             >
-              {isMenuOpen ? (
-                <X className="h-4 w-4" />
-              ) : (
-                <Menu className="h-4 w-4" />
-              )}
+              {isMenuOpen ? "Close" : "Menu"}
             </button>
           </div>
 
@@ -282,7 +255,6 @@ export default function HomePage() {
                 </Link>
                 <Link href="/register" className={primaryButtonClass}>
                   Start now
-                  <ArrowRight className="h-4 w-4" />
                 </Link>
               </div>
             </div>
@@ -292,7 +264,7 @@ export default function HomePage() {
 
       <main className="relative z-10 mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 pb-8 pt-28 sm:px-6 lg:px-8 lg:pb-10 lg:pt-32">
         <section className={`${panelClass} overflow-hidden`}>
-          <div className="grid items-center gap-10 px-5 py-8 sm:px-8 lg:grid-cols-[1.02fr_0.98fr] lg:px-10 lg:py-12">
+          <div className="grid items-center gap-10 px-5 py-8 sm:px-8 lg:grid-cols-[0.96fr_1.04fr] lg:px-10 lg:py-12">
             <motion.div
               initial="hidden"
               animate="visible"
@@ -302,21 +274,20 @@ export default function HomePage() {
             >
               <p className={eyebrowClass}>Placement, made clearer</p>
 
-              <h1 className="mt-5 max-w-4xl text-[3.1rem] font-semibold leading-[0.95] tracking-[-0.075em] text-[#101010] sm:text-[4.7rem] lg:text-[5.8rem]">
-                Help students get ready. Help recruiters choose faster.
+              <h1 className="mt-5 max-w-4xl text-[3.05rem] font-semibold leading-[0.96] tracking-[-0.075em] text-[#101010] sm:text-[4.55rem] lg:text-[5.45rem]">
+                A cleaner way to prepare and shortlist students.
               </h1>
 
               <p
                 className={`mt-6 max-w-2xl text-lg leading-8 ${mutedTextClass} sm:text-xl sm:leading-9`}
               >
-                Esencelab brings resumes, skills, learning plans, jobs, and
-                applications into one clear workflow for placement teams.
+                Esencelab connects resumes, skills, learning plans, jobs, and
+                applications in one calm workflow for placement teams.
               </p>
 
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <Link href="/register" className={primaryButtonClass}>
                   Create account
-                  <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
                 </Link>
                 <Link
                   href="/login?next=%2Fdashboard"
@@ -324,17 +295,6 @@ export default function HomePage() {
                 >
                   Open dashboard
                 </Link>
-              </div>
-
-              <div className="mt-8 grid gap-3 border-t border-black/10 pt-6 text-sm font-medium text-[#4f4f4f] sm:grid-cols-3">
-                {["Resume parsing", "Skill gaps", "Candidate ranking"].map(
-                  (item) => (
-                    <div key={item} className="flex items-center gap-2">
-                      <CheckCircle2 className="h-4 w-4 text-[#171717]" />
-                      {item}
-                    </div>
-                  ),
-                )}
               </div>
             </motion.div>
 
@@ -352,7 +312,7 @@ export default function HomePage() {
                   <div className="flex items-center justify-between gap-4 border-b border-black/10 pb-4">
                     <div>
                       <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#777777]">
-                        Role match
+                        Candidate profile
                       </p>
                       <h2 className="mt-1 text-xl font-semibold tracking-[-0.04em] text-[#111111]">
                         Backend Developer
@@ -363,24 +323,23 @@ export default function HomePage() {
                     </div>
                   </div>
 
-                  <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  <div className="mt-5 grid gap-3 lg:grid-cols-[0.92fr_1.08fr]">
                     <div className="rounded-3xl border border-black/10 bg-white p-4">
-                      <div className="flex items-center gap-2 text-sm font-semibold text-[#1f1f1f]">
-                        <FileText className="h-4 w-4" />
+                      <p className="text-sm font-semibold text-[#1f1f1f]">
                         Resume signals
-                      </div>
+                      </p>
                       <div className="mt-4 space-y-3">
-                        {resumeSignals.map(([skill, score]) => (
-                          <div key={skill}>
+                        {resumeSignals.map((signal) => (
+                          <div key={signal.skill}>
                             <div className="mb-1 flex items-center justify-between text-xs text-[#696969]">
-                              <span>{skill}</span>
-                              <span>{score}%</span>
+                              <span>{signal.skill}</span>
+                              <span>{signal.score}%</span>
                             </div>
                             <div className="h-2 rounded-full bg-[#eceae4]">
                               <motion.div
                                 className="h-full rounded-full bg-[#111111]"
                                 initial={{ width: 0 }}
-                                animate={{ width: `${score}%` }}
+                                animate={{ width: `${signal.score}%` }}
                                 transition={{ delay: 0.35, duration: 0.8 }}
                               />
                             </div>
@@ -390,35 +349,48 @@ export default function HomePage() {
                     </div>
 
                     <div className="rounded-3xl border border-black/10 bg-white p-4">
-                      <div className="flex items-center gap-2 text-sm font-semibold text-[#1f1f1f]">
-                        <Target className="h-4 w-4" />
-                        Next steps
-                      </div>
+                      <p className="text-sm font-semibold text-[#1f1f1f]">
+                        Shortlist view
+                      </p>
                       <div className="mt-4 space-y-2">
-                        {[
-                          "Add Docker project evidence",
-                          "Practice API design",
-                          "Finish testing module",
-                        ].map((task) => (
-                          <div
-                            key={task}
-                            className="rounded-2xl bg-[#f4f3ef] px-3 py-2 text-sm text-[#4b4b4b]"
+                        {candidates.map((candidate) => (
+                          <motion.div
+                            key={candidate.name}
+                            whileHover={{ x: 3 }}
+                            transition={{ duration: 0.18 }}
+                            className="grid grid-cols-[1fr_auto] gap-3 rounded-2xl bg-[#f4f3ef] px-3 py-2"
                           >
-                            {task}
-                          </div>
+                            <div>
+                              <p className="text-sm font-semibold text-[#222222]">
+                                {candidate.name}
+                              </p>
+                              <p className="text-xs text-[#6a6a6a]">
+                                {candidate.role}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm font-semibold text-[#111111]">
+                                {candidate.match}%
+                              </p>
+                              <p className="text-xs text-[#6a6a6a]">
+                                {candidate.status}
+                              </p>
+                            </div>
+                          </motion.div>
                         ))}
                       </div>
                     </div>
                   </div>
 
-                  <div className="mt-3 rounded-3xl border border-black/10 bg-white p-4">
-                    <p className="text-sm font-semibold text-[#111111]">
-                      Recruiter view
-                    </p>
-                    <p className="mt-1 text-sm text-[#696969]">
-                      Applicants are easier to review when match score, skills,
-                      and missing areas are shown together.
-                    </p>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                    {productPoints.slice(0, 3).map((point) => (
+                      <div
+                        key={point}
+                        className="rounded-2xl border border-black/10 bg-white px-3 py-3 text-xs font-medium leading-5 text-[#4b4b4b]"
+                      >
+                        {point}
+                      </div>
+                    ))}
                   </div>
                 </div>
               </motion.div>
@@ -430,30 +402,24 @@ export default function HomePage() {
           className="grid gap-4 md:grid-cols-3"
           aria-label="Product summary"
         >
-          {proofCards.map((card) => {
-            const IconComponent = card.icon;
-            return (
-              <motion.article
-                key={card.label}
-                whileHover={{ y: -4 }}
-                transition={{ duration: 0.2 }}
-                className={`${panelClass} p-5 sm:p-6`}
-              >
-                <div className="flex items-center justify-between gap-4">
-                  <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#555555]">
-                    {card.label}
-                  </p>
-                  <IconComponent className="h-5 w-5 text-[#111111]" />
-                </div>
-                <p className="mt-4 text-5xl font-semibold tracking-[-0.08em] text-[#111111]">
-                  {card.value}
-                </p>
-                <p className={`mt-3 text-sm leading-6 ${mutedTextClass}`}>
-                  {card.description}
-                </p>
-              </motion.article>
-            );
-          })}
+          {proofCards.map((card) => (
+            <motion.article
+              key={card.label}
+              whileHover={{ y: -4 }}
+              transition={{ duration: 0.2 }}
+              className={`${panelClass} p-5 sm:p-6`}
+            >
+              <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#555555]">
+                {card.label}
+              </p>
+              <p className="mt-4 text-5xl font-semibold tracking-[-0.08em] text-[#111111]">
+                {card.value}
+              </p>
+              <p className={`mt-3 text-sm leading-6 ${mutedTextClass}`}>
+                {card.description}
+              </p>
+            </motion.article>
+          ))}
         </section>
 
         <section
@@ -464,7 +430,7 @@ export default function HomePage() {
             <div>
               <p className={eyebrowClass}>Product</p>
               <h2 className="mt-3 text-4xl font-semibold tracking-[-0.06em] text-[#111111] sm:text-5xl">
-                One place for the work that happens before and after placement.
+                One place for the work around placement.
               </h2>
             </div>
             <div className="grid gap-3">
@@ -473,9 +439,8 @@ export default function HomePage() {
                   key={point}
                   whileHover={{ x: 4 }}
                   transition={{ duration: 0.18 }}
-                  className="flex gap-3 rounded-3xl border border-black/10 bg-white/74 p-4 text-sm font-medium leading-6 text-[#3e3e3e]"
+                  className="rounded-3xl border border-black/10 bg-white/74 p-4 text-sm font-medium leading-6 text-[#3e3e3e]"
                 >
-                  <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-[#111111]" />
                   {point}
                 </motion.div>
               ))}
@@ -490,7 +455,7 @@ export default function HomePage() {
           <div className="mx-auto max-w-3xl text-center">
             <p className={eyebrowClass}>Workflow</p>
             <h2 className="mt-3 text-4xl font-semibold tracking-[-0.06em] text-[#111111] sm:text-5xl">
-              A clearer path from resume to shortlist.
+              From resume to shortlist.
             </h2>
           </div>
           <div className="mt-9 grid gap-4 lg:grid-cols-3">
@@ -527,56 +492,47 @@ export default function HomePage() {
               </h2>
             </div>
             <p className={`max-w-xl text-base leading-7 ${mutedTextClass}`}>
-              The same data supports three different jobs: student preparation,
-              recruiter review, and admin oversight.
+              The same data supports student preparation, recruiter review, and
+              admin oversight.
             </p>
           </div>
 
           <div className="mt-8 grid gap-4 lg:grid-cols-3">
-            {roleCards.map((card) => {
-              const IconComponent = card.icon;
-              return (
-                <motion.article
-                  key={card.title}
-                  whileHover={{ y: -4 }}
-                  transition={{ duration: 0.2 }}
-                  className="rounded-[1.75rem] border border-black/10 bg-white/72 p-5 transition hover:bg-white sm:p-6"
-                >
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#111111] text-white">
-                    <IconComponent className="h-5 w-5" />
-                  </div>
-                  <h3 className="mt-5 text-2xl font-semibold tracking-[-0.04em] text-[#111111]">
-                    {card.title}
-                  </h3>
-                  <p className={`mt-3 text-sm leading-6 ${mutedTextClass}`}>
-                    {card.description}
-                  </p>
-                  <ul className="mt-5 space-y-2">
-                    {card.bullets.map((bullet) => (
-                      <li
-                        key={bullet}
-                        className="flex items-center gap-2 text-sm font-medium text-[#343434]"
-                      >
-                        <CheckCircle2 className="h-4 w-4" />
-                        {bullet}
-                      </li>
-                    ))}
-                  </ul>
-                </motion.article>
-              );
-            })}
+            {roleCards.map((card) => (
+              <motion.article
+                key={card.title}
+                whileHover={{ y: -4 }}
+                transition={{ duration: 0.2 }}
+                className="rounded-[1.75rem] border border-black/10 bg-white/72 p-5 transition hover:bg-white sm:p-6"
+              >
+                <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#737373]">
+                  {card.title}
+                </p>
+                <p className={`mt-4 text-sm leading-6 ${mutedTextClass}`}>
+                  {card.description}
+                </p>
+                <div className="mt-5 grid gap-2">
+                  {card.details.map((detail) => (
+                    <span
+                      key={detail}
+                      className="rounded-2xl bg-[#f4f3ef] px-3 py-2 text-sm font-medium text-[#343434]"
+                    >
+                      {detail}
+                    </span>
+                  ))}
+                </div>
+              </motion.article>
+            ))}
           </div>
         </section>
 
         <section
           id="trust"
-          className="grid scroll-mt-28 gap-5 lg:grid-cols-[0.92fr_1.08fr]"
+          className="grid scroll-mt-28 gap-4 lg:grid-cols-[0.92fr_1.08fr]"
         >
           <div className={`${panelClass} px-5 py-8 sm:px-8 lg:px-10`}>
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#111111] text-white">
-              <Lock className="h-5 w-5" />
-            </div>
-            <h2 className="mt-5 text-4xl font-semibold tracking-[-0.06em] text-[#111111] sm:text-5xl">
+            <p className={eyebrowClass}>Trust</p>
+            <h2 className="mt-3 text-4xl font-semibold tracking-[-0.06em] text-[#111111] sm:text-5xl">
               Built for real use, not just a demo flow.
             </h2>
             <p className={`mt-5 text-base leading-7 ${mutedTextClass}`}>
@@ -595,9 +551,8 @@ export default function HomePage() {
                   key={item}
                   whileHover={{ x: 4 }}
                   transition={{ duration: 0.18 }}
-                  className="flex gap-3 rounded-3xl border border-black/10 bg-white/74 p-4 text-sm leading-6 text-[#454545]"
+                  className="rounded-3xl border border-black/10 bg-white/74 p-4 text-sm leading-6 text-[#454545]"
                 >
-                  <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#111111]" />
                   {item}
                 </motion.div>
               ))}
@@ -637,10 +592,7 @@ export default function HomePage() {
 
         <section className="overflow-hidden rounded-[2.25rem] bg-[#111111] px-5 py-10 text-center text-white shadow-[0_34px_100px_-58px_rgba(0,0,0,0.9)] sm:px-8 lg:px-10 lg:py-14">
           <div className="mx-auto max-w-3xl">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-[#111111]">
-              <Users className="h-5 w-5" />
-            </div>
-            <h2 className="mt-5 text-4xl font-semibold tracking-[-0.06em] sm:text-5xl">
+            <h2 className="text-4xl font-semibold tracking-[-0.06em] sm:text-5xl">
               Start with one student profile.
             </h2>
             <p className="mt-5 text-base leading-7 text-white/70 sm:text-lg">
@@ -650,10 +602,9 @@ export default function HomePage() {
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Link
                 href="/register"
-                className="group inline-flex min-h-[48px] items-center justify-center gap-2 rounded-full bg-white px-7 py-3 text-sm font-bold text-[#111111] transition hover:-translate-y-0.5 hover:bg-[#f2f2f2]"
+                className="inline-flex min-h-[48px] items-center justify-center rounded-full bg-white px-7 py-3 text-sm font-bold text-[#111111] transition hover:-translate-y-0.5 hover:bg-[#f2f2f2]"
               >
                 Get started
-                <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
               </Link>
               <Link
                 href="/login"

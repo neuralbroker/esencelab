@@ -118,8 +118,7 @@ const proofCards: Array<{
 const trustItems = [
   "Next.js frontend, Express backend, and FastAPI AI service.",
   "Supabase/Postgres support for production data.",
-  "Internal service token support between backend and AI service.",
-  "Fallback behavior when an external AI provider is unavailable.",
+  "Protected backend-to-AI service calls with fallback behavior.",
 ];
 
 const faqs = [
@@ -132,11 +131,6 @@ const faqs = [
     question: "Is it just a resume parser?",
     answer:
       "No. Resume parsing starts the workflow. The product also handles skill gaps, learning plans, job matching, applications, and admin review.",
-  },
-  {
-    question: "Can it run locally without a database?",
-    answer:
-      "Yes. Local development can use memory mode. Production should use Supabase/Postgres.",
   },
 ];
 
@@ -151,7 +145,7 @@ const primaryButtonClass =
 const secondaryButtonClass =
   "inline-flex min-h-[48px] items-center justify-center rounded-full border border-black/10 bg-white/72 px-6 py-3 text-sm font-semibold text-[#161616] transition hover:-translate-y-0.5 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2";
 const panelClass =
-  "rounded-[2rem] border border-white/70 bg-white/72 shadow-[0_28px_80px_-58px_rgba(15,15,15,0.65)] backdrop-blur-xl";
+  "rounded-[2rem] border border-white/70 bg-white/70 shadow-[0_24px_70px_-58px_rgba(15,15,15,0.58)] backdrop-blur-xl";
 const mutedTextClass = "text-[#626262]";
 const eyebrowClass =
   "text-xs font-bold uppercase tracking-[0.22em] text-[#707070]";
@@ -159,6 +153,15 @@ const eyebrowClass =
 const fadeUp = {
   hidden: { opacity: 0, y: 16 },
   visible: { opacity: 1, y: 0 },
+};
+
+const softFloat = {
+  y: [0, -8, 0],
+  transition: {
+    duration: 6,
+    repeat: Infinity,
+    ease: "easeInOut" as const,
+  },
 };
 
 export default function HomePage() {
@@ -185,6 +188,16 @@ export default function HomePage() {
     <div className="min-h-screen overflow-x-hidden bg-[#f6f5f1] text-[#101010] antialiased">
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_12%_8%,rgba(255,255,255,0.95),transparent_30%),radial-gradient(circle_at_88%_4%,rgba(214,214,206,0.7),transparent_30%),linear-gradient(180deg,#f6f5f1_0%,#fbfaf7_48%,#f3f1ea_100%)]" />
       <div className="pointer-events-none fixed inset-0 opacity-[0.22] [background-image:linear-gradient(to_right,rgba(20,20,20,0.055)_1px,transparent_1px),linear-gradient(to_bottom,rgba(20,20,20,0.055)_1px,transparent_1px)] [background-size:56px_56px] [mask-image:linear-gradient(to_bottom,black,transparent_82%)]" />
+      <motion.div
+        className="pointer-events-none fixed left-[7%] top-[18%] h-28 w-28 rounded-full bg-white/50 blur-2xl"
+        animate={{ x: [0, 18, 0], y: [0, -12, 0] }}
+        transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
+      />
+      <motion.div
+        className="pointer-events-none fixed bottom-[12%] right-[10%] h-36 w-36 rounded-full bg-[#d8d6cf]/40 blur-3xl"
+        animate={{ x: [0, -16, 0], y: [0, 14, 0] }}
+        transition={{ duration: 11, repeat: Infinity, ease: "easeInOut" }}
+      />
 
       <header className="fixed inset-x-0 top-0 z-50 px-4 py-4 sm:px-6 lg:px-8">
         <div
@@ -277,7 +290,7 @@ export default function HomePage() {
         </div>
       </header>
 
-      <main className="relative z-10 mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 pb-8 pt-28 sm:px-6 lg:px-8 lg:pb-10 lg:pt-32">
+      <main className="relative z-10 mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 pb-8 pt-28 sm:px-6 lg:px-8 lg:pb-10 lg:pt-32">
         <section className={`${panelClass} overflow-hidden`}>
           <div className="grid items-center gap-10 px-5 py-8 sm:px-8 lg:grid-cols-[1.02fr_0.98fr] lg:px-10 lg:py-12">
             <motion.div
@@ -289,16 +302,15 @@ export default function HomePage() {
             >
               <p className={eyebrowClass}>Placement, made clearer</p>
 
-              <h1 className="mt-5 max-w-4xl text-[3.25rem] font-semibold leading-[0.94] tracking-[-0.075em] text-[#101010] sm:text-[5rem] lg:text-[6.2rem]">
-                Help students get ready. Help recruiters decide faster.
+              <h1 className="mt-5 max-w-4xl text-[3.1rem] font-semibold leading-[0.95] tracking-[-0.075em] text-[#101010] sm:text-[4.7rem] lg:text-[5.8rem]">
+                Help students get ready. Help recruiters choose faster.
               </h1>
 
               <p
                 className={`mt-6 max-w-2xl text-lg leading-8 ${mutedTextClass} sm:text-xl sm:leading-9`}
               >
-                Esencelab brings resumes, skills, learning plans, jobs,
-                applications, and admin review into one simple workflow for
-                placement teams.
+                Esencelab brings resumes, skills, learning plans, jobs, and
+                applications into one clear workflow for placement teams.
               </p>
 
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -332,7 +344,10 @@ export default function HomePage() {
               transition={{ delay: 0.1, duration: 0.45 }}
               className="relative"
             >
-              <div className="rounded-[2rem] border border-black/10 bg-[#111111] p-2 shadow-[0_42px_100px_-56px_rgba(0,0,0,0.85)]">
+              <motion.div
+                animate={softFloat}
+                className="rounded-[2rem] border border-black/10 bg-[#111111] p-2 shadow-[0_42px_100px_-56px_rgba(0,0,0,0.85)]"
+              >
                 <div className="rounded-[1.55rem] border border-white/10 bg-[#f8f7f2] p-4 sm:p-5">
                   <div className="flex items-center justify-between gap-4 border-b border-black/10 pb-4">
                     <div>
@@ -362,9 +377,11 @@ export default function HomePage() {
                               <span>{score}%</span>
                             </div>
                             <div className="h-2 rounded-full bg-[#eceae4]">
-                              <div
+                              <motion.div
                                 className="h-full rounded-full bg-[#111111]"
-                                style={{ width: `${score}%` }}
+                                initial={{ width: 0 }}
+                                animate={{ width: `${score}%` }}
+                                transition={{ delay: 0.35, duration: 0.8 }}
                               />
                             </div>
                           </div>
@@ -404,7 +421,7 @@ export default function HomePage() {
                     </p>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             </motion.div>
           </div>
         </section>
@@ -416,7 +433,12 @@ export default function HomePage() {
           {proofCards.map((card) => {
             const IconComponent = card.icon;
             return (
-              <article key={card.label} className={`${panelClass} p-5 sm:p-6`}>
+              <motion.article
+                key={card.label}
+                whileHover={{ y: -4 }}
+                transition={{ duration: 0.2 }}
+                className={`${panelClass} p-5 sm:p-6`}
+              >
                 <div className="flex items-center justify-between gap-4">
                   <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#555555]">
                     {card.label}
@@ -429,7 +451,7 @@ export default function HomePage() {
                 <p className={`mt-3 text-sm leading-6 ${mutedTextClass}`}>
                   {card.description}
                 </p>
-              </article>
+              </motion.article>
             );
           })}
         </section>
@@ -447,13 +469,15 @@ export default function HomePage() {
             </div>
             <div className="grid gap-3">
               {productPoints.map((point) => (
-                <div
+                <motion.div
                   key={point}
+                  whileHover={{ x: 4 }}
+                  transition={{ duration: 0.18 }}
                   className="flex gap-3 rounded-3xl border border-black/10 bg-white/74 p-4 text-sm font-medium leading-6 text-[#3e3e3e]"
                 >
                   <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-[#111111]" />
                   {point}
-                </div>
+                </motion.div>
               ))}
             </div>
           </div>
@@ -471,8 +495,10 @@ export default function HomePage() {
           </div>
           <div className="mt-9 grid gap-4 lg:grid-cols-3">
             {workflowSteps.map((step) => (
-              <article
+              <motion.article
                 key={step.step}
+                whileHover={{ y: -4 }}
+                transition={{ duration: 0.2 }}
                 className="rounded-[1.75rem] border border-black/10 bg-white/76 p-6"
               >
                 <div className="text-5xl font-semibold tracking-[-0.08em] text-[#d6d2c8]">
@@ -484,7 +510,7 @@ export default function HomePage() {
                 <p className={`mt-3 text-sm leading-6 ${mutedTextClass}`}>
                   {step.description}
                 </p>
-              </article>
+              </motion.article>
             ))}
           </div>
         </section>
@@ -510,9 +536,11 @@ export default function HomePage() {
             {roleCards.map((card) => {
               const IconComponent = card.icon;
               return (
-                <article
+                <motion.article
                   key={card.title}
-                  className="rounded-[1.75rem] border border-black/10 bg-white/72 p-5 transition hover:-translate-y-1 hover:bg-white sm:p-6"
+                  whileHover={{ y: -4 }}
+                  transition={{ duration: 0.2 }}
+                  className="rounded-[1.75rem] border border-black/10 bg-white/72 p-5 transition hover:bg-white sm:p-6"
                 >
                   <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#111111] text-white">
                     <IconComponent className="h-5 w-5" />
@@ -534,7 +562,7 @@ export default function HomePage() {
                       </li>
                     ))}
                   </ul>
-                </article>
+                </motion.article>
               );
             })}
           </div>
@@ -563,13 +591,15 @@ export default function HomePage() {
             </p>
             <div className="mt-5 space-y-3">
               {trustItems.map((item) => (
-                <div
+                <motion.div
                   key={item}
+                  whileHover={{ x: 4 }}
+                  transition={{ duration: 0.18 }}
                   className="flex gap-3 rounded-3xl border border-black/10 bg-white/74 p-4 text-sm leading-6 text-[#454545]"
                 >
                   <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#111111]" />
                   {item}
-                </div>
+                </motion.div>
               ))}
             </div>
           </div>
@@ -587,8 +617,10 @@ export default function HomePage() {
             </div>
             <div className="space-y-3">
               {faqs.map((faq) => (
-                <article
+                <motion.article
                   key={faq.question}
+                  whileHover={{ y: -3 }}
+                  transition={{ duration: 0.18 }}
                   className="rounded-[1.5rem] border border-black/10 bg-white/74 p-5"
                 >
                   <h3 className="text-lg font-semibold tracking-[-0.03em] text-[#111111]">
@@ -597,7 +629,7 @@ export default function HomePage() {
                   <p className={`mt-2 text-sm leading-6 ${mutedTextClass}`}>
                     {faq.answer}
                   </p>
-                </article>
+                </motion.article>
               ))}
             </div>
           </div>

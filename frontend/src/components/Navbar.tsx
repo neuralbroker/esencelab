@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Main authenticated navbar.
@@ -6,13 +6,13 @@
  * This component builds the dashboard navigation and changes the visible links
  * based on the current user role.
  */
-import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
-import { LogOut, Menu, X } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-import EsencelabLogo from '@/components/EsencelabLogo';
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
+import { LogOut, Menu, X } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import EsencelabLogo from "@/components/EsencelabLogo";
 
 export default function Navbar() {
   const { user, isAuthenticated, logout } = useAuth();
@@ -24,12 +24,15 @@ export default function Navbar() {
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+      if (
+        profileRef.current &&
+        !profileRef.current.contains(event.target as Node)
+      ) {
         setIsProfileOpen(false);
       }
     }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   useEffect(() => {
@@ -39,35 +42,35 @@ export default function Navbar() {
 
   const handleLogout = () => {
     logout();
-    router.push('/');
+    router.push("/");
   };
 
   const getNavLinks = () => {
     if (!user) return [];
 
     switch (user.role) {
-      case 'student':
+      case "student":
         return [
-          { href: '/dashboard', label: 'Dashboard' },
-          { href: '/jobs', label: 'Jobs' },
-          { href: '/courses', label: 'Courses' },
-          { href: '/roadmaps', label: 'Roadmaps' },
-          { href: '/resume', label: 'Resume' },
-          { href: '/applications', label: 'Applications' },
+          { href: "/dashboard", label: "Dashboard" },
+          { href: "/jobs", label: "Jobs" },
+          { href: "/courses", label: "Courses" },
+          { href: "/roadmaps", label: "Roadmaps" },
+          { href: "/resume", label: "Resume" },
+          { href: "/applications", label: "Applications" },
         ];
-      case 'employer':
+      case "employer":
         return [
-          { href: '/dashboard', label: 'Dashboard' },
-          { href: '/jobs', label: 'Jobs' },
-          { href: '/applicants', label: 'Applicants' },
+          { href: "/dashboard", label: "Dashboard" },
+          { href: "/jobs", label: "Jobs" },
+          { href: "/applicants", label: "Applicants" },
         ];
-      case 'admin':
+      case "admin":
         return [
-          { href: '/dashboard', label: 'Overview' },
-          { href: '/admin/resumes', label: 'Resumes' },
-          { href: '/jobs', label: 'Jobs' },
-          { href: '/users', label: 'Users' },
-          { href: '/applicants', label: 'Applicants' },
+          { href: "/dashboard", label: "Overview" },
+          { href: "/admin/resumes", label: "Resumes" },
+          { href: "/jobs", label: "Jobs" },
+          { href: "/users", label: "Users" },
+          { href: "/applicants", label: "Applicants" },
         ];
       default:
         return [];
@@ -79,7 +82,10 @@ export default function Navbar() {
   if (!isAuthenticated) return null;
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-white/72 bg-white/62 backdrop-blur-xl" aria-label="Main navigation">
+    <nav
+      className="sticky top-0 z-50 border-b border-white/72 bg-white/62 backdrop-blur-xl"
+      aria-label="Main navigation"
+    >
       <div className="layout-container">
         <div className="flex h-16 items-center justify-between">
           <Link href="/dashboard" className="inline-flex">
@@ -88,13 +94,16 @@ export default function Navbar() {
 
           <div className="hidden items-center gap-1 rounded-full border border-white/72 bg-white/64 px-2 py-1 text-[0.72rem] font-semibold text-[#111111] shadow-[0_14px_28px_-22px_rgba(20,20,20,0.65)] lg:flex">
             {navLinks.map((link) => {
-              const isActive = pathname === link.href || pathname.startsWith(link.href + '/');
+              const isActive =
+                pathname === link.href || pathname.startsWith(link.href + "/");
               return (
                 <Link
                   key={link.href}
                   href={link.href}
                   className={`rounded-full px-3 py-1.5 transition ${
-                    isActive ? 'bg-white/84 text-primary' : 'text-secondary hover:bg-white/74 hover:text-primary'
+                    isActive
+                      ? "bg-white/84 text-primary"
+                      : "text-secondary hover:bg-white/74 hover:text-primary"
                   }`}
                 >
                   {link.label}
@@ -112,9 +121,11 @@ export default function Navbar() {
                 aria-haspopup="true"
               >
                 <div className="h-8 w-8 rounded-full bg-[#f0f0f0] text-[#111111] flex items-center justify-center text-sm font-semibold">
-                  {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+                  {user?.name?.charAt(0)?.toUpperCase() || "U"}
                 </div>
-                <span className="max-w-[120px] truncate text-sm font-medium text-primary">{user?.name}</span>
+                <span className="max-w-[120px] truncate text-sm font-medium text-primary">
+                  {user?.name}
+                </span>
               </button>
 
               <AnimatePresence>
@@ -127,10 +138,14 @@ export default function Navbar() {
                     className="absolute right-0 z-50 mt-2 w-56 rounded-2xl border border-white/72 bg-white/82 py-2 text-primary shadow-[0_18px_34px_-28px_rgba(22,22,22,0.7)] backdrop-blur-md"
                   >
                     <div className="mb-1 border-b border-border px-4 py-3">
-                      <p className="truncate text-sm font-medium">{user?.name}</p>
-                      <p className="mt-0.5 text-xs capitalize text-secondary">{user?.role}</p>
+                      <p className="truncate text-sm font-medium">
+                        {user?.name}
+                      </p>
+                      <p className="mt-0.5 text-xs capitalize text-secondary">
+                        {user?.role}
+                      </p>
                     </div>
-<button
+                    <button
                       onClick={handleLogout}
                       aria-label="Logout from your account"
                       className="flex w-full items-center space-x-3 px-4 py-2.5 text-left text-sm text-gray-600 transition-colors hover:bg-gray-100"
@@ -149,7 +164,11 @@ export default function Navbar() {
             className="rounded-lg p-2.5 text-primary transition-colors hover:bg-white/70 lg:hidden"
             aria-label="Toggle menu"
           >
-            {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            {isMenuOpen ? (
+              <X className="h-5 w-5" />
+            ) : (
+              <Menu className="h-5 w-5" />
+            )}
           </button>
         </div>
       </div>
@@ -158,23 +177,31 @@ export default function Navbar() {
         {isMenuOpen && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
+            animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden border-b border-white/72 bg-white/82 backdrop-blur-md lg:hidden"
+            className="max-h-[calc(100vh-4rem)] overflow-y-auto border-b border-white/72 bg-white/82 backdrop-blur-md lg:hidden"
           >
-            <div className="space-y-1 px-4 pb-4 pt-2">
+            <div className="layout-container space-y-1 pb-4 pt-2">
               <div className="mb-2 rounded-2xl border border-white/72 bg-white/72 px-4 py-3">
-                <p className="truncate text-sm font-semibold text-primary">{user?.name}</p>
-                <p className="mt-1 text-xs capitalize text-secondary">{user?.role}</p>
+                <p className="truncate text-sm font-semibold text-primary">
+                  {user?.name}
+                </p>
+                <p className="mt-1 text-xs capitalize text-secondary">
+                  {user?.role}
+                </p>
               </div>
               {navLinks.map((link) => {
-                const isActive = pathname === link.href || pathname.startsWith(link.href + '/');
+                const isActive =
+                  pathname === link.href ||
+                  pathname.startsWith(link.href + "/");
                 return (
                   <Link
                     key={link.href}
                     href={link.href}
                     className={`block min-h-[44px] rounded-xl px-4 py-3 text-sm font-medium transition-colors ${
-                      isActive ? 'bg-white/84 text-primary' : 'text-secondary hover:bg-white/74 hover:text-primary'
+                      isActive
+                        ? "bg-white/84 text-primary"
+                        : "text-secondary hover:bg-white/74 hover:text-primary"
                     }`}
                   >
                     {link.label}
@@ -182,7 +209,7 @@ export default function Navbar() {
                 );
               })}
               <div className="my-2 border-t border-white/72 pt-2"></div>
-<button
+              <button
                 onClick={handleLogout}
                 aria-label="Logout from your account"
                 className="flex min-h-[44px] w-full items-center space-x-3 rounded-xl px-4 py-3 text-left text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100"
@@ -197,4 +224,3 @@ export default function Navbar() {
     </nav>
   );
 }
-

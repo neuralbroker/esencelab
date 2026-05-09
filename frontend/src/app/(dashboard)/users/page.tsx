@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Admin users page.
@@ -6,16 +6,16 @@
  * This page gives admins a searchable interface for viewing, updating,
  * deactivating, and deleting user accounts.
  */
-import { useCallback, useEffect, useState } from 'react';
-import api from '@/lib/api';
-import { getAdminUsers, getReadableErrorMessage } from '@/lib/dashboardApi';
-import { PaginationMeta, User } from '@/types';
-import Card from '@/components/Card';
-import Badge from '@/components/Badge';
-import Button from '@/components/Button';
-import Loading from '@/components/Loading';
-import { Users, Search, Trash2 } from 'lucide-react';
-import { useRoleAccess } from '@/lib/useRoleAccess';
+import { useCallback, useEffect, useState } from "react";
+import api from "@/lib/api";
+import { getAdminUsers, getReadableErrorMessage } from "@/lib/dashboardApi";
+import { PaginationMeta, User } from "@/types";
+import Card from "@/components/Card";
+import Badge from "@/components/Badge";
+import Button from "@/components/Button";
+import Loading from "@/components/Loading";
+import { Users, Search, Trash2 } from "lucide-react";
+import { useRoleAccess } from "@/lib/useRoleAccess";
 
 const EMPTY_META: PaginationMeta = {
   page: 1,
@@ -25,14 +25,22 @@ const EMPTY_META: PaginationMeta = {
 };
 
 export default function UsersPage() {
-  const { hasAllowedRole } = useRoleAccess({ allowedRoles: ['admin'] });
+  const { hasAllowedRole } = useRoleAccess({ allowedRoles: ["admin"] });
   const [users, setUsers] = useState<User[]>([]);
   const [meta, setMeta] = useState<PaginationMeta>(EMPTY_META);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [roleFilter, setRoleFilter] = useState('');
-  const [sortBy, setSortBy] = useState<'createdAt' | 'name' | 'email' | 'role' | 'applications' | 'jobs' | 'resumeScore'>('createdAt');
-  const [order, setOrder] = useState<'asc' | 'desc'>('desc');
+  const [searchTerm, setSearchTerm] = useState("");
+  const [roleFilter, setRoleFilter] = useState("");
+  const [sortBy, setSortBy] = useState<
+    | "createdAt"
+    | "name"
+    | "email"
+    | "role"
+    | "applications"
+    | "jobs"
+    | "resumeScore"
+  >("createdAt");
+  const [order, setOrder] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,7 +64,7 @@ export default function UsersPage() {
     } catch (err: any) {
       setUsers([]);
       setMeta(EMPTY_META);
-      setError(getReadableErrorMessage(err, 'Failed to load users.'));
+      setError(getReadableErrorMessage(err, "Failed to load users."));
     } finally {
       setLoading(false);
     }
@@ -72,14 +80,14 @@ export default function UsersPage() {
   }, [searchTerm, roleFilter, sortBy, order]);
 
   const handleDelete = async (userId: string) => {
-    const ok = window.confirm('Delete this user and related data?');
+    const ok = window.confirm("Delete this user and related data?");
     if (!ok) return;
     try {
       setError(null);
       await api.delete(`/users/${userId}`);
       await fetchUsers();
     } catch (err: any) {
-      setError(getReadableErrorMessage(err, 'Failed to delete user.'));
+      setError(getReadableErrorMessage(err, "Failed to delete user."));
     }
   };
 
@@ -89,17 +97,17 @@ export default function UsersPage() {
       await api.put(`/users/${userId}`, { isActive: !currentStatus });
       await fetchUsers();
     } catch (err: any) {
-      setError(getReadableErrorMessage(err, 'Failed to update user status.'));
+      setError(getReadableErrorMessage(err, "Failed to update user status."));
     }
   };
 
   const getRoleBadge = (role: string) => {
-    const variants: Record<string, 'primary' | 'success' | 'warning'> = {
-      admin: 'warning',
-      employer: 'success',
-      student: 'primary',
+    const variants: Record<string, "primary" | "success" | "warning"> = {
+      admin: "warning",
+      employer: "success",
+      student: "primary",
     };
-    return <Badge variant={variants[role] || 'secondary'}>{role}</Badge>;
+    return <Badge variant={variants[role] || "secondary"}>{role}</Badge>;
   };
 
   if (loading) {
@@ -109,17 +117,25 @@ export default function UsersPage() {
   if (!hasAllowedRole) return null;
 
   const pageStart = meta.total === 0 ? 0 : (meta.page - 1) * meta.limit + 1;
-  const pageEnd = meta.total === 0 ? 0 : Math.min(meta.page * meta.limit, meta.total);
+  const pageEnd =
+    meta.total === 0 ? 0 : Math.min(meta.page * meta.limit, meta.total);
 
   return (
     <div className="layout-container section-spacing space-y-8 max-w-7xl mx-auto">
       <div className="max-w-3xl space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight text-primary">User Management</h1>
-        <p className="text-secondary">Search accounts, adjust access, and keep the platform healthy.</p>
+        <h1 className="text-3xl font-bold tracking-tight text-primary">
+          User Management
+        </h1>
+        <p className="text-secondary">
+          Search accounts, adjust access, and keep the platform healthy.
+        </p>
       </div>
 
       {error && (
-        <Card hoverable={false} className="border border-gray-300 bg-gray-100 p-4 text-sm text-gray-800">
+        <Card
+          hoverable={false}
+          className="border border-gray-300 bg-gray-100 p-4 text-sm text-gray-800"
+        >
           {error}
         </Card>
       )}
@@ -148,7 +164,18 @@ export default function UsersPage() {
           </select>
           <select
             value={sortBy}
-            onChange={(event) => setSortBy(event.target.value as 'createdAt' | 'name' | 'email' | 'role' | 'applications' | 'jobs' | 'resumeScore')}
+            onChange={(event) =>
+              setSortBy(
+                event.target.value as
+                  | "createdAt"
+                  | "name"
+                  | "email"
+                  | "role"
+                  | "applications"
+                  | "jobs"
+                  | "resumeScore",
+              )
+            }
             className="rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-primary focus:outline-none focus:ring-1 focus:ring-primary"
           >
             <option value="createdAt">Sort by Join Date</option>
@@ -161,7 +188,7 @@ export default function UsersPage() {
           </select>
           <select
             value={order}
-            onChange={(event) => setOrder(event.target.value as 'asc' | 'desc')}
+            onChange={(event) => setOrder(event.target.value as "asc" | "desc")}
             className="rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-primary focus:outline-none focus:ring-1 focus:ring-primary"
           >
             <option value="desc">Descending</option>
@@ -171,51 +198,86 @@ export default function UsersPage() {
 
         {users.length > 0 ? (
           <div className="space-y-4">
-            <div className="overflow-x-auto rounded-2xl border border-border">
-              <table className="w-full min-w-[920px]">
+            <div className="-mx-4 overflow-x-auto rounded-2xl border border-border px-4 sm:mx-0 sm:px-0">
+              <table className="w-full min-w-[860px] table-fixed">
                 <thead>
                   <tr className="border-b border-gray-200">
-                    <th className="text-left py-3 px-4 font-medium text-secondary">Name</th>
-                    <th className="text-left py-3 px-4 font-medium text-secondary">Email</th>
-                    <th className="text-left py-3 px-4 font-medium text-secondary">Role</th>
-                    <th className="text-left py-3 px-4 font-medium text-secondary">Resume</th>
-                    <th className="text-left py-3 px-4 font-medium text-secondary">Applications</th>
-                    <th className="text-left py-3 px-4 font-medium text-secondary">Jobs</th>
-                    <th className="text-left py-3 px-4 font-medium text-secondary">Status</th>
-                    <th className="text-left py-3 px-4 font-medium text-secondary">Joined</th>
-                    <th className="text-right py-3 px-4 font-medium text-secondary">Actions</th>
+                    <th className="text-left py-3 px-4 font-medium text-secondary">
+                      Name
+                    </th>
+                    <th className="text-left py-3 px-4 font-medium text-secondary">
+                      Email
+                    </th>
+                    <th className="text-left py-3 px-4 font-medium text-secondary">
+                      Role
+                    </th>
+                    <th className="text-left py-3 px-4 font-medium text-secondary">
+                      Resume
+                    </th>
+                    <th className="text-left py-3 px-4 font-medium text-secondary">
+                      Applications
+                    </th>
+                    <th className="text-left py-3 px-4 font-medium text-secondary">
+                      Jobs
+                    </th>
+                    <th className="text-left py-3 px-4 font-medium text-secondary">
+                      Status
+                    </th>
+                    <th className="text-left py-3 px-4 font-medium text-secondary">
+                      Joined
+                    </th>
+                    <th className="text-right py-3 px-4 font-medium text-secondary">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {users.map((entry) => (
-                    <tr key={entry.id} className="border-b border-border transition-colors hover:bg-gray-50">
+                    <tr
+                      key={entry.id}
+                      className="border-b border-border transition-colors hover:bg-gray-50"
+                    >
                       <td className="py-3 px-4">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
+                        <div className="flex min-w-0 items-center space-x-3">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100">
                             <span className="text-primary text-sm font-medium">
-                              {entry.name?.charAt(0)?.toUpperCase() || 'U'}
+                              {entry.name?.charAt(0)?.toUpperCase() || "U"}
                             </span>
                           </div>
-                          <span className="font-medium text-primary">{entry.name}</span>
+                          <span className="truncate font-medium text-primary">
+                            {entry.name}
+                          </span>
                         </div>
                       </td>
-                      <td className="py-3 px-4 text-secondary">{entry.email}</td>
+                      <td className="py-3 px-4 text-secondary">
+                        <span className="block truncate">{entry.email}</span>
+                      </td>
                       <td className="py-3 px-4">{getRoleBadge(entry.role)}</td>
                       <td className="py-3 px-4 text-secondary text-sm">
-                        {entry.resumeUploaded ? `${Math.round(entry.latestResumeScore || 0)}%` : 'No'}
+                        {entry.resumeUploaded
+                          ? `${Math.round(entry.latestResumeScore || 0)}%`
+                          : "No"}
                       </td>
-                      <td className="py-3 px-4 text-secondary text-sm">{entry.totalApplications || 0}</td>
-                      <td className="py-3 px-4 text-secondary text-sm">{entry.totalJobsPosted || 0}</td>
+                      <td className="py-3 px-4 text-secondary text-sm">
+                        {entry.totalApplications || 0}
+                      </td>
+                      <td className="py-3 px-4 text-secondary text-sm">
+                        {entry.totalJobsPosted || 0}
+                      </td>
                       <td className="py-3 px-4">
                         <button
-                          onClick={() => handleToggleStatus(entry.id, !!entry.isActive)}
+                          onClick={() =>
+                            handleToggleStatus(entry.id, !!entry.isActive)
+                          }
                           className="min-h-[36px] rounded px-3 py-1 text-xs font-medium text-gray-800 transition hover:bg-gray-100"
                         >
-                          {entry.isActive ? 'Active' : 'Inactive'}
+                          {entry.isActive ? "Active" : "Inactive"}
                         </button>
                       </td>
                       <td className="py-3 px-4 text-secondary text-sm">
-                        {new Date(entry.createdAt || Date.now()).toLocaleDateString()}
+                        {new Date(
+                          entry.createdAt || Date.now(),
+                        ).toLocaleDateString()}
                       </td>
                       <td className="py-3 px-4 text-right">
                         <button
@@ -262,7 +324,9 @@ export default function UsersPage() {
         ) : (
           <div className="text-center py-12">
             <Users className="w-12 h-12 text-secondary/70 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-black mb-2">No users found</h3>
+            <h3 className="text-lg font-medium text-black mb-2">
+              No users found
+            </h3>
             <p className="text-secondary">Try adjusting search or filters</p>
           </div>
         )}
@@ -270,4 +334,3 @@ export default function UsersPage() {
     </div>
   );
 }
-

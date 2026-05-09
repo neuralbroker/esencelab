@@ -274,7 +274,7 @@ export default function HomePage() {
             >
               <p className={eyebrowClass}>Placement, made clearer</p>
 
-              <h1 className="mt-5 max-w-4xl text-[3.05rem] font-semibold leading-[0.96] tracking-[-0.075em] text-[#101010] sm:text-[4.55rem] lg:text-[5.45rem]">
+              <h1 className="mt-5 max-w-4xl text-[2.45rem] font-semibold leading-[1.02] tracking-[-0.055em] text-[#101010] sm:text-[4.55rem] sm:leading-[0.96] sm:tracking-[-0.075em] lg:text-[5.45rem]">
                 A cleaner way to prepare and shortlist students.
               </h1>
 

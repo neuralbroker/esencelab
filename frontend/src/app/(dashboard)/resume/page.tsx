@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Student resume page.
@@ -6,9 +6,9 @@
  * This page handles resume upload, replacement, parsing results, and the
  * latest stored resume insights for the signed-in student.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   AlertCircle,
   Compass,
@@ -18,25 +18,27 @@ import {
   Trash2,
   UploadCloud,
   X,
-} from 'lucide-react';
-import { AnimatePresence, motion } from 'framer-motion';
-import { Resume } from '@/types';
-import Card from '@/components/Card';
-import Button from '@/components/Button';
-import Badge from '@/components/Badge';
-import BeginnerCareerStarter, { BeginnerBlueprint } from '@/components/BeginnerCareerStarter';
-import Loading from '@/components/Loading';
-import { Skeleton } from '@/components/Skeleton';
+} from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Resume } from "@/types";
+import Card from "@/components/Card";
+import Button from "@/components/Button";
+import Badge from "@/components/Badge";
+import BeginnerCareerStarter, {
+  BeginnerBlueprint,
+} from "@/components/BeginnerCareerStarter";
+import Loading from "@/components/Loading";
+import { Skeleton } from "@/components/Skeleton";
 import {
   deleteResume,
   getReadableErrorMessage,
   getResume,
   uploadResume,
-} from '@/lib/dashboardApi';
-import { useRoleAccess } from '@/lib/useRoleAccess';
+} from "@/lib/dashboardApi";
+import { useRoleAccess } from "@/lib/useRoleAccess";
 
-type FeedbackTone = 'success' | 'error' | 'info';
-type EntryMode = 'upload' | 'discover';
+type FeedbackTone = "success" | "error" | "info";
+type EntryMode = "upload" | "discover";
 
 interface FeedbackState {
   tone: FeedbackTone;
@@ -54,10 +56,13 @@ const isResumeEffectivelyEmpty = (resume: Resume) => {
 const formatExperienceItem = (item: Record<string, any>) => {
   const role = item.role || item.title || item.position;
   const company = item.company || item.organization || item.employer;
-  const period = item.duration || item.period || [item.startDate, item.endDate].filter(Boolean).join(' - ');
+  const period =
+    item.duration ||
+    item.period ||
+    [item.startDate, item.endDate].filter(Boolean).join(" - ");
   const summary = item.description || item.summary || item.details;
   return {
-    title: [role, company].filter(Boolean).join(' at ') || 'Experience entry',
+    title: [role, company].filter(Boolean).join(" at ") || "Experience entry",
     meta: period || null,
     summary: summary || null,
   };
@@ -68,14 +73,16 @@ const formatEducationItem = (item: Record<string, any>) => {
   const school = item.institution || item.school || item.college;
   const period = item.year || item.graduationYear || item.duration;
   return {
-    title: [degree, school].filter(Boolean).join(' - ') || 'Education entry',
+    title: [degree, school].filter(Boolean).join(" - ") || "Education entry",
     meta: period || null,
   };
 };
 
 export default function ResumeUploadPage() {
   const searchParams = useSearchParams();
-  const { hasAllowedRole, isCheckingAccess } = useRoleAccess({ allowedRoles: ['student'] });
+  const { hasAllowedRole, isCheckingAccess } = useRoleAccess({
+    allowedRoles: ["student"],
+  });
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -83,8 +90,9 @@ export default function ResumeUploadPage() {
   const [dragActive, setDragActive] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const [loading, setLoading] = useState(true);
-  const [entryMode, setEntryMode] = useState<EntryMode>('upload');
-  const [selectedBeginnerTrack, setSelectedBeginnerTrack] = useState<BeginnerBlueprint | null>(null);
+  const [entryMode, setEntryMode] = useState<EntryMode>("upload");
+  const [selectedBeginnerTrack, setSelectedBeginnerTrack] =
+    useState<BeginnerBlueprint | null>(null);
 
   const fetchResume = useCallback(async () => {
     try {
@@ -92,8 +100,8 @@ export default function ResumeUploadPage() {
       setResume(data);
     } catch (error: any) {
       setFeedback({
-        tone: 'error',
-        text: getReadableErrorMessage(error, 'Failed to load resume data.'),
+        tone: "error",
+        text: getReadableErrorMessage(error, "Failed to load resume data."),
       });
     } finally {
       setLoading(false);
@@ -107,14 +115,18 @@ export default function ResumeUploadPage() {
 
   useEffect(() => {
     if (resume) return;
-    setEntryMode(searchParams.get('mode') === 'discover' ? 'discover' : 'upload');
+    setEntryMode(
+      searchParams.get("mode") === "discover" ? "discover" : "upload",
+    );
   }, [resume, searchParams]);
 
   const validatePdf = useCallback((candidate: File) => {
     const isPdf =
-      candidate.type === 'application/pdf' || candidate.name.toLowerCase().endsWith('.pdf');
-    if (!isPdf) return 'Invalid file type. Please upload a PDF.';
-    if (candidate.size > 5 * 1024 * 1024) return 'File too large. Maximum size is 5MB.';
+      candidate.type === "application/pdf" ||
+      candidate.name.toLowerCase().endsWith(".pdf");
+    if (!isPdf) return "Invalid file type. Please upload a PDF.";
+    if (candidate.size > 5 * 1024 * 1024)
+      return "File too large. Maximum size is 5MB.";
     return null;
   }, []);
 
@@ -126,20 +138,21 @@ export default function ResumeUploadPage() {
       }
       const validationError = validatePdf(candidate);
       if (validationError) {
-        setFeedback({ tone: 'error', text: validationError });
+        setFeedback({ tone: "error", text: validationError });
         return;
       }
       setFeedback(null);
       setFile(candidate);
     },
-    [validatePdf]
+    [validatePdf],
   );
 
   const handleDrag = useCallback((event: React.DragEvent) => {
     event.preventDefault();
     event.stopPropagation();
-    if (event.type === 'dragenter' || event.type === 'dragover') setDragActive(true);
-    if (event.type === 'dragleave') setDragActive(false);
+    if (event.type === "dragenter" || event.type === "dragover")
+      setDragActive(true);
+    if (event.type === "dragleave") setDragActive(false);
   }, []);
 
   const handleDrop = useCallback(
@@ -149,14 +162,14 @@ export default function ResumeUploadPage() {
       setDragActive(false);
       setSelectedFile(event.dataTransfer.files?.[0] || null);
     },
-    [setSelectedFile]
+    [setSelectedFile],
   );
 
   const handleUpload = async () => {
     if (!file || uploading) return;
     setUploading(true);
     setUploadProgress(0);
-    setFeedback({ tone: 'info', text: 'Analyzing your resume...' });
+    setFeedback({ tone: "info", text: "Analyzing your resume..." });
 
     try {
       const parsedResume = await uploadResume(file, setUploadProgress);
@@ -164,19 +177,19 @@ export default function ResumeUploadPage() {
       setFile(null);
       if (isResumeEffectivelyEmpty(parsedResume)) {
         setFeedback({
-          tone: 'error',
-          text: 'Resume uploaded, but content appears empty. Please upload a text-based PDF.',
+          tone: "error",
+          text: "Resume uploaded, but content appears empty. Please upload a text-based PDF.",
         });
       } else {
         setFeedback({
-          tone: 'success',
-          text: 'Your resume has been parsed successfully.',
+          tone: "success",
+          text: "Your resume has been parsed successfully.",
         });
       }
     } catch (error: any) {
       setFeedback({
-        tone: 'error',
-        text: getReadableErrorMessage(error, 'Failed to upload resume.'),
+        tone: "error",
+        text: getReadableErrorMessage(error, "Failed to upload resume."),
       });
     } finally {
       setUploading(false);
@@ -185,16 +198,16 @@ export default function ResumeUploadPage() {
 
   const handleDelete = async () => {
     if (!resume) return;
-    if (!confirm('Are you sure you want to delete your resume?')) return;
+    if (!confirm("Are you sure you want to delete your resume?")) return;
     try {
       await deleteResume(resume.id);
       setResume(null);
       setFile(null);
-      setFeedback({ tone: 'success', text: 'Resume deleted successfully.' });
+      setFeedback({ tone: "success", text: "Resume deleted successfully." });
     } catch (error: any) {
       setFeedback({
-        tone: 'error',
-        text: getReadableErrorMessage(error, 'Failed to delete resume.'),
+        tone: "error",
+        text: getReadableErrorMessage(error, "Failed to delete resume."),
       });
     }
   };
@@ -205,10 +218,10 @@ export default function ResumeUploadPage() {
     const experience = (parsed?.experience || []).map(formatExperienceItem);
     return {
       skills: resume?.skills || [],
-      summary: parsed?.summary || '',
-      name: parsed?.name || '',
-      email: parsed?.email || '',
-      phone: parsed?.phone || '',
+      summary: parsed?.summary || "",
+      name: parsed?.name || "",
+      email: parsed?.email || "",
+      phone: parsed?.phone || "",
       education,
       experience,
     };
@@ -234,18 +247,18 @@ export default function ResumeUploadPage() {
   }
 
   const feedbackClass =
-    feedback?.tone === 'success'
-      ? 'border-gray-300 bg-gray-100 text-gray-800'
-      : feedback?.tone === 'error'
-        ? 'border-gray-300 bg-gray-100 text-gray-800'
-        : 'border-accent-soft bg-white text-accent';
+    feedback?.tone === "success"
+      ? "border-gray-300 bg-gray-100 text-gray-800"
+      : feedback?.tone === "error"
+        ? "border-gray-300 bg-gray-100 text-gray-800"
+        : "border-accent-soft bg-white text-accent";
 
   const hasParsedContent = resume && !isResumeEffectivelyEmpty(resume);
 
   return (
     <div className="layout-container section-spacing space-y-8 max-w-6xl mx-auto">
       <section className="grid gap-6 xl:grid-cols-[1.2fr,0.8fr] xl:items-stretch">
-        <Card hoverable={false} className="p-8 md:p-10">
+        <Card hoverable={false} className="p-5 sm:p-8 md:p-10">
           <div className="space-y-6">
             <div className="space-y-3">
               <Badge variant="secondary" className="w-fit">
@@ -254,17 +267,17 @@ export default function ResumeUploadPage() {
               <div>
                 <h1 className="text-3xl font-bold tracking-tight text-primary md:text-4xl">
                   {resume
-                    ? 'Upload your resume and review the extracted profile.'
+                    ? "Upload your resume and review the extracted profile."
                     : selectedBeginnerTrack
                       ? `Build your first resume for ${selectedBeginnerTrack.name}.`
-                      : 'Choose your starting point for placement preparation.'}
+                      : "Choose your starting point for placement preparation."}
                 </h1>
                 <p className="mt-3 max-w-2xl text-base text-secondary">
                   {resume
-                    ? 'This is the source for your career recommendations, role match insights, and recruiter visibility. Use a clean text-based PDF for the best results.'
+                    ? "This is the source for your career recommendations, role match insights, and recruiter visibility. Use a clean text-based PDF for the best results."
                     : selectedBeginnerTrack
                       ? `Your path is saved as ${selectedBeginnerTrack.name}. Create a one-page starter resume around this track, then upload it here to continue with the normal Esencelab flow.`
-                      : 'If you already have a resume, upload it normally. If you are just starting out, discover a likely-fit domain first and build your first resume with the right structure.'}
+                      : "If you already have a resume, upload it normally. If you are just starting out, discover a likely-fit domain first and build your first resume with the right structure."}
                 </p>
               </div>
             </div>
@@ -275,7 +288,7 @@ export default function ResumeUploadPage() {
                   Resume status
                 </p>
                 <p className="mt-2 text-lg font-semibold text-primary">
-                  {resume ? 'Uploaded' : 'Not uploaded'}
+                  {resume ? "Uploaded" : "Not uploaded"}
                 </p>
               </div>
               <div className="rounded-2xl border border-border bg-white/70 p-4">
@@ -298,60 +311,74 @@ export default function ResumeUploadPage() {
           </div>
         </Card>
 
-        <Card hoverable={false} className="p-8">
+        <Card hoverable={false} className="p-5 sm:p-8">
           {resume ? (
             <div className="space-y-4">
-              <h2 className="text-xl font-semibold text-primary">Before you upload</h2>
+              <h2 className="text-xl font-semibold text-primary">
+                Before you upload
+              </h2>
               <div className="space-y-3 text-sm text-secondary">
                 <p>Use PDF format only.</p>
                 <p>Keep the file under 5 MB.</p>
                 <p>Prefer selectable text over scanned image PDFs.</p>
-                <p>Include skills, education, and project or internship details.</p>
+                <p>
+                  Include skills, education, and project or internship details.
+                </p>
               </div>
             </div>
           ) : (
             <div className="space-y-5">
               <div>
-                <h2 className="text-xl font-semibold text-primary">How would you like to start?</h2>
+                <h2 className="text-xl font-semibold text-primary">
+                  How would you like to start?
+                </h2>
                 <p className="mt-2 text-sm text-secondary">
-                  Keep the existing upload flow if you already have a resume. Use the beginner path only if you are still figuring out your domain.
+                  Keep the existing upload flow if you already have a resume.
+                  Use the beginner path only if you are still figuring out your
+                  domain.
                 </p>
               </div>
               <div className="grid gap-3">
                 <button
                   type="button"
-                  onClick={() => setEntryMode('upload')}
+                  onClick={() => setEntryMode("upload")}
                   className={`rounded-2xl border p-4 text-left transition ${
-                    entryMode === 'upload'
-                      ? 'border-primary bg-white shadow-sm'
-                      : 'border-border bg-white/70 hover:bg-white'
+                    entryMode === "upload"
+                      ? "border-primary bg-white shadow-sm"
+                      : "border-border bg-white/70 hover:bg-white"
                   }`}
                 >
                   <div className="flex items-start gap-3">
                     <UploadCloud className="mt-0.5 h-5 w-5 text-primary" />
                     <div>
-                      <p className="font-semibold text-primary">I already have a resume</p>
+                      <p className="font-semibold text-primary">
+                        I already have a resume
+                      </p>
                       <p className="mt-1 text-sm text-secondary">
-                        Upload your PDF and continue with the existing Esencelab workflow.
+                        Upload your PDF and continue with the existing Esencelab
+                        workflow.
                       </p>
                     </div>
                   </div>
                 </button>
                 <button
                   type="button"
-                  onClick={() => setEntryMode('discover')}
+                  onClick={() => setEntryMode("discover")}
                   className={`rounded-2xl border p-4 text-left transition ${
-                    entryMode === 'discover'
-                      ? 'border-primary bg-white shadow-sm'
-                      : 'border-border bg-white/70 hover:bg-white'
+                    entryMode === "discover"
+                      ? "border-primary bg-white shadow-sm"
+                      : "border-border bg-white/70 hover:bg-white"
                   }`}
                 >
                   <div className="flex items-start gap-3">
                     <Compass className="mt-0.5 h-5 w-5 text-primary" />
                     <div>
-                      <p className="font-semibold text-primary">I am new and need direction</p>
+                      <p className="font-semibold text-primary">
+                        I am new and need direction
+                      </p>
                       <p className="mt-1 text-sm text-secondary">
-                        Discover a likely domain, then build a fresher-friendly resume around that path.
+                        Discover a likely domain, then build a fresher-friendly
+                        resume around that path.
                       </p>
                     </div>
                   </div>
@@ -371,7 +398,7 @@ export default function ResumeUploadPage() {
             className={`rounded-2xl border px-5 py-4 text-sm font-medium shadow-sm ${feedbackClass}`}
           >
             <div className="flex items-center gap-3">
-              {feedback.tone === 'error' ? (
+              {feedback.tone === "error" ? (
                 <AlertCircle className="h-5 w-5" />
               ) : (
                 <CheckCircle className="h-5 w-5" />
@@ -382,25 +409,25 @@ export default function ResumeUploadPage() {
         )}
       </AnimatePresence>
 
-      {!resume && entryMode === 'discover' && (
+      {!resume && entryMode === "discover" && (
         <BeginnerCareerStarter
-          onUseUploadFlow={() => setEntryMode('upload')}
+          onUseUploadFlow={() => setEntryMode("upload")}
           onSavedTrack={({ message, track }) => {
             setSelectedBeginnerTrack(track);
-            setEntryMode('upload');
-            setFeedback({ tone: 'success', text: message });
+            setEntryMode("upload");
+            setFeedback({ tone: "success", text: message });
           }}
-          onError={(text) => setFeedback({ tone: 'error', text })}
+          onError={(text) => setFeedback({ tone: "error", text })}
         />
       )}
 
       <section className="grid gap-6 xl:grid-cols-[1.05fr,0.95fr]">
-        <Card hoverable={false} className="p-8">
+        <Card hoverable={false} className="p-5 sm:p-8">
           <div
-            className={`rounded-3xl border border-dashed p-8 text-center transition-all ${
+            className={`rounded-3xl border border-dashed p-5 text-center transition-all sm:p-8 ${
               dragActive
-                ? 'border-primary bg-white'
-                : 'border-border bg-white/60 hover:border-primary/50 hover:bg-white'
+                ? "border-primary bg-white"
+                : "border-border bg-white/60 hover:border-primary/50 hover:bg-white"
             }`}
             onDragEnter={handleDrag}
             onDragLeave={handleDrag}
@@ -411,30 +438,45 @@ export default function ResumeUploadPage() {
               id="file-upload"
               type="file"
               accept=".pdf"
-              onChange={(event) => setSelectedFile(event.target.files?.[0] || null)}
+              onChange={(event) =>
+                setSelectedFile(event.target.files?.[0] || null)
+              }
               className="hidden"
             />
 
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-border bg-white">
               <UploadCloud className="h-7 w-7 text-primary" />
             </div>
-            <h2 className="mt-5 text-2xl font-semibold text-primary">Upload a resume PDF</h2>
+            <h2 className="mt-5 text-2xl font-semibold text-primary">
+              Upload a resume PDF
+            </h2>
             <p className="mt-2 text-sm text-secondary">
               Drag and drop your file here, or browse from your device.
             </p>
 
-            <div className="mt-6 flex flex-wrap justify-center gap-3">
-              <Button onClick={() => document.getElementById('file-upload')?.click()}>
+            <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row sm:flex-wrap">
+              <Button
+                className="w-full sm:w-auto"
+                onClick={() => document.getElementById("file-upload")?.click()}
+              >
                 Choose file
               </Button>
               {file && (
-                <Button variant="outline" onClick={() => setFile(null)}>
+                <Button
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  onClick={() => setFile(null)}
+                >
                   <X className="mr-2 h-4 w-4" />
                   Clear selection
                 </Button>
               )}
               {resume && (
-                <Button variant="ghost" onClick={handleDelete} className="text-gray-700 hover:bg-gray-100">
+                <Button
+                  variant="ghost"
+                  onClick={handleDelete}
+                  className="w-full text-gray-700 hover:bg-gray-100 sm:w-auto"
+                >
                   <Trash2 className="mr-2 h-4 w-4" />
                   Delete resume
                 </Button>
@@ -455,7 +497,11 @@ export default function ResumeUploadPage() {
                       </p>
                     </div>
                   </div>
-                  <Button onClick={handleUpload} disabled={uploading} isLoading={uploading}>
+                  <Button
+                    onClick={handleUpload}
+                    disabled={uploading}
+                    isLoading={uploading}
+                  >
                     Upload and analyze
                   </Button>
                 </div>
@@ -479,10 +525,10 @@ export default function ResumeUploadPage() {
           </div>
         </Card>
 
-        <Card hoverable={false} className="p-8">
+        <Card hoverable={false} className="p-5 sm:p-8">
           <div className="space-y-4">
             <h2 className="text-xl font-semibold text-primary">
-              {resume ? 'Current profile snapshot' : 'Starter resume guidance'}
+              {resume ? "Current profile snapshot" : "Starter resume guidance"}
             </h2>
             {!resume ? (
               selectedBeginnerTrack ? (
@@ -530,52 +576,64 @@ export default function ResumeUploadPage() {
                   </div>
                   <div className="flex flex-wrap gap-3">
                     <Link href={`/roadmaps?focus=${selectedBeginnerTrack.id}`}>
-                      <Button variant="outline">Open recommended roadmaps</Button>
+                      <Button variant="outline">
+                        Open recommended roadmaps
+                      </Button>
                     </Link>
                     <Button
                       variant="ghost"
                       onClick={() => {
                         setSelectedBeginnerTrack(null);
-                        setEntryMode('discover');
+                        setEntryMode("discover");
                       }}
                     >
                       Change path
                     </Button>
                   </div>
                 </div>
-              ) : entryMode === 'discover' ? (
+              ) : entryMode === "discover" ? (
                 <div className="space-y-4">
                   <div className="rounded-2xl border border-border bg-white/70 p-4">
                     <p className="text-xs font-semibold uppercase tracking-[0.14em] text-secondary">
                       What your first resume should include
                     </p>
                     <ul className="mt-3 space-y-2 text-sm text-secondary">
-                      <li>One clean page with education, skills, projects, and links.</li>
-                      <li>Projects should highlight your contribution, tools, and the result.</li>
+                      <li>
+                        One clean page with education, skills, projects, and
+                        links.
+                      </li>
+                      <li>
+                        Projects should highlight your contribution, tools, and
+                        the result.
+                      </li>
                       <li>Only list technologies you can explain clearly.</li>
                       <li>Upload your first version here once it is ready.</li>
                     </ul>
                   </div>
                   <div className="rounded-2xl border border-border bg-white/70 p-4 text-sm leading-6 text-secondary">
-                    The normal Esencelab resume-analysis flow will continue exactly as usual after you upload your first draft.
+                    The normal Esencelab resume-analysis flow will continue
+                    exactly as usual after you upload your first draft.
                   </div>
                 </div>
               ) : (
                 <p className="text-sm text-secondary">
-                  No resume uploaded yet. Once you upload one, this page will show your
-                  parsed contact details, summary, skills, and extracted experience.
+                  No resume uploaded yet. Once you upload one, this page will
+                  show your parsed contact details, summary, skills, and
+                  extracted experience.
                 </p>
               )
             ) : hasParsedContent ? (
               <>
                 <div className="rounded-2xl border border-border bg-white/70 p-4">
                   <p className="text-lg font-semibold text-primary">
-                    {resumeSnapshot.name || 'Unnamed candidate'}
+                    {resumeSnapshot.name || "Unnamed candidate"}
                   </p>
                   <div className="mt-2 space-y-1 text-sm text-secondary">
                     {resumeSnapshot.email && <p>{resumeSnapshot.email}</p>}
                     {resumeSnapshot.phone && <p>{resumeSnapshot.phone}</p>}
-                    {!resumeSnapshot.email && !resumeSnapshot.phone && <p>Contact details not found.</p>}
+                    {!resumeSnapshot.email && !resumeSnapshot.phone && (
+                      <p>Contact details not found.</p>
+                    )}
                   </div>
                 </div>
 
@@ -605,15 +663,17 @@ export default function ResumeUploadPage() {
                         </span>
                       ))
                     ) : (
-                      <p className="text-sm text-secondary">No skills detected yet.</p>
+                      <p className="text-sm text-secondary">
+                        No skills detected yet.
+                      </p>
                     )}
                   </div>
                 </div>
               </>
             ) : (
               <p className="text-sm text-secondary">
-                The resume was uploaded, but the parser could not extract enough structured
-                text. Try a cleaner PDF export and upload again.
+                The resume was uploaded, but the parser could not extract enough
+                structured text. Try a cleaner PDF export and upload again.
               </p>
             )}
           </div>
@@ -627,14 +687,21 @@ export default function ResumeUploadPage() {
             {resumeSnapshot.education.length > 0 ? (
               <div className="mt-4 space-y-3">
                 {resumeSnapshot.education.map((item, index) => (
-                  <div key={`${item.title}-${index}`} className="rounded-2xl border border-border bg-white/70 p-4">
+                  <div
+                    key={`${item.title}-${index}`}
+                    className="rounded-2xl border border-border bg-white/70 p-4"
+                  >
                     <p className="font-medium text-primary">{item.title}</p>
-                    {item.meta && <p className="mt-1 text-sm text-secondary">{item.meta}</p>}
+                    {item.meta && (
+                      <p className="mt-1 text-sm text-secondary">{item.meta}</p>
+                    )}
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="mt-4 text-sm text-secondary">No education entries were extracted.</p>
+              <p className="mt-4 text-sm text-secondary">
+                No education entries were extracted.
+              </p>
             )}
           </Card>
 
@@ -643,17 +710,26 @@ export default function ResumeUploadPage() {
             {resumeSnapshot.experience.length > 0 ? (
               <div className="mt-4 space-y-3">
                 {resumeSnapshot.experience.map((item, index) => (
-                  <div key={`${item.title}-${index}`} className="rounded-2xl border border-border bg-white/70 p-4">
+                  <div
+                    key={`${item.title}-${index}`}
+                    className="rounded-2xl border border-border bg-white/70 p-4"
+                  >
                     <p className="font-medium text-primary">{item.title}</p>
-                    {item.meta && <p className="mt-1 text-sm text-secondary">{item.meta}</p>}
+                    {item.meta && (
+                      <p className="mt-1 text-sm text-secondary">{item.meta}</p>
+                    )}
                     {item.summary && (
-                      <p className="mt-2 text-sm leading-6 text-secondary">{item.summary}</p>
+                      <p className="mt-2 text-sm leading-6 text-secondary">
+                        {item.summary}
+                      </p>
                     )}
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="mt-4 text-sm text-secondary">No experience entries were extracted.</p>
+              <p className="mt-4 text-sm text-secondary">
+                No experience entries were extracted.
+              </p>
             )}
           </Card>
         </section>

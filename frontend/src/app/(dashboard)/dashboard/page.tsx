@@ -329,7 +329,7 @@ export default function DashboardPage() {
         </section>
 
         <section>
-          <div className="glass-panel p-8 max-w-4xl rounded-3xl">
+          <div className="glass-panel max-w-4xl rounded-3xl p-5 sm:p-8">
             <h2 className="text-2xl font-serif text-primary mb-6">
               Post a New Job
             </h2>
@@ -467,9 +467,9 @@ export default function DashboardPage() {
         </section>
 
         <section>
-          <div className="glass-panel p-8 rounded-3xl">
-            <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-2xl font-serif text-primary">
+          <div className="glass-panel rounded-3xl p-5 sm:p-8">
+            <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <h2 className="min-w-0 break-words text-2xl font-serif text-primary">
                 Candidate Ranking Summary
               </h2>
               <Button
@@ -584,14 +584,14 @@ export default function DashboardPage() {
                   return (
                     <div
                       key={candidate.candidateId}
-                      className="p-6 rounded-2xl border-[0.5px] border-border bg-white/60 hover:bg-white transition-all shadow-sm hover:shadow-lg hover:-translate-y-1 flex flex-col justify-between"
+                      className="flex flex-col justify-between rounded-2xl border-[0.5px] border-border bg-white/60 p-5 shadow-sm transition-all hover:-translate-y-1 hover:bg-white hover:shadow-lg sm:p-6"
                     >
-                      <div className="mb-4 flex items-start justify-between">
-                        <div>
-                          <p className="text-xl font-serif font-bold text-primary">
+                      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
+                          <p className="break-words text-xl font-serif font-bold text-primary">
                             {candidate.name}
                           </p>
-                          <p className="text-xs text-secondary">
+                          <p className="break-words text-xs text-secondary">
                             {candidate.email}
                           </p>
                         </div>
@@ -603,7 +603,7 @@ export default function DashboardPage() {
                                 ? "warning"
                                 : "secondary"
                           }
-                          className="font-sans font-semibold tracking-wide uppercase text-[10px] px-2 py-1"
+                          className="self-start px-2 py-1 font-sans text-[10px] font-semibold uppercase tracking-wide sm:self-auto"
                         >
                           {match}% Match
                         </Badge>
@@ -687,16 +687,19 @@ export default function DashboardPage() {
                       key={`${candidate.studentId}-${candidate.jobId}`}
                       className="rounded-xl border border-border bg-white/70 p-3"
                     >
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-primary">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-primary">
                             {candidate.name}
                           </p>
-                          <p className="text-xs text-secondary">
+                          <p className="break-words text-xs text-secondary">
                             {candidate.jobTitle}
                           </p>
                         </div>
-                        <Badge variant="success">
+                        <Badge
+                          variant="success"
+                          className="self-start sm:self-auto"
+                        >
                           {scoreToPercent(candidate.matchScore)}%
                         </Badge>
                       </div>
@@ -836,7 +839,7 @@ export default function DashboardPage() {
       <section className="grid gap-6 lg:grid-cols-2">
         <Card hoverable={false} className="p-6 space-y-4">
           <h2 className="text-xl font-serif text-primary">Resume Monitoring</h2>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="rounded-xl border border-border bg-white p-3">
               <p className="text-[11px] uppercase tracking-[0.12em] text-secondary">
                 Parsed

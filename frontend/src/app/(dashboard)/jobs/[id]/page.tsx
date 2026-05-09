@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Job detail page.
@@ -6,18 +6,26 @@
  * This page shows a single job in more detail and exposes role-based actions
  * such as applying, viewing match data, or managing the posting.
  */
-import { useCallback, useEffect, useState } from 'react';
-import { useRouter, useParams } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
-import api from '@/lib/api';
-import { Job, Application } from '@/types';
-import Card from '@/components/Card';
-import Badge from '@/components/Badge';
-import Button from '@/components/Button';
-import Link from 'next/link';
-import { MapPin, DollarSign, Clock, Briefcase, Building, CheckCircle, ChevronLeft } from 'lucide-react';
-import { Skeleton } from '@/components/Skeleton';
-import { motion } from 'framer-motion';
+import { useCallback, useEffect, useState } from "react";
+import { useRouter, useParams } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
+import api from "@/lib/api";
+import { Job, Application } from "@/types";
+import Card from "@/components/Card";
+import Badge from "@/components/Badge";
+import Button from "@/components/Button";
+import Link from "next/link";
+import {
+  MapPin,
+  DollarSign,
+  Clock,
+  Briefcase,
+  Building,
+  CheckCircle,
+  ChevronLeft,
+} from "lucide-react";
+import { Skeleton } from "@/components/Skeleton";
+import { motion } from "framer-motion";
 
 export default function JobDetailPage() {
   const { user } = useAuth();
@@ -37,22 +45,24 @@ export default function JobDetailPage() {
       const res = await api.get(`/jobs/${jobId}`);
       setJob(res.data.data);
     } catch {
-      router.push('/jobs');
+      router.push("/jobs");
     } finally {
       setLoading(false);
     }
   }, [jobId, router]);
 
   const checkApplication = useCallback(async () => {
-    if (user?.role !== 'student') {
+    if (user?.role !== "student") {
       setHasApplied(false);
       return;
     }
     if (!jobId) return;
     try {
-      const res = await api.get('/applications/my');
+      const res = await api.get("/applications/my");
       const applications = res.data.data || [];
-      const applied = applications.some((app: Application) => app.jobId === jobId);
+      const applied = applications.some(
+        (app: Application) => app.jobId === jobId,
+      );
       setHasApplied(applied);
     } catch {
       setHasApplied(false);
@@ -72,11 +82,13 @@ export default function JobDetailPage() {
     setFeedback(null);
     setError(null);
     try {
-      await api.post('/applications', { jobId });
+      await api.post("/applications", { jobId });
       setHasApplied(true);
-      setFeedback('Application submitted successfully.');
+      setFeedback("Application submitted successfully.");
     } catch (error: any) {
-      setError(error.response?.data?.message || 'Failed to apply. Please try again.');
+      setError(
+        error.response?.data?.message || "Failed to apply. Please try again.",
+      );
     } finally {
       setApplying(false);
     }
@@ -109,7 +121,10 @@ export default function JobDetailPage() {
           {error}
         </div>
       )}
-      <Link href="/jobs" className="mb-6 inline-flex items-center text-sm font-medium text-secondary transition-colors hover:text-primary sm:mb-8 group">
+      <Link
+        href="/jobs"
+        className="mb-6 inline-flex items-center text-sm font-medium text-secondary transition-colors hover:text-primary sm:mb-8 group"
+      >
         <div className="bg-background border border-border group-hover:bg-accent-soft group-hover:text-accent group-hover:border-accent-soft p-1.5 rounded-lg mr-3 transition-colors">
           <ChevronLeft className="w-4 h-4" />
         </div>
@@ -125,30 +140,39 @@ export default function JobDetailPage() {
           <div className="mb-6">
             <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-4">
               <div>
-                <h1 className="text-2xl md:text-4xl font-bold tracking-tight text-primary mb-2 leading-tight">{job.title}</h1>
+                <h1 className="text-2xl md:text-4xl font-bold tracking-tight text-primary mb-2 leading-tight">
+                  {job.title}
+                </h1>
                 <p className="flex items-center text-lg font-medium text-secondary sm:text-xl">
                   <Building className="w-5 h-5 mr-2.5 text-secondary" />
                   {job.company}
                 </p>
               </div>
-              <Badge variant={job.status === 'active' ? 'success' : 'secondary'} className="self-start md:self-auto px-4 py-1.5 text-sm">
+              <Badge
+                variant={job.status === "active" ? "success" : "secondary"}
+                className="self-start md:self-auto px-4 py-1.5 text-sm"
+              >
                 {job.status}
               </Badge>
             </div>
 
             <div className="my-8 flex flex-wrap gap-3 border-y border-border py-6">
-              <div className="flex min-h-[44px] items-center text-secondary bg-background px-4 py-2 rounded-xl border border-border">
-                <MapPin className="w-4 h-4 mr-2.5 text-accent" />
-                <span className="text-sm font-medium">{job.location}</span>
+              <div className="flex max-w-full min-w-0 items-center text-secondary bg-background px-4 py-2 rounded-xl border border-border">
+                <MapPin className="w-4 h-4 mr-2.5 shrink-0 text-accent" />
+                <span className="min-w-0 break-words text-sm font-medium">
+                  {job.location}
+                </span>
               </div>
-              <div className="flex min-h-[44px] items-center text-secondary bg-background px-4 py-2 rounded-xl border border-border">
-                <Briefcase className="w-4 h-4 mr-2.5 text-accent" />
-                <span className="text-sm font-medium capitalize">{job.jobType?.replace('_', ' ')}</span>
+              <div className="flex max-w-full min-w-0 items-center text-secondary bg-background px-4 py-2 rounded-xl border border-border">
+                <Briefcase className="w-4 h-4 mr-2.5 shrink-0 text-accent" />
+                <span className="min-w-0 break-words text-sm font-medium capitalize">
+                  {job.jobType?.replace("_", " ")}
+                </span>
               </div>
               {(job.salaryMin || job.salaryMax) && (
-                <div className="flex min-h-[44px] items-center text-secondary bg-background px-4 py-2 rounded-xl border border-border">
-                  <DollarSign className="w-4 h-4 mr-2.5 text-accent" />
-                  <span className="text-sm font-medium">
+                <div className="flex max-w-full min-w-0 items-center text-secondary bg-background px-4 py-2 rounded-xl border border-border">
+                  <DollarSign className="w-4 h-4 mr-2.5 shrink-0 text-accent" />
+                  <span className="min-w-0 break-words text-sm font-medium">
                     {job.salaryMin && job.salaryMax
                       ? `$${job.salaryMin.toLocaleString()} - $${job.salaryMax.toLocaleString()}`
                       : job.salaryMin
@@ -157,9 +181,11 @@ export default function JobDetailPage() {
                   </span>
                 </div>
               )}
-              <div className="flex min-h-[44px] items-center text-secondary bg-background px-4 py-2 rounded-xl border border-border">
-                <Clock className="w-4 h-4 mr-2.5 text-accent" />
-                <span className="text-sm font-medium">{new Date(job.createdAt).toLocaleDateString()}</span>
+              <div className="flex max-w-full min-w-0 items-center text-secondary bg-background px-4 py-2 rounded-xl border border-border">
+                <Clock className="w-4 h-4 mr-2.5 shrink-0 text-accent" />
+                <span className="min-w-0 break-words text-sm font-medium">
+                  {new Date(job.createdAt).toLocaleDateString()}
+                </span>
               </div>
             </div>
           </div>
@@ -195,7 +221,11 @@ export default function JobDetailPage() {
                 </h2>
                 <div className="flex flex-wrap gap-2.5">
                   {job.skills.map((skill, index) => (
-                    <Badge key={index} variant="secondary" className="px-3 py-1.5 font-normal text-sm">
+                    <Badge
+                      key={index}
+                      variant="secondary"
+                      className="px-3 py-1.5 font-normal text-sm"
+                    >
                       {skill}
                     </Badge>
                   ))}
@@ -211,26 +241,46 @@ export default function JobDetailPage() {
           transition={{ delay: 0.1 }}
           className="space-y-6 lg:sticky lg:top-28 lg:self-start"
         >
-          {user?.role === 'student' && (
-            <Card hoverable={false} className="border-2 border-border shadow-sm">
+          {user?.role === "student" && (
+            <Card
+              hoverable={false}
+              className="border-2 border-border shadow-sm"
+            >
               {hasApplied ? (
                 <div className="text-center py-6">
                   <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                     <CheckCircle className="w-8 h-8 text-gray-600" />
                   </div>
-                  <p className="font-bold text-primary text-xl mb-2">Application Submitted</p>
-                  <p className="text-sm text-secondary">Track your application status in your dashboard.</p>
-                  <Link href="/applications" className="mt-6 inline-block w-full">
-                    <Button variant="outline" className="w-full">View My Applications</Button>
+                  <p className="font-bold text-primary text-xl mb-2">
+                    Application Submitted
+                  </p>
+                  <p className="text-sm text-secondary">
+                    Track your application status in your dashboard.
+                  </p>
+                  <Link
+                    href="/applications"
+                    className="mt-6 inline-block w-full"
+                  >
+                    <Button variant="outline" className="w-full">
+                      View My Applications
+                    </Button>
                   </Link>
                 </div>
               ) : (
                 <div className="space-y-5 text-center py-2">
-                  <h3 className="font-bold text-primary text-xl">Interested in this role?</h3>
+                  <h3 className="font-bold text-primary text-xl">
+                    Interested in this role?
+                  </h3>
                   <p className="text-sm text-secondary leading-relaxed">
-                    Submit your application now. Our AI will automatically match your resume skills against the job requirements.
+                    Submit your application now. Our AI will automatically match
+                    your resume skills against the job requirements.
                   </p>
-                  <Button onClick={handleApply} isLoading={applying} variant="primary" className="w-full py-3 text-sm">
+                  <Button
+                    onClick={handleApply}
+                    isLoading={applying}
+                    variant="primary"
+                    className="w-full py-3 text-sm"
+                  >
                     Apply Now
                   </Button>
                 </div>
@@ -238,33 +288,45 @@ export default function JobDetailPage() {
             </Card>
           )}
 
-          <Card hoverable={false} className="bg-background border-none shadow-none p-0">
-            <h3 className="font-bold text-primary text-lg mb-4">Quick Overview</h3>
+          <Card
+            hoverable={false}
+            className="bg-background border-none shadow-none p-0"
+          >
+            <h3 className="font-bold text-primary text-lg mb-4">
+              Quick Overview
+            </h3>
             <div className="space-y-4 text-sm bg-white p-5 sm:p-6 rounded-2xl border border-border">
-              <div className="grid gap-1 sm:grid-cols-[100px_1fr] sm:items-center">
+              <div className="grid gap-1 md:grid-cols-[90px,minmax(0,1fr)] md:items-center">
                 <span className="text-secondary font-medium">Job Type</span>
-                <span className="font-semibold text-primary sm:text-right capitalize">{job.jobType?.replace('_', ' ')}</span>
+                <span className="min-w-0 break-words font-semibold text-primary md:text-right capitalize">
+                  {job.jobType?.replace("_", " ")}
+                </span>
               </div>
               <div className="w-full h-px bg-border"></div>
-              <div className="grid gap-1 sm:grid-cols-[100px_1fr] sm:items-center">
+              <div className="grid gap-1 md:grid-cols-[90px,minmax(0,1fr)] md:items-center">
                 <span className="text-secondary font-medium">Location</span>
-                <span className="font-semibold text-primary sm:text-right">{job.location}</span>
+                <span className="min-w-0 break-words font-semibold text-primary md:text-right">
+                  {job.location}
+                </span>
               </div>
               {(job.salaryMin || job.salaryMax) && (
                 <>
                   <div className="w-full h-px bg-border"></div>
-                  <div className="grid gap-1 sm:grid-cols-[100px_1fr] sm:items-center">
+                  <div className="grid gap-1 md:grid-cols-[90px,minmax(0,1fr)] md:items-center">
                     <span className="text-secondary font-medium">Salary</span>
-                    <span className="font-semibold text-primary sm:text-right">
-                      ${job.salaryMin?.toLocaleString()} - ${job.salaryMax?.toLocaleString()}
+                    <span className="min-w-0 break-words font-semibold text-primary md:text-right">
+                      ${job.salaryMin?.toLocaleString()} - $
+                      {job.salaryMax?.toLocaleString()}
                     </span>
                   </div>
                 </>
               )}
               <div className="w-full h-px bg-border"></div>
-              <div className="grid gap-1 sm:grid-cols-[100px_1fr] sm:items-center">
+              <div className="grid gap-1 md:grid-cols-[90px,minmax(0,1fr)] md:items-center">
                 <span className="text-secondary font-medium">Posted</span>
-                <span className="font-semibold text-primary sm:text-right">{new Date(job.createdAt).toLocaleDateString()}</span>
+                <span className="min-w-0 break-words font-semibold text-primary md:text-right">
+                  {new Date(job.createdAt).toLocaleDateString()}
+                </span>
               </div>
             </div>
           </Card>

@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Applicants overview page.
@@ -6,42 +6,59 @@
  * Recruiters and admins use this page to review ranked candidates, filter the
  * list, and move into a detailed applicant view.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import api from '@/lib/api';
-import { Application, Job, RecruiterCandidateMatch } from '@/types';
-import Card from '@/components/Card';
-import Badge from '@/components/Badge';
-import Button from '@/components/Button';
-import Loading from '@/components/Loading';
-import { Users, Briefcase, CheckCircle, XCircle, Clock, Search } from 'lucide-react';
-import { getCandidateMatches, getEmployerJobs, getReadableErrorMessage } from '@/lib/dashboardApi';
-import { useRoleAccess } from '@/lib/useRoleAccess';
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import api from "@/lib/api";
+import { Application, Job, RecruiterCandidateMatch } from "@/types";
+import Card from "@/components/Card";
+import Badge from "@/components/Badge";
+import Button from "@/components/Button";
+import Loading from "@/components/Loading";
+import {
+  Users,
+  Briefcase,
+  CheckCircle,
+  XCircle,
+  Clock,
+  Search,
+} from "lucide-react";
+import {
+  getCandidateMatches,
+  getEmployerJobs,
+  getReadableErrorMessage,
+} from "@/lib/dashboardApi";
+import { useRoleAccess } from "@/lib/useRoleAccess";
 
 export default function ApplicantsPage() {
-  const { user, hasAllowedRole, isCheckingAccess } = useRoleAccess({ allowedRoles: ['employer', 'admin'] });
+  const { user, hasAllowedRole, isCheckingAccess } = useRoleAccess({
+    allowedRoles: ["employer", "admin"],
+  });
   const router = useRouter();
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [selectedJobId, setSelectedJobId] = useState('');
-  const [candidateMatches, setCandidateMatches] = useState<RecruiterCandidateMatch[]>([]);
-  const [sortBy, setSortBy] = useState<'match' | 'resume' | 'experience'>('match');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [selectedJobId, setSelectedJobId] = useState("");
+  const [candidateMatches, setCandidateMatches] = useState<
+    RecruiterCandidateMatch[]
+  >([]);
+  const [sortBy, setSortBy] = useState<"match" | "resume" | "experience">(
+    "match",
+  );
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [loadingMatches, setLoadingMatches] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchApplications = useCallback(async () => {
     try {
       setError(null);
-      const params = statusFilter ? `?status=${statusFilter}` : '';
+      const params = statusFilter ? `?status=${statusFilter}` : "";
       const res = await api.get(`/applications${params}`);
       setApplications(res.data.data || []);
     } catch (err: any) {
       setApplications([]);
-      setError(getReadableErrorMessage(err, 'Failed to load applications.'));
+      setError(getReadableErrorMessage(err, "Failed to load applications."));
     } finally {
       setLoading(false);
     }
@@ -51,38 +68,43 @@ export default function ApplicantsPage() {
     try {
       setError(null);
       const fetchedJobs =
-        user?.role === 'employer'
+        user?.role === "employer"
           ? await getEmployerJobs()
-          : ((await api.get('/jobs?status=active')).data.data?.jobs || []);
+          : (await api.get("/jobs?status=active")).data.data?.jobs || [];
       setJobs(fetchedJobs);
-      setSelectedJobId((current) => current || fetchedJobs[0]?.id || '');
+      setSelectedJobId((current) => current || fetchedJobs[0]?.id || "");
     } catch (err: any) {
       setJobs([]);
-      setError(getReadableErrorMessage(err, 'Failed to load jobs.'));
+      setError(getReadableErrorMessage(err, "Failed to load jobs."));
     }
   }, [user?.role]);
 
-  const fetchCandidateMatches = useCallback(async (jobId: string) => {
-    if (!jobId) {
-      setCandidateMatches([]);
-      return;
-    }
-    setLoadingMatches(true);
-    try {
-      setError(null);
-      const matches = await getCandidateMatches(jobId, {
-        sortBy,
-        order: sortOrder,
-        limit: 20,
-      });
-      setCandidateMatches(matches);
-    } catch (err: any) {
-      setCandidateMatches([]);
-      setError(getReadableErrorMessage(err, 'Failed to load candidate rankings.'));
-    } finally {
-      setLoadingMatches(false);
-    }
-  }, [sortBy, sortOrder]);
+  const fetchCandidateMatches = useCallback(
+    async (jobId: string) => {
+      if (!jobId) {
+        setCandidateMatches([]);
+        return;
+      }
+      setLoadingMatches(true);
+      try {
+        setError(null);
+        const matches = await getCandidateMatches(jobId, {
+          sortBy,
+          order: sortOrder,
+          limit: 20,
+        });
+        setCandidateMatches(matches);
+      } catch (err: any) {
+        setCandidateMatches([]);
+        setError(
+          getReadableErrorMessage(err, "Failed to load candidate rankings."),
+        );
+      } finally {
+        setLoadingMatches(false);
+      }
+    },
+    [sortBy, sortOrder],
+  );
 
   useEffect(() => {
     if (!hasAllowedRole) return;
@@ -104,18 +126,21 @@ export default function ApplicantsPage() {
       await api.put(`/applications/${appId}/status`, { status: newStatus });
       void fetchApplications();
     } catch (err: any) {
-      setError(getReadableErrorMessage(err, 'Failed to update status.'));
+      setError(getReadableErrorMessage(err, "Failed to update status."));
     }
   };
 
   const getStatusBadge = (status: string) => {
-    const variants: Record<string, 'success' | 'warning' | 'error' | 'primary'> = {
-      pending: 'warning',
-      shortlisted: 'success',
-      rejected: 'error',
-      interview: 'primary',
+    const variants: Record<
+      string,
+      "success" | "warning" | "error" | "primary"
+    > = {
+      pending: "warning",
+      shortlisted: "success",
+      rejected: "error",
+      interview: "primary",
     };
-    return <Badge variant={variants[status] || 'secondary'}>{status}</Badge>;
+    return <Badge variant={variants[status] || "secondary"}>{status}</Badge>;
   };
 
   const getApplicantDetailHref = (application: Application) => {
@@ -133,7 +158,7 @@ export default function ApplicantsPage() {
         app.job?.company,
       ]
         .filter(Boolean)
-        .join(' ')
+        .join(" ")
         .toLowerCase();
       return haystack.includes(query);
     });
@@ -151,16 +176,21 @@ export default function ApplicantsPage() {
 
   const stats = {
     total: applications.length,
-    pending: applications.filter(a => a.status === 'pending').length,
-    shortlisted: applications.filter(a => a.status === 'shortlisted').length,
-    interview: applications.filter(a => a.status === 'interview').length,
+    pending: applications.filter((a) => a.status === "pending").length,
+    shortlisted: applications.filter((a) => a.status === "shortlisted").length,
+    interview: applications.filter((a) => a.status === "interview").length,
   };
 
   return (
     <div className="layout-container section-spacing space-y-8 max-w-6xl mx-auto">
       <div className="space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight text-primary">Applicants</h1>
-        <p className="text-secondary">Review applications, compare ranked candidates, and move hiring forward.</p>
+        <h1 className="text-3xl font-bold tracking-tight text-primary">
+          Applicants
+        </h1>
+        <p className="text-secondary">
+          Review applications, compare ranked candidates, and move hiring
+          forward.
+        </p>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -186,11 +216,17 @@ export default function ApplicantsPage() {
         </Card>
       </div>
 
-      <Card hoverable={false} title="AI Candidate Ranking" subtitle="Review the best-fit candidates for each active role.">
+      <Card
+        hoverable={false}
+        title="AI Candidate Ranking"
+        subtitle="Review the best-fit candidates for each active role."
+      >
         <div className="space-y-4">
           <div className="grid gap-3 md:grid-cols-3">
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-secondary/70 mb-1">Select Job</label>
+              <label className="block text-sm font-medium text-secondary/70 mb-1">
+                Select Job
+              </label>
               <select
                 value={selectedJobId}
                 onChange={(event) => setSelectedJobId(event.target.value)}
@@ -205,10 +241,16 @@ export default function ApplicantsPage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-secondary/70 mb-1">Sort By</label>
+              <label className="block text-sm font-medium text-secondary/70 mb-1">
+                Sort By
+              </label>
               <select
                 value={sortBy}
-                onChange={(event) => setSortBy(event.target.value as 'match' | 'resume' | 'experience')}
+                onChange={(event) =>
+                  setSortBy(
+                    event.target.value as "match" | "resume" | "experience",
+                  )
+                }
                 className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-primary focus:outline-none focus:ring-1 focus:ring-primary"
               >
                 <option value="match">Highest Match %</option>
@@ -217,10 +259,14 @@ export default function ApplicantsPage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-secondary/70 mb-1">Order</label>
+              <label className="block text-sm font-medium text-secondary/70 mb-1">
+                Order
+              </label>
               <select
                 value={sortOrder}
-                onChange={(event) => setSortOrder(event.target.value as 'asc' | 'desc')}
+                onChange={(event) =>
+                  setSortOrder(event.target.value as "asc" | "desc")
+                }
                 className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-primary focus:outline-none focus:ring-1 focus:ring-primary"
               >
                 <option value="desc">High to Low</option>
@@ -236,40 +282,63 @@ export default function ApplicantsPage() {
           )}
 
           {loadingMatches ? (
-            <div className="text-sm text-secondary py-8 text-center">Loading AI candidate rankings...</div>
+            <div className="text-sm text-secondary py-8 text-center">
+              Loading AI candidate rankings...
+            </div>
           ) : candidateMatches.length > 0 ? (
             <div className="space-y-3">
               {candidateMatches.slice(0, 8).map((match) => (
-                <div key={match.candidateId} className="rounded-2xl border border-border bg-white/70 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-medium text-primary">{match.name}</p>
-                      <p className="text-sm text-secondary">{match.email}</p>
+                <div
+                  key={match.candidateId}
+                  className="rounded-2xl border border-border bg-white/70 p-4"
+                >
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-primary">
+                        {match.name}
+                      </p>
+                      <p className="break-words text-sm text-secondary">
+                        {match.email}
+                      </p>
                       <p className="text-xs text-secondary mt-1">
-                        Resume: {Math.round(match.resumeScore || 0)}% | Experience: {match.experienceYears || 0} yrs
+                        Resume: {Math.round(match.resumeScore || 0)}% |
+                        Experience: {match.experienceYears || 0} yrs
                       </p>
                     </div>
-                    <Badge variant={match.matchScore >= 70 ? 'success' : match.matchScore >= 50 ? 'warning' : 'secondary'}>
+                    <Badge
+                      variant={
+                        match.matchScore >= 70
+                          ? "success"
+                          : match.matchScore >= 50
+                            ? "warning"
+                            : "secondary"
+                      }
+                      className="self-start sm:self-auto"
+                    >
                       {match.matchScore}% Match
                     </Badge>
                   </div>
                   {match.topSkills?.length ? (
                     <p className="mt-2 text-xs text-secondary">
-                      Top Skills: {match.topSkills.slice(0, 3).join(', ')}
+                      Top Skills: {match.topSkills.slice(0, 3).join(", ")}
                     </p>
                   ) : null}
                   {match.missingSkills.length > 0 && (
                     <p className="mt-2 text-xs text-secondary">
-                      Missing: {match.missingSkills.slice(0, 5).join(', ')}
+                      Missing: {match.missingSkills.slice(0, 5).join(", ")}
                     </p>
                   )}
                   {match.hasApplied && (
                     <p className="mt-1 text-xs text-secondary">
-                      Application: {match.applicationStatus || 'pending'}
+                      Application: {match.applicationStatus || "pending"}
                     </p>
                   )}
                   <button
-                    onClick={() => router.push(`/applicants/${match.candidateId}?jobId=${selectedJobId}`)}
+                    onClick={() =>
+                      router.push(
+                        `/applicants/${match.candidateId}?jobId=${selectedJobId}`,
+                      )
+                    }
                     className="mt-3 rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-gray-50"
                   >
                     View Profile
@@ -286,8 +355,8 @@ export default function ApplicantsPage() {
       </Card>
 
       <Card hoverable={false}>
-        <div className="flex items-center space-x-4 mb-6">
-          <div className="relative flex-1">
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative min-w-0 flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-secondary w-4 h-4" />
             <input
               type="text"
@@ -300,7 +369,7 @@ export default function ApplicantsPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-primary focus:outline-none focus:ring-1 focus:ring-primary sm:w-auto"
           >
             <option value="">All Status</option>
             <option value="pending">Pending</option>
@@ -315,17 +384,19 @@ export default function ApplicantsPage() {
             {filteredApplications.map((app) => (
               <div
                 key={app.id}
-                className="flex items-center justify-between rounded-2xl border border-border bg-white/70 p-4 transition-colors hover:bg-white"
+                className="flex flex-col gap-4 rounded-2xl border border-border bg-white/70 p-4 transition-colors hover:bg-white sm:flex-row sm:items-center sm:justify-between"
               >
-                <div className="flex items-center space-x-4">
-                  <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
-                    <span className="text-primary font-medium">
-                      {app.student?.name?.charAt(0)?.toUpperCase() || 'U'}
+                <div className="flex min-w-0 items-center gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gray-100">
+                    <span className="font-medium text-primary">
+                      {app.student?.name?.charAt(0)?.toUpperCase() || "U"}
                     </span>
                   </div>
-                  <div>
-                    <h4 className="font-medium text-primary">{app.student?.name}</h4>
-                    <p className="text-sm text-secondary">
+                  <div className="min-w-0">
+                    <h4 className="truncate font-medium text-primary">
+                      {app.student?.name}
+                    </h4>
+                    <p className="break-words text-sm text-secondary">
                       {app.job?.title} at {app.job?.company}
                     </p>
                     {app.matchScore && (
@@ -335,37 +406,39 @@ export default function ApplicantsPage() {
                     )}
                   </div>
                 </div>
-                <div className="flex items-center space-x-4">
+                <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
                   {getStatusBadge(app.status)}
-                  <div className="flex space-x-2">
+                  <div className="flex flex-wrap gap-2 sm:justify-end">
                     <button
                       onClick={() => router.push(getApplicantDetailHref(app))}
-                      className="px-3 py-1 border border-border rounded-lg text-sm text-primary transition-colors hover:bg-gray-50"
+                      className="min-h-[38px] rounded-lg border border-border px-3 py-1 text-sm text-primary transition-colors hover:bg-gray-50"
                     >
                       View Profile
                     </button>
-                    {app.status === 'pending' && (
+                    {app.status === "pending" && (
                       <>
                         <button
-                          onClick={() => handleStatusUpdate(app.id, 'shortlisted')}
-                          className="p-2 hover:bg-gray-200 rounded-lg text-gray-700"
+                          onClick={() =>
+                            handleStatusUpdate(app.id, "shortlisted")
+                          }
+                          className="min-h-[38px] rounded-lg p-2 text-gray-700 hover:bg-gray-200"
                           title="Shortlist"
                         >
                           <CheckCircle className="w-5 h-5" />
                         </button>
                         <button
-                          onClick={() => handleStatusUpdate(app.id, 'rejected')}
-                          className="p-2 hover:bg-gray-200 rounded-lg text-gray-600"
+                          onClick={() => handleStatusUpdate(app.id, "rejected")}
+                          className="min-h-[38px] rounded-lg p-2 text-gray-600 hover:bg-gray-200"
                           title="Reject"
                         >
                           <XCircle className="w-5 h-5" />
                         </button>
                       </>
                     )}
-                    {app.status === 'shortlisted' && (
+                    {app.status === "shortlisted" && (
                       <button
-                        onClick={() => handleStatusUpdate(app.id, 'interview')}
-                        className="px-3 py-1 bg-black text-white rounded-lg text-sm hover:bg-primary/90"
+                        onClick={() => handleStatusUpdate(app.id, "interview")}
+                        className="min-h-[38px] rounded-lg bg-black px-3 py-1 text-sm text-white hover:bg-primary/90"
                       >
                         Schedule Interview
                       </button>
@@ -379,16 +452,22 @@ export default function ApplicantsPage() {
           <div className="text-center py-12">
             <Users className="w-12 h-12 text-secondary/70 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-black mb-2">
-              {searchTerm ? 'No applicants match your search' : 'No applicants yet'}
+              {searchTerm
+                ? "No applicants match your search"
+                : "No applicants yet"}
             </h3>
             <p className="text-secondary">
               {searchTerm
-                ? 'Try a different candidate name, email, job title, or company.'
-                : 'Applications will appear here when candidates apply.'}
+                ? "Try a different candidate name, email, job title, or company."
+                : "Applications will appear here when candidates apply."}
             </p>
             {!searchTerm && jobs.length === 0 && (
               <div className="mt-4">
-                <Button size="sm" variant="outline" onClick={() => router.push('/jobs/new')}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => router.push("/jobs/new")}
+                >
                   Post Your First Job
                 </Button>
               </div>
@@ -399,4 +478,3 @@ export default function ApplicantsPage() {
     </div>
   );
 }
-

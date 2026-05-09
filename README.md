@@ -74,7 +74,6 @@ Esencelab/
 |- ai-service/                   # FastAPI AI and resume processing service
 |- supabase/                     # Supabase config and schema
 |- render.yaml                   # Render service blueprint
-|- PROMPTS.md                    # Generic AI execution prompt library
 |- run-frontend-3100.ps1         # Local frontend launcher
 |- run-backend-3101.ps1          # Local backend launcher
 |- run-ai-3102.ps1               # Local AI launcher
@@ -102,14 +101,14 @@ Frontend:
 
 ```powershell
 cd .\frontend
-npm install
+npm ci
 ```
 
 Backend:
 
 ```powershell
 cd .\backend
-npm install
+npm ci
 ```
 
 AI service:
@@ -148,6 +147,13 @@ AI=http://127.0.0.1:3102
 DATA_PROVIDER=memory
 ```
 
+The root launchers load `.env.local` first, then service-specific `.env.local` files. Set local-only secrets there instead of editing the scripts:
+
+```env
+JWT_SECRET=replace-with-a-local-32-character-minimum-secret
+AI_INTERNAL_AUTH_TOKEN=replace-with-a-shared-local-internal-token
+```
+
 ### Run the local stack
 
 From the repo root:
@@ -174,7 +180,7 @@ powershell -ExecutionPolicy Bypass -File .\run-frontend-3100.ps1
 
 ### Backend
 
-Use [backend/.env.example](/C:/Dev/esencelab/backend/.env.example) as the starting point.
+Use [backend/.env.example](backend/.env.example) as the starting point.
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
@@ -200,7 +206,7 @@ Use [backend/.env.example](/C:/Dev/esencelab/backend/.env.example) as the starti
 
 ### AI service
 
-Use [ai-service/.env.example](/C:/Dev/esencelab/ai-service/.env.example) for AI-specific deployment values.
+Use [ai-service/.env.example](ai-service/.env.example) for AI-specific deployment values.
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
@@ -214,7 +220,7 @@ Use [ai-service/.env.example](/C:/Dev/esencelab/ai-service/.env.example) for AI-
 
 ### Frontend
 
-Use [frontend/.env.example](/C:/Dev/esencelab/frontend/.env.example) for build-time frontend settings.
+Use [frontend/.env.example](frontend/.env.example) for build-time frontend settings.
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
@@ -241,7 +247,7 @@ Required changes:
 
 1. Set `DATA_PROVIDER=supabase` in `backend/.env`.
 2. Configure `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.
-3. Apply [supabase/supabase-schema.sql](/C:/Dev/esencelab/supabase/supabase-schema.sql).
+3. Apply [supabase/supabase-schema.sql](supabase/supabase-schema.sql).
 
 ## Deployment
 
@@ -256,18 +262,16 @@ This repo is currently designed to run best as:
 
 Use these files as the starting point:
 
-- [render.yaml](/C:/Dev/esencelab/render.yaml)
-- [frontend/vercel.json](/C:/Dev/esencelab/frontend/vercel.json)
-- [backend/vercel.json](/C:/Dev/esencelab/backend/vercel.json)
-- [ai-service/vercel.json](/C:/Dev/esencelab/ai-service/vercel.json)
+- [render.yaml](render.yaml)
+- [frontend/vercel.json](frontend/vercel.json)
 
 ### Container assets
 
 The repo also includes Dockerfiles for each service:
 
-- [frontend/Dockerfile](/C:/Dev/esencelab/frontend/Dockerfile)
-- [backend/Dockerfile](/C:/Dev/esencelab/backend/Dockerfile)
-- [ai-service/Dockerfile](/C:/Dev/esencelab/ai-service/Dockerfile)
+- [frontend/Dockerfile](frontend/Dockerfile)
+- [backend/Dockerfile](backend/Dockerfile)
+- [ai-service/Dockerfile](ai-service/Dockerfile)
 
 ## Validation And Testing
 
@@ -330,7 +334,7 @@ The backend currently exposes grouped endpoints for:
 - Admin monitoring: dashboard stats, application summary, monitoring, audit logs
 - Health: API health endpoint
 
-The main API implementation lives in [backend/src/index.ts](/C:/Dev/esencelab/backend/src/index.ts).
+The main API implementation lives in [backend/src/index.ts](backend/src/index.ts).
 
 ## Frontend Surface
 
@@ -343,11 +347,19 @@ The frontend includes:
 - Recruiter applicants and job details pages
 - Admin resume review and user management pages
 
-The frontend app router lives under [frontend/src/app](/C:/Dev/esencelab/frontend/src/app).
+The frontend app router lives under [frontend/src/app](frontend/src/app).
+
+
 
 ## Documentation
 
-- [PROMPTS.md](/C:/Dev/esencelab/PROMPTS.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Deployment Guide](docs/DEPLOYMENT.md)
+- [Operations Runbook](docs/RUNBOOK.md)
+- [Scaling Roadmap](docs/SCALING.md)
+- [Testing Strategy](docs/TESTING.md)
+- [Contributing](CONTRIBUTING.md)
+- [Security Policy](SECURITY.md)
 
 ## Operational Notes
 
@@ -356,13 +368,8 @@ The frontend app router lives under [frontend/src/app](/C:/Dev/esencelab/fronten
 - JWT secrets and external API keys should be set through environment variables and never committed.
 - Use your own local users or bootstrap users through env vars; do not reintroduce public demo credentials into docs.
 
-## Team
 
-- Abdulla Sajad - backend development, database implementation, system architecture
-- Harikrishnan K - frontend development, UI design
-- Adwaith PC - documentation, system design support, presentation planning
-- Jishnu MR - testing, validation, research support
 
-## License
+## Contributing
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Contributions are welcome!

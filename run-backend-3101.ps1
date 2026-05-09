@@ -1,15 +1,45 @@
-$env:PORT='3101'
-$env:NODE_ENV='development'
-$env:JWT_SECRET='12345678901234567890123456789012'
-$env:AI_SERVICE_URL='http://127.0.0.1:3102'
-$env:AI_INTERNAL_AUTH_TOKEN='test-internal-token-1234567890'
-$env:FRONTEND_URL='http://127.0.0.1:3100'
-$env:FRONTEND_URLS='http://127.0.0.1:3100,http://localhost:3100'
-$env:DATA_PROVIDER='memory'
-$env:INITIAL_ADMIN_EMAIL='admin.test@example.com'
-$env:INITIAL_ADMIN_PASSWORD='AdminPass123!'
-$env:INITIAL_ADMIN_NAME='Admin Test'
-$env:INITIAL_RECRUITER_EMAIL='recruiter.test@example.com'
-$env:INITIAL_RECRUITER_PASSWORD='RecruitPass123!'
-$env:INITIAL_RECRUITER_NAME='Recruiter Test'
-node dist/index.js
+$ErrorActionPreference = 'Stop'
+$Root = Split-Path -Parent $MyInvocation.MyCommand.Path
+
+function Import-EnvFile {
+  param([string]$Path)
+  if (-not (Test-Path $Path)) { return }
+  foreach ($rawLine in Get-Content $Path) {
+    $line = $rawLine.Trim()
+    if (-not $line -or $line.StartsWith('#') -or -not $line.Contains('=')) { continue }
+    $parts = $line.Split('=', 2)
+    $key = $parts[0].Trim()
+    $value = $parts[1].Trim().Trim('"').Trim("'")
+    if ($key) { [Environment]::SetEnvironmentVariable($key, $value, 'Process') }
+  }
+}
+
+function Set-DefaultEnv {
+  param([string]$Name, [string]$Value)
+  if (-not [Environment]::GetEnvironmentVariable($Name, 'Process')) {
+    [Environment]::SetEnvironmentVariable($Name, $Value, 'Process')
+  }
+}
+
+function Require-Env {
+  param([string]$Name)
+  if (-not [Environment]::GetEnvironmentVariable($Name, 'Process')) {
+    throw "$Name must be set in your environment or .env.local before starting the backend."
+  }
+}
+
+Import-EnvFile (Join-Path $Root '.env.local')
+Import-EnvFile (Join-Path $Root 'backend\.env.local')
+
+Set-DefaultEnv 'PORT' '3101'
+Set-DefaultEnv 'NODE_ENV' 'development'
+Set-DefaultEnv 'AI_SERVICE_URL' 'http://127.0.0.1:3102'
+Set-DefaultEnv 'FRONTEND_URL' 'http://127.0.0.1:3100'
+Set-DefaultEnv 'FRONTEND_URLS' 'http://127.0.0.1:3100,http://localhost:3100'
+Set-DefaultEnv 'DATA_PROVIDER' 'memory'
+
+Require-Env 'JWT_SECRET'
+Require-Env 'AI_INTERNAL_AUTH_TOKEN'
+
+Set-Location (Join-Path $Root 'backend')
+npm run dev

@@ -1,11 +1,3 @@
-from __future__ import annotations
-
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    pass
-
 """
 Main AI service used by the backend.
 
@@ -22,9 +14,12 @@ The service is intentionally defensive:
 - it caches student assistant responses briefly to reduce latency and cost
 """
 
+from __future__ import annotations
+
+import hashlib
+import importlib
 import io
 import json
-import hashlib
 import logging
 import os
 import re
@@ -34,18 +29,15 @@ import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
-from pathlib import Path
 from uuid import uuid4
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-try:
-    import numpy as np
-except Exception:  # pragma: no cover
-    np = None
+load_dotenv()
 
 try:
     import pdfplumber
@@ -53,11 +45,9 @@ except Exception:  # pragma: no cover
     pdfplumber = None
 
 try:
-    import pypdf
+    pypdf = importlib.import_module("pypdf")
 except Exception:  # pragma: no cover
     pypdf = None
-
-PyPDF2 = pypdf  # Alias for backward compatibility
 
 try:
     import spacy
@@ -71,7 +61,7 @@ except Exception:  # pragma: no cover
     TfidfVectorizer = None
     cosine_similarity = None
 
-app = FastAPI(title="EsenceLab AI Service")
+app = FastAPI(title="Esencelab AI Service")
 NODE_ENV = str(os.getenv("NODE_ENV", "development")).strip().lower()
 IS_PRODUCTION = NODE_ENV == "production"
 AI_INTERNAL_AUTH_TOKEN = str(os.getenv("AI_INTERNAL_AUTH_TOKEN", "")).strip()
@@ -79,7 +69,9 @@ MAX_RESUME_FILE_SIZE_MB = max(1, min(8, int(os.getenv("AI_MAX_UPLOAD_MB", "4")))
 MAX_RESUME_FILE_SIZE_BYTES = MAX_RESUME_FILE_SIZE_MB * 1024 * 1024
 LOG_LEVEL = str(os.getenv("LOG_LEVEL", "INFO")).strip().upper() or "INFO"
 
-logging.basicConfig(level=getattr(logging, LOG_LEVEL, logging.INFO), format="%(message)s")
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL, logging.INFO), format="%(message)s"
+)
 logger = logging.getLogger("esencelab.ai")
 
 
@@ -102,28 +94,6 @@ def _serialize_error(error: Exception) -> Dict[str, Any]:
         "type": error.__class__.__name__,
         "message": str(error),
     }
-
-
-def _load_local_env() -> None:
-    env_path = Path(__file__).resolve().parent.parent / ".env"
-    if not env_path.exists():
-        return
-    try:
-        for raw_line in env_path.read_text(encoding="utf-8").splitlines():
-            line = raw_line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, value = line.split("=", 1)
-            key = key.strip()
-            value = value.strip().strip('"').strip("'")
-            if key and key not in os.environ:
-                os.environ[key] = value
-    except Exception:
-        # Non-blocking for local demos if env parsing fails.
-        return
-
-
-_load_local_env()
 
 
 def _parse_allowed_origins() -> List[str]:
@@ -156,15 +126,23 @@ def _assert_production_safety() -> None:
         return
     if not ALLOWED_ORIGINS or ALLOWED_ORIGINS == ["*"]:
         raise RuntimeError("Production requires explicit AI_ALLOWED_ORIGINS values.")
-    if not AI_INTERNAL_AUTH_TOKEN or len(AI_INTERNAL_AUTH_TOKEN) < 24 or _looks_like_placeholder_value(AI_INTERNAL_AUTH_TOKEN):
-        raise RuntimeError("Production requires AI_INTERNAL_AUTH_TOKEN with at least 24 non-placeholder characters.")
+    if (
+        not AI_INTERNAL_AUTH_TOKEN
+        or len(AI_INTERNAL_AUTH_TOKEN) < 24
+        or _looks_like_placeholder_value(AI_INTERNAL_AUTH_TOKEN)
+    ):
+        raise RuntimeError(
+            "Production requires AI_INTERNAL_AUTH_TOKEN with at least 24 non-placeholder characters."
+        )
     for origin in ALLOWED_ORIGINS:
         parsed = urllib.parse.urlparse(origin)
         if not parsed.scheme or not parsed.netloc:
             raise RuntimeError(f"Invalid AI_ALLOWED_ORIGINS origin: {origin}")
         is_local = parsed.hostname in {"localhost", "127.0.0.1"}
         if not is_local and parsed.scheme != "https":
-            raise RuntimeError(f"Production AI_ALLOWED_ORIGINS must use https: {origin}")
+            raise RuntimeError(
+                f"Production AI_ALLOWED_ORIGINS must use https: {origin}"
+            )
 
 
 _assert_production_safety()
@@ -256,12 +234,17 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(
         status_code=exc.status_code,
         content={
-            "error": "request_failed" if exc.status_code < 500 else "internal_server_error",
+            "error": "request_failed"
+            if exc.status_code < 500
+            else "internal_server_error",
             "message": message if exc.status_code < 500 else "Internal server error",
-            "code": "REQUEST_FAILED" if exc.status_code < 500 else "INTERNAL_SERVER_ERROR",
+            "code": "REQUEST_FAILED"
+            if exc.status_code < 500
+            else "INTERNAL_SERVER_ERROR",
             "requestId": getattr(request.state, "request_id", None),
         },
     )
+
 
 NLP_MODEL = None
 if spacy:
@@ -271,23 +254,86 @@ if spacy:
         NLP_MODEL = None
 
 SKILL_KEYWORDS = [
-    "python", "javascript", "typescript", "java", "c++", "c#", "ruby", "go", "rust", "php",
-    "react", "angular", "vue", "node.js", "express", "django", "flask", "spring", "rails",
-    "html", "css", "sass", "tailwind", "bootstrap",
-    "sql", "mysql", "postgresql", "mongodb", "redis", "elasticsearch",
-    "aws", "azure", "gcp", "docker", "kubernetes", "terraform", "jenkins", "git",
-    "machine learning", "deep learning", "tensorflow", "pytorch", "keras", "scikit-learn",
-    "data analysis", "data science", "data engineering", "etl", "pandas", "numpy",
-    "nlp", "natural language processing", "computer vision", "opencv",
-    "agile", "scrum", "jira", "confluence",
-    "rest api", "graphql", "microservices",
-    "linux", "unix", "bash", "shell scripting",
-    "testing", "unit testing", "integration testing", "selenium", "jest",
-    "ci/cd", "devops", "firebase", "figma",
+    "python",
+    "javascript",
+    "typescript",
+    "java",
+    "c++",
+    "c#",
+    "ruby",
+    "go",
+    "rust",
+    "php",
+    "react",
+    "angular",
+    "vue",
+    "node.js",
+    "express",
+    "django",
+    "flask",
+    "spring",
+    "rails",
+    "html",
+    "css",
+    "sass",
+    "tailwind",
+    "bootstrap",
+    "sql",
+    "mysql",
+    "postgresql",
+    "mongodb",
+    "redis",
+    "elasticsearch",
+    "aws",
+    "azure",
+    "gcp",
+    "docker",
+    "kubernetes",
+    "terraform",
+    "jenkins",
+    "git",
+    "machine learning",
+    "deep learning",
+    "tensorflow",
+    "pytorch",
+    "keras",
+    "scikit-learn",
+    "data analysis",
+    "data science",
+    "data engineering",
+    "etl",
+    "pandas",
+    "numpy",
+    "nlp",
+    "natural language processing",
+    "computer vision",
+    "opencv",
+    "agile",
+    "scrum",
+    "jira",
+    "confluence",
+    "rest api",
+    "graphql",
+    "microservices",
+    "linux",
+    "unix",
+    "bash",
+    "shell scripting",
+    "testing",
+    "unit testing",
+    "integration testing",
+    "selenium",
+    "jest",
+    "ci/cd",
+    "devops",
+    "firebase",
+    "figma",
 ]
 
 EMAIL_REGEX = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z|a-z]{2,}\b")
-PHONE_REGEX = re.compile(r"\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b")
+PHONE_REGEX = re.compile(
+    r"\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b"
+)
 YEAR_REGEX = re.compile(r"\b(?:19|20)\d{2}\b")
 
 EDUCATION_KEYWORDS = [
@@ -404,7 +450,10 @@ def extract_name(lines: List[str], normalized_text: str) -> Optional[str]:
         clean = line.strip()
         if not clean:
             continue
-        if any(token in clean.lower() for token in ["resume", "curriculum", "vitae", "email", "phone"]):
+        if any(
+            token in clean.lower()
+            for token in ["resume", "curriculum", "vitae", "email", "phone"]
+        ):
             continue
         if len(clean.split()) <= 4 and len(clean) <= 40:
             return clean
@@ -539,7 +588,10 @@ def parse_resume_text(text: str) -> Dict[str, Any]:
     if not summary:
         for line in lines:
             lower = line.lower()
-            if any(keyword in lower for keyword in ["summary", "objective", "profile"]) and len(line) > 20:
+            if (
+                any(keyword in lower for keyword in ["summary", "objective", "profile"])
+                and len(line) > 20
+            ):
                 summary = line
                 break
 
@@ -618,7 +670,9 @@ def calculate_tfidf_match(
     return max(0.0, min(score, 1.0))
 
 
-def generate_explanation(match_score: float, matched: List[str], missing: List[str]) -> str:
+def generate_explanation(
+    match_score: float, matched: List[str], missing: List[str]
+) -> str:
     if match_score >= 0.75:
         verdict = "strong match"
     elif match_score >= 0.5:
@@ -638,8 +692,14 @@ def _compact_context(context: Dict[str, Any]) -> Dict[str, Any]:
     send the payload to Groq.
     """
     role = str(context.get("targetRole") or "").strip()
-    skills = [str(item).strip() for item in (context.get("skills") or []) if str(item).strip()]
-    missing_skills = [str(item).strip() for item in (context.get("missingSkills") or []) if str(item).strip()]
+    skills = [
+        str(item).strip() for item in (context.get("skills") or []) if str(item).strip()
+    ]
+    missing_skills = [
+        str(item).strip()
+        for item in (context.get("missingSkills") or [])
+        if str(item).strip()
+    ]
     resume_summary = str(context.get("resumeSummary") or "").strip()
     readiness = context.get("readinessScore")
     roadmap_highlights = [
@@ -710,7 +770,11 @@ def _assistant_cache_key(feature: str, prompt: str, context: Dict[str, Any]) -> 
 
 def _prune_assistant_cache() -> None:
     now = time.time()
-    stale_keys = [key for key, entry in _assistant_cache.items() if entry.get("expiresAt", 0) <= now]
+    stale_keys = [
+        key
+        for key, entry in _assistant_cache.items()
+        if entry.get("expiresAt", 0) <= now
+    ]
     for key in stale_keys:
         _assistant_cache.pop(key, None)
 
@@ -740,7 +804,9 @@ def _extract_json_object(raw_text: str) -> Dict[str, Any]:
     return {}
 
 
-def _fallback_student_assistant(feature: str, prompt: str, context: Dict[str, Any]) -> Dict[str, Any]:
+def _fallback_student_assistant(
+    feature: str, prompt: str, context: Dict[str, Any]
+) -> Dict[str, Any]:
     clean_context = _compact_context(context)
     role = clean_context.get("targetRole") or "your target role"
     missing = clean_context.get("missingSkills") or []
@@ -841,15 +907,23 @@ def _fallback_student_assistant(feature: str, prompt: str, context: Dict[str, An
     }
 
 
-def _call_groq_assistant(feature: str, prompt: str, context: Dict[str, Any]) -> Dict[str, Any]:
+def _call_groq_assistant(
+    feature: str, prompt: str, context: Dict[str, Any]
+) -> Dict[str, Any]:
     api_key = os.getenv("GROQ_API_KEY", "").strip()
-    model = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b").strip() or "openai/gpt-oss-120b"
-    reasoning_effort = os.getenv("GROQ_REASONING_EFFORT", "high").strip().lower() or "high"
+    model = (
+        os.getenv("GROQ_MODEL", "openai/gpt-oss-120b").strip() or "openai/gpt-oss-120b"
+    )
+    reasoning_effort = (
+        os.getenv("GROQ_REASONING_EFFORT", "high").strip().lower() or "high"
+    )
     service_tier = os.getenv("GROQ_SERVICE_TIER", "auto").strip().lower() or "auto"
     if not api_key:
         return _fallback_student_assistant(feature, prompt, context)
 
-    feature_hint = STUDENT_ASSISTANT_PROMPTS.get(feature, STUDENT_ASSISTANT_PROMPTS["skill_gap"])
+    feature_hint = STUDENT_ASSISTANT_PROMPTS.get(
+        feature, STUDENT_ASSISTANT_PROMPTS["skill_gap"]
+    )
     clean_context = _compact_context(context)
     safe_prompt = prompt.strip()[:1200]
     system_prompt = (
@@ -890,7 +964,7 @@ def _call_groq_assistant(feature: str, prompt: str, context: Dict[str, Any]) -> 
             "Content-Type": "application/json",
             "Authorization": f"Bearer {api_key}",
             "Accept": "application/json",
-            "User-Agent": "EsenceLab-AI/1.0",
+            "User-Agent": "Esencelab-AI/1.0",
         },
         method="POST",
     )
@@ -899,9 +973,7 @@ def _call_groq_assistant(feature: str, prompt: str, context: Dict[str, Any]) -> 
         with urllib.request.urlopen(req, timeout=22) as response:
             payload = json.loads(response.read().decode("utf-8"))
             content = (
-                payload.get("choices", [{}])[0]
-                .get("message", {})
-                .get("content", "")
+                payload.get("choices", [{}])[0].get("message", {}).get("content", "")
             )
             parsed = _extract_json_object(content)
             title = str(parsed.get("title") or "").strip() or "AI Career Guidance"
@@ -927,9 +999,8 @@ def _call_groq_assistant(feature: str, prompt: str, context: Dict[str, Any]) -> 
                 "title": title[:120],
                 "summary": summary[:900],
                 "actionItems": action_items,
-                "followUpQuestions": follow_ups or [
-                    "Do you want a more advanced version of this plan?"
-                ],
+                "followUpQuestions": follow_ups
+                or ["Do you want a more advanced version of this plan?"],
             }
     except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError):
         return _fallback_student_assistant(feature, prompt, context)
@@ -937,17 +1008,12 @@ def _call_groq_assistant(feature: str, prompt: str, context: Dict[str, Any]) -> 
 
 @app.get("/")
 async def root():
-    return {"message": "EsenceLab AI Service is running"}
+    return {"message": "Esencelab AI Service is running"}
 
 
 @app.get("/health")
 async def health():
-    return {
-        "status": "ok",
-        "groqConfigured": bool(str(os.getenv("GROQ_API_KEY", "")).strip()),
-        "allowedOriginsConfigured": 0 if ALLOWED_ORIGINS == ["*"] else len(ALLOWED_ORIGINS),
-        "assistantCacheSize": len(_assistant_cache),
-    }
+    return {"status": "ok"}
 
 
 @app.get("/ai/health")
@@ -984,7 +1050,9 @@ async def parse_resume_endpoint(request: Request, file: UploadFile = File(...)):
             # Do not fail the full flow for malformed or scanned PDFs.
             parsed_data = empty_parsed_resume()
 
-        return ResumeParseResponse(parsedData=parsed_data, skills=parsed_data.get("skills", []))
+        return ResumeParseResponse(
+            parsedData=parsed_data, skills=parsed_data.get("skills", [])
+        )
     except Exception as exc:
         if isinstance(exc, HTTPException):
             raise exc
@@ -994,7 +1062,10 @@ async def parse_resume_endpoint(request: Request, file: UploadFile = File(...)):
             requestId=getattr(request.state, "request_id", None),
             error=_serialize_error(exc),
         )
-        raise HTTPException(status_code=422, detail="Could not parse resume. Please ensure the file is a valid PDF with extractable text.")
+        raise HTTPException(
+            status_code=422,
+            detail="Could not parse resume. Please ensure the file is a valid PDF with extractable text.",
+        )
 
 
 @app.post("/ai/match", response_model=MatchResponse)
@@ -1002,15 +1073,21 @@ async def match_jobs(request: MatchRequest, http_request: Request):
     try:
         resume_skills = normalize_skill_list(request.resumeSkills)
         job_skills = normalize_skill_list(
-            request.jobRequiredSkills if request.jobRequiredSkills else extract_skills(request.jobRequirements)
+            request.jobRequiredSkills
+            if request.jobRequiredSkills
+            else extract_skills(request.jobRequirements)
         )
 
         resume_set = {skill.lower() for skill in resume_skills}
         job_set = {skill.lower() for skill in job_skills}
         display_map = {skill.lower(): skill for skill in job_skills}
 
-        matched = sorted([display_map.get(skill, skill.title()) for skill in (resume_set & job_set)])
-        missing = sorted([display_map.get(skill, skill.title()) for skill in (job_set - resume_set)])
+        matched = sorted(
+            [display_map.get(skill, skill.title()) for skill in (resume_set & job_set)]
+        )
+        missing = sorted(
+            [display_map.get(skill, skill.title()) for skill in (job_set - resume_set)]
+        )
 
         skill_overlap = len(matched) / len(job_set) if job_set else 0.0
         tfidf_score = calculate_tfidf_match(
@@ -1020,7 +1097,11 @@ async def match_jobs(request: MatchRequest, http_request: Request):
         )
         final_score = round(((skill_overlap * 0.55) + (tfidf_score * 0.45)), 4)
 
-        explanation = generate_explanation(final_score, matched, missing) if request.includeExplanation else None
+        explanation = (
+            generate_explanation(final_score, matched, missing)
+            if request.includeExplanation
+            else None
+        )
 
         return MatchResponse(
             matchScore=max(0.0, min(final_score, 1.0)),
@@ -1053,7 +1134,9 @@ async def extract_skills_endpoint(http_request: Request, text: str = Form(...)):
 
 
 @app.post("/ai/student-assistant", response_model=StudentAssistantResponse)
-async def student_assistant_endpoint(request: StudentAssistantRequest, http_request: Request):
+async def student_assistant_endpoint(
+    request: StudentAssistantRequest, http_request: Request
+):
     feature = str(request.feature or "").strip().lower()
     if feature not in SUPPORTED_STUDENT_FEATURES:
         feature = "skill_gap"
@@ -1073,7 +1156,9 @@ async def student_assistant_endpoint(request: StudentAssistantRequest, http_requ
         "model": result.get("model"),
         "feature": feature,
         "title": str(result.get("title") or "AI Career Guidance")[:120],
-        "summary": str(result.get("summary") or "No guidance generated right now.")[:900],
+        "summary": str(result.get("summary") or "No guidance generated right now.")[
+            :900
+        ],
         "actionItems": [
             str(item).strip()
             for item in (result.get("actionItems") or [])

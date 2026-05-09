@@ -1,0 +1,2 @@
+-- Intentionally empty.
+-- Supabase local config expects this file during `supabase db reset`.

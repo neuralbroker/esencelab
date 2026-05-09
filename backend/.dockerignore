@@ -2,4 +2,11 @@ node_modules
 dist
 .git
 .env
+.env.local
+.env.*.local
+.env.production
+.env.vercel
+*.log
+uploads
+*.pdf
 npm-debug.log

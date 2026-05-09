@@ -6,7 +6,7 @@ ENV PYTHONUNBUFFERED=1
 ENV PORT=3002
 
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt && python -m spacy download en_core_web_sm || true
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
 

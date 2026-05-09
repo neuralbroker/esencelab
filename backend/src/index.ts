@@ -5,22 +5,21 @@
  * persistence, and defines the student, recruiter, admin, and health routes
  * used by the whole platform.
  */
-import express, { NextFunction, Request, Response } from 'express';
-import cors from 'cors';
-import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
-import compression from 'compression';
-import dotenv from 'dotenv';
-import { v4 as uuidv4 } from 'uuid';
-import multer from 'multer';
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-import path from 'path';
-import fs from 'fs';
-import crypto from 'crypto';
-import { createServer, Server } from 'http';
-import { Socket } from 'net';
-import { SupabaseStore } from './supabaseStore';
+import express, { NextFunction, Request, Response } from "express";
+import cors from "cors";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
+import compression from "compression";
+import dotenv from "dotenv";
+import multer from "multer";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import path from "path";
+import fs from "fs";
+import crypto from "crypto";
+import { createServer, Server } from "http";
+import { Socket } from "net";
+import { SupabaseStore } from "./supabaseStore";
 import {
   CAREER_ROLES,
   buildRecommendationExplanation,
@@ -32,65 +31,90 @@ import {
   generateWeeklyPlanner,
   getRoleExplorerData,
   SkillStatus,
-} from './careerEngine';
+} from "./careerEngine";
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const NODE_ENV = String(process.env.NODE_ENV || 'development')
+const NODE_ENV = String(process.env.NODE_ENV || "development")
   .trim()
   .toLowerCase();
-const IS_PRODUCTION = NODE_ENV === 'production';
-const JWT_SECRET = String(process.env.JWT_SECRET || '').trim();
-const AI_SERVICE_URL = String(process.env.AI_SERVICE_URL || 'http://localhost:3002').trim() || 'http://localhost:3002';
-const AI_INTERNAL_AUTH_TOKEN = String(process.env.AI_INTERNAL_AUTH_TOKEN || '').trim();
+const IS_PRODUCTION = NODE_ENV === "production";
+const JWT_SECRET = String(process.env.JWT_SECRET || "").trim();
+const AI_SERVICE_URL =
+  String(process.env.AI_SERVICE_URL || "http://localhost:3002").trim() ||
+  "http://localhost:3002";
+const AI_INTERNAL_AUTH_TOKEN = String(
+  process.env.AI_INTERNAL_AUTH_TOKEN || "",
+).trim();
 if (!JWT_SECRET) {
-  throw new Error('JWT_SECRET environment variable is required.');
+  throw new Error("JWT_SECRET environment variable is required.");
 }
 const SERVER_STARTED_AT = Date.now();
-const SLOW_ENDPOINT_THRESHOLD_MS = Number(process.env.SLOW_ENDPOINT_THRESHOLD_MS || 1200);
-const GENERAL_RATE_LIMIT_WINDOW_MS = Math.max(60_000, Number(process.env.GENERAL_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000));
-const GENERAL_RATE_LIMIT_MAX_REQUESTS = Math.max(100, Number(process.env.GENERAL_RATE_LIMIT_MAX_REQUESTS || 400));
+const SLOW_ENDPOINT_THRESHOLD_MS = Number(
+  process.env.SLOW_ENDPOINT_THRESHOLD_MS || 1200,
+);
+const GENERAL_RATE_LIMIT_WINDOW_MS = Math.max(
+  60_000,
+  Number(process.env.GENERAL_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000),
+);
+const GENERAL_RATE_LIMIT_MAX_REQUESTS = Math.max(
+  100,
+  Number(process.env.GENERAL_RATE_LIMIT_MAX_REQUESTS || 400),
+);
 const MAX_RESUME_FILE_SIZE_MB = Math.max(
   1,
-  Math.min(4.4, Number(process.env.MAX_RESUME_FILE_SIZE_MB || 4))
+  Math.min(4.4, Number(process.env.MAX_RESUME_FILE_SIZE_MB || 4)),
 );
-const MAX_RESUME_FILE_SIZE_BYTES = Math.floor(MAX_RESUME_FILE_SIZE_MB * 1024 * 1024);
-const METRIC_SAMPLE_LIMIT = Math.max(50, Number(process.env.METRIC_SAMPLE_LIMIT || 240));
-const AI_REQUEST_TIMEOUT_MS = Math.max(1000, Number(process.env.AI_REQUEST_TIMEOUT_MS || 12000));
-const AI_MATCH_TIMEOUT_MS = Math.max(1000, Number(process.env.AI_MATCH_TIMEOUT_MS || 8000));
-const AI_HEALTH_TIMEOUT_MS = Math.max(1000, Number(process.env.AI_HEALTH_TIMEOUT_MS || 3500));
-const SHUTDOWN_TIMEOUT_MS = Math.max(1000, Number(process.env.SHUTDOWN_TIMEOUT_MS || 10000));
+const MAX_RESUME_FILE_SIZE_BYTES = Math.floor(
+  MAX_RESUME_FILE_SIZE_MB * 1024 * 1024,
+);
+const METRIC_SAMPLE_LIMIT = Math.max(
+  50,
+  Number(process.env.METRIC_SAMPLE_LIMIT || 240),
+);
+const AI_REQUEST_TIMEOUT_MS = Math.max(
+  1000,
+  Number(process.env.AI_REQUEST_TIMEOUT_MS || 12000),
+);
+const AI_MATCH_TIMEOUT_MS = Math.max(
+  1000,
+  Number(process.env.AI_MATCH_TIMEOUT_MS || 8000),
+);
+const AI_HEALTH_TIMEOUT_MS = Math.max(
+  1000,
+  Number(process.env.AI_HEALTH_TIMEOUT_MS || 3500),
+);
+const SHUTDOWN_TIMEOUT_MS = Math.max(
+  1000,
+  Number(process.env.SHUTDOWN_TIMEOUT_MS || 10000),
+);
 let runtimeReady: Promise<void> = Promise.resolve();
 
 const toBooleanEnv = (name: string, defaultValue = false) => {
   const rawValue = process.env[name];
-  if (rawValue === undefined || rawValue === null || String(rawValue).trim() === '') {
+  if (
+    rawValue === undefined ||
+    rawValue === null ||
+    String(rawValue).trim() === ""
+  ) {
     return defaultValue;
   }
   const normalized = String(rawValue).trim().toLowerCase();
-  return ['1', 'true', 'yes', 'on'].includes(normalized);
-};
-
-const requireEnv = (name: string) => {
-  const value = String(process.env[name] || '').trim();
-  if (!value) {
-    throw new Error(`${name} environment variable is required.`);
-  }
-  return value;
+  return ["1", "true", "yes", "on"].includes(normalized);
 };
 
 const ALLOW_INSECURE_PASSWORD_RESET_TOKEN_RESPONSE = toBooleanEnv(
-  'ALLOW_INSECURE_PASSWORD_RESET_TOKEN_RESPONSE'
+  "ALLOW_INSECURE_PASSWORD_RESET_TOKEN_RESPONSE",
 );
-const DATA_PROVIDER = String(process.env.DATA_PROVIDER || 'memory')
+const DATA_PROVIDER = String(process.env.DATA_PROVIDER || "memory")
   .trim()
   .toLowerCase();
 
 const parseEnvList = (rawValue: string) =>
   rawValue
-    .split(',')
+    .split(",")
     .map((entry) => entry.trim())
     .filter(Boolean);
 
@@ -98,36 +122,50 @@ const looksLikePlaceholderValue = (value: string) => {
   const normalized = value.trim().toLowerCase();
   if (!normalized) return true;
   return (
-    normalized.startsWith('change-this') ||
-    normalized.startsWith('your-') ||
-    normalized === 'xxx'
+    normalized.startsWith("change-this") ||
+    normalized.startsWith("your-") ||
+    normalized === "xxx"
   );
 };
 
 const assertProductionSafety = () => {
   if (!IS_PRODUCTION) return;
 
-  if (DATA_PROVIDER !== 'supabase') {
-    throw new Error('Production requires DATA_PROVIDER=supabase.');
+  if (DATA_PROVIDER !== "supabase") {
+    throw new Error("Production requires DATA_PROVIDER=supabase.");
   }
   if (ALLOW_INSECURE_PASSWORD_RESET_TOKEN_RESPONSE) {
-    throw new Error('ALLOW_INSECURE_PASSWORD_RESET_TOKEN_RESPONSE must remain disabled in production.');
+    throw new Error(
+      "ALLOW_INSECURE_PASSWORD_RESET_TOKEN_RESPONSE must remain disabled in production.",
+    );
   }
   if (JWT_SECRET.length < 32 || looksLikePlaceholderValue(JWT_SECRET)) {
-    throw new Error('Production requires a strong non-placeholder JWT_SECRET with at least 32 characters.');
+    throw new Error(
+      "Production requires a strong non-placeholder JWT_SECRET with at least 32 characters.",
+    );
   }
-  if (!AI_INTERNAL_AUTH_TOKEN || AI_INTERNAL_AUTH_TOKEN.length < 24 || looksLikePlaceholderValue(AI_INTERNAL_AUTH_TOKEN)) {
-    throw new Error('Production requires AI_INTERNAL_AUTH_TOKEN with at least 24 non-placeholder characters.');
+  if (
+    !AI_INTERNAL_AUTH_TOKEN ||
+    AI_INTERNAL_AUTH_TOKEN.length < 24 ||
+    looksLikePlaceholderValue(AI_INTERNAL_AUTH_TOKEN)
+  ) {
+    throw new Error(
+      "Production requires AI_INTERNAL_AUTH_TOKEN with at least 24 non-placeholder characters.",
+    );
   }
 
   const configuredFrontendOrigins = parseEnvList(
-    process.env.FRONTEND_URLS || process.env.FRONTEND_URL || ''
+    process.env.FRONTEND_URLS || process.env.FRONTEND_URL || "",
   );
   if (configuredFrontendOrigins.length === 0) {
-    throw new Error('Production requires FRONTEND_URLS or FRONTEND_URL to be configured.');
+    throw new Error(
+      "Production requires FRONTEND_URLS or FRONTEND_URL to be configured.",
+    );
   }
-  if (configuredFrontendOrigins.includes('*')) {
-    throw new Error('Production does not allow wildcard FRONTEND_URLS origins.');
+  if (configuredFrontendOrigins.includes("*")) {
+    throw new Error(
+      "Production does not allow wildcard FRONTEND_URLS origins.",
+    );
   }
   for (const origin of configuredFrontendOrigins) {
     let parsedOrigin: URL;
@@ -136,23 +174,27 @@ const assertProductionSafety = () => {
     } catch {
       throw new Error(`FRONTEND_URLS contains an invalid origin: ${origin}`);
     }
-    const isLocalOrigin = ['localhost', '127.0.0.1'].includes(parsedOrigin.hostname);
-    if (!isLocalOrigin && parsedOrigin.protocol !== 'https:') {
+    const isLocalOrigin = ["localhost", "127.0.0.1"].includes(
+      parsedOrigin.hostname,
+    );
+    if (!isLocalOrigin && parsedOrigin.protocol !== "https:") {
       throw new Error(`Production frontend origins must use https: ${origin}`);
     }
   }
 
-  const bootstrapPrefixes = ['INITIAL_ADMIN', 'INITIAL_RECRUITER'];
+  const bootstrapPrefixes = ["INITIAL_ADMIN", "INITIAL_RECRUITER"];
   for (const prefix of bootstrapPrefixes) {
-    const email = String(process.env[`${prefix}_EMAIL`] || '')
+    const email = String(process.env[`${prefix}_EMAIL`] || "")
       .trim()
       .toLowerCase();
-    const password = String(process.env[`${prefix}_PASSWORD`] || '').trim();
+    const password = String(process.env[`${prefix}_PASSWORD`] || "").trim();
 
     if (!email && !password) continue;
 
     if (!email || !password) {
-      throw new Error(`${prefix}_EMAIL and ${prefix}_PASSWORD must both be set when bootstrapping users in production.`);
+      throw new Error(
+        `${prefix}_EMAIL and ${prefix}_PASSWORD must both be set when bootstrapping users in production.`,
+      );
     }
     if (password.length < 12) {
       throw new Error(`${prefix}_PASSWORD must be at least 12 characters.`);
@@ -163,11 +205,11 @@ const assertProductionSafety = () => {
 assertProductionSafety();
 
 const wrapRouteHandler = (handler: unknown) => {
-  if (typeof handler !== 'function') return handler;
+  if (typeof handler !== "function") return handler;
   return (req: Request, res: Response, next: NextFunction) => {
     try {
       const result = (handler as any)(req, res, next);
-      if (result && typeof result.then === 'function') {
+      if (result && typeof result.then === "function") {
         Promise.resolve(result).catch(next);
       }
     } catch (error) {
@@ -176,11 +218,14 @@ const wrapRouteHandler = (handler: unknown) => {
   };
 };
 
-for (const method of ['get', 'post', 'put', 'delete', 'patch'] as const) {
+for (const method of ["get", "post", "put", "delete", "patch"] as const) {
   const originalMethod = (app as any)[method].bind(app);
   (app as any)[method] = (...args: any[]) => {
     const [pathOrHandler, ...handlers] = args;
-    return originalMethod(pathOrHandler, ...handlers.map((handler: unknown) => wrapRouteHandler(handler)));
+    return originalMethod(
+      pathOrHandler,
+      ...handlers.map((handler: unknown) => wrapRouteHandler(handler)),
+    );
   };
 }
 
@@ -209,134 +254,165 @@ const createEmptyDb = () => ({
 });
 
 const FRONTEND_ORIGINS = (() => {
-  const rawOrigins = process.env.FRONTEND_URLS || process.env.FRONTEND_URL || 'http://localhost:3000';
+  const rawOrigins =
+    process.env.FRONTEND_URLS ||
+    process.env.FRONTEND_URL ||
+    "http://localhost:3000";
   return parseEnvList(rawOrigins);
 })();
-const ALLOW_ALL_FRONTEND_ORIGINS = FRONTEND_ORIGINS.includes('*');
-const TRUST_PROXY_RAW = String(process.env.TRUST_PROXY || '').trim().toLowerCase();
+const ALLOW_ALL_FRONTEND_ORIGINS = FRONTEND_ORIGINS.includes("*");
+const TRUST_PROXY_RAW = String(process.env.TRUST_PROXY || "")
+  .trim()
+  .toLowerCase();
 
 if (TRUST_PROXY_RAW) {
-  if (TRUST_PROXY_RAW === 'true') app.set('trust proxy', 1);
-  else if (TRUST_PROXY_RAW === 'false') app.set('trust proxy', false);
-  else if (!Number.isNaN(Number(TRUST_PROXY_RAW))) app.set('trust proxy', Number(TRUST_PROXY_RAW));
-  else app.set('trust proxy', TRUST_PROXY_RAW);
+  if (TRUST_PROXY_RAW === "true") app.set("trust proxy", 1);
+  else if (TRUST_PROXY_RAW === "false") app.set("trust proxy", false);
+  else if (!Number.isNaN(Number(TRUST_PROXY_RAW)))
+    app.set("trust proxy", Number(TRUST_PROXY_RAW));
+  else app.set("trust proxy", TRUST_PROXY_RAW);
 }
 
-app.disable('x-powered-by');
+app.disable("x-powered-by");
 app.use(helmet());
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || ALLOW_ALL_FRONTEND_ORIGINS || FRONTEND_ORIGINS.includes(origin)) {
+      if (
+        !origin ||
+        ALLOW_ALL_FRONTEND_ORIGINS ||
+        FRONTEND_ORIGINS.includes(origin)
+      ) {
         callback(null, true);
         return;
       }
-      callback(new Error('Origin not allowed by CORS'));
+      callback(new Error("Origin not allowed by CORS"));
     },
     credentials: true,
-  })
+  }),
 );
 app.use(
   compression({
     threshold: 1024,
-  })
+  }),
 );
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true }));
-app.set('etag', 'strong');
+app.set("etag", "strong");
 
-type RequestWithAuth = Request & { authToken?: string; profile?: any; requestId?: string };
-type LogLevel = 'info' | 'warn' | 'error';
+type RequestWithAuth = Request & {
+  authToken?: string;
+  profile?: any;
+  requestId?: string;
+};
+type LogLevel = "info" | "warn" | "error";
 
 const toSerializableError = (error: any) => ({
-  message: String(error?.message || error || 'Unknown error'),
-  name: String(error?.name || 'Error'),
-  stack: typeof error?.stack === 'string' ? error.stack : undefined,
+  message: String(error?.message || error || "Unknown error"),
+  name: String(error?.name || "Error"),
+  stack: typeof error?.stack === "string" ? error.stack : undefined,
   code: error?.code ? String(error.code) : undefined,
 });
 
-const logEvent = (level: LogLevel, event: string, payload: Record<string, any> = {}) => {
+const logEvent = (
+  level: LogLevel,
+  event: string,
+  payload: Record<string, any> = {},
+) => {
   const entry = JSON.stringify({
     ts: new Date().toISOString(),
     level,
     event,
     ...payload,
   });
-  if (level === 'error') {
+  if (level === "error") {
     console.error(entry);
-  } else if (level === 'warn') {
+  } else if (level === "warn") {
     console.warn(entry);
   } else {
     console.log(entry);
   }
 };
 
-const logError = (event: string, error: any, payload: Record<string, any> = {}) => {
-  logEvent('error', event, {
+const logError = (
+  event: string,
+  error: any,
+  payload: Record<string, any> = {},
+) => {
+  logEvent("error", event, {
     ...payload,
     error: toSerializableError(error),
   });
 };
 
-const toRequestPath = (req: Request) => (req.originalUrl || req.url || '/').split('?')[0] || '/';
+const toRequestPath = (req: Request) =>
+  (req.originalUrl || req.url || "/").split("?")[0] || "/";
 
-const getResponseLogLevel = (statusCode: number, durationMs: number): LogLevel => {
-  if (statusCode >= 500) return 'error';
-  if (statusCode >= 400 || durationMs >= SLOW_ENDPOINT_THRESHOLD_MS) return 'warn';
-  return 'info';
+const getResponseLogLevel = (
+  statusCode: number,
+  durationMs: number,
+): LogLevel => {
+  if (statusCode >= 500) return "error";
+  if (statusCode >= 400 || durationMs >= SLOW_ENDPOINT_THRESHOLD_MS)
+    return "warn";
+  return "info";
 };
 
 const toErrorName = (statusCode: number) => {
   switch (statusCode) {
     case 400:
-      return 'bad_request';
+      return "bad_request";
     case 401:
-      return 'not_authenticated';
+      return "not_authenticated";
     case 403:
-      return 'not_authorized';
+      return "not_authorized";
     case 404:
-      return 'not_found';
+      return "not_found";
     case 409:
-      return 'conflict';
+      return "conflict";
     case 413:
-      return 'payload_too_large';
+      return "payload_too_large";
     case 429:
-      return 'rate_limited';
+      return "rate_limited";
     default:
-      return statusCode >= 500 ? 'internal_server_error' : 'request_failed';
+      return statusCode >= 500 ? "internal_server_error" : "request_failed";
   }
 };
 
 const toErrorCode = (statusCode: number) => {
   switch (statusCode) {
     case 400:
-      return 'BAD_REQUEST';
+      return "BAD_REQUEST";
     case 401:
-      return 'NOT_AUTHENTICATED';
+      return "NOT_AUTHENTICATED";
     case 403:
-      return 'NOT_AUTHORIZED';
+      return "NOT_AUTHORIZED";
     case 404:
-      return 'NOT_FOUND';
+      return "NOT_FOUND";
     case 409:
-      return 'CONFLICT';
+      return "CONFLICT";
     case 413:
-      return 'PAYLOAD_TOO_LARGE';
+      return "PAYLOAD_TOO_LARGE";
     case 429:
-      return 'RATE_LIMITED';
+      return "RATE_LIMITED";
     default:
-      return statusCode >= 500 ? 'INTERNAL_SERVER_ERROR' : 'REQUEST_FAILED';
+      return statusCode >= 500 ? "INTERNAL_SERVER_ERROR" : "REQUEST_FAILED";
   }
 };
 
-const normalizeErrorResponseBody = (statusCode: number, body: any, requestId?: string) => {
+const normalizeErrorResponseBody = (
+  statusCode: number,
+  body: any,
+  requestId?: string,
+) => {
   if (statusCode < 400) {
     return body;
   }
 
-  const safeMessage = statusCode >= 500 ? 'Internal server error' : undefined;
+  const safeMessage = statusCode >= 500 ? "Internal server error" : undefined;
 
-  if (body && typeof body === 'object' && !Array.isArray(body)) {
-    if (typeof body.error === 'string' && typeof body.message === 'string') {
+  if (body && typeof body === "object" && !Array.isArray(body)) {
+    if (typeof body.error === "string" && typeof body.message === "string") {
       return {
         ...body,
         code: body.code || toErrorCode(statusCode),
@@ -344,7 +420,7 @@ const normalizeErrorResponseBody = (statusCode: number, body: any, requestId?: s
       };
     }
 
-    if (typeof body.message === 'string') {
+    if (typeof body.message === "string") {
       return {
         ...body,
         error: body.error || toErrorName(statusCode),
@@ -355,7 +431,7 @@ const normalizeErrorResponseBody = (statusCode: number, body: any, requestId?: s
     }
   }
 
-  if (typeof body === 'string') {
+  if (typeof body === "string") {
     return {
       error: toErrorName(statusCode),
       message: safeMessage || body,
@@ -366,7 +442,7 @@ const normalizeErrorResponseBody = (statusCode: number, body: any, requestId?: s
 
   return {
     error: toErrorName(statusCode),
-    message: safeMessage || 'Request failed',
+    message: safeMessage || "Request failed",
     code: toErrorCode(statusCode),
     requestId,
   };
@@ -375,13 +451,18 @@ const normalizeErrorResponseBody = (statusCode: number, body: any, requestId?: s
 const toPercentile = (values: number[], percentile: number) => {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((left, right) => left - right);
-  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil((percentile / 100) * sorted.length) - 1));
+  const index = Math.min(
+    sorted.length - 1,
+    Math.max(0, Math.ceil((percentile / 100) * sorted.length) - 1),
+  );
   return Math.round(sorted[index] || 0);
 };
 
 const getMetricSamples = (entry: any): number[] => {
   return Array.isArray(entry?.recentDurationsMs)
-    ? entry.recentDurationsMs.filter((value: unknown) => Number.isFinite(Number(value))).map((value: unknown) => Number(value))
+    ? entry.recentDurationsMs
+        .filter((value: unknown) => Number.isFinite(Number(value)))
+        .map((value: unknown) => Number(value))
     : [];
 };
 
@@ -391,7 +472,7 @@ const buildAiServiceHeaders = (headers: Record<string, string> = {}) => {
   }
   return {
     ...headers,
-    'x-internal-service-token': AI_INTERNAL_AUTH_TOKEN,
+    "x-internal-service-token": AI_INTERNAL_AUTH_TOKEN,
   };
 };
 
@@ -400,9 +481,10 @@ let server: Server | null = null;
 const openConnections = new Set<Socket>();
 
 app.use((req: RequestWithAuth, res, next) => {
-  const requestId = String(req.headers['x-request-id'] || '').trim() || crypto.randomUUID();
+  const requestId =
+    String(req.headers["x-request-id"] || "").trim() || crypto.randomUUID();
   req.requestId = requestId;
-  res.setHeader('X-Request-Id', requestId);
+  res.setHeader("X-Request-Id", requestId);
   next();
 });
 
@@ -417,12 +499,12 @@ app.use((req: RequestWithAuth, res, next) => {
 });
 
 app.use((req, res, next) => {
-  if (isShuttingDown && req.path !== '/api/health') {
-    res.setHeader('Connection', 'close');
+  if (isShuttingDown && req.path !== "/api/health") {
+    res.setHeader("Connection", "close");
     return res.status(503).json({
-      error: 'service_unavailable',
-      message: 'Server is restarting. Please retry shortly.',
-      code: 'SERVICE_UNAVAILABLE',
+      error: "service_unavailable",
+      message: "Server is restarting. Please retry shortly.",
+      code: "SERVICE_UNAVAILABLE",
       requestId: (req as RequestWithAuth).requestId,
     });
   }
@@ -434,41 +516,44 @@ app.use(async (req: RequestWithAuth, res, next) => {
     await runtimeReady;
     next();
   } catch (error: any) {
-    logError('runtime.bootstrap_failed', error, {
+    logError("runtime.bootstrap_failed", error, {
       requestId: req.requestId,
       method: req.method,
       path: normalizeMetricPath(toRequestPath(req)),
     });
     res.status(500).json({
-      error: 'service_initialization_failed',
-      message: 'Server initialization failed.',
-      code: 'SERVICE_INITIALIZATION_FAILED',
+      error: "service_initialization_failed",
+      message: "Server initialization failed.",
+      code: "SERVICE_INITIALIZATION_FAILED",
       requestId: req.requestId,
     });
   }
 });
 
 app.use((req, res, next) => {
-  if (req.method !== 'GET') {
-    res.setHeader('Cache-Control', 'no-store');
+  if (req.method !== "GET") {
+    res.setHeader("Cache-Control", "no-store");
     return next();
   }
 
-  const routePath = req.path || '';
-  if (routePath === '/api/health') {
-    res.setHeader('Cache-Control', 'no-store');
-  } else if (routePath === '/api/career/roles') {
-    res.setHeader('Cache-Control', 'public, max-age=60');
+  const routePath = req.path || "";
+  if (routePath === "/api/health") {
+    res.setHeader("Cache-Control", "no-store");
+  } else if (routePath === "/api/career/roles") {
+    res.setHeader("Cache-Control", "public, max-age=60");
   } else if (
-    routePath.startsWith('/api/jobs') ||
-    routePath.startsWith('/api/recruiter/overview') ||
-    routePath.startsWith('/api/admin/monitoring') ||
-    routePath.startsWith('/api/jobs/') ||
-    routePath.startsWith('/api/dashboard/stats')
+    routePath.startsWith("/api/jobs") ||
+    routePath.startsWith("/api/recruiter/overview") ||
+    routePath.startsWith("/api/admin/monitoring") ||
+    routePath.startsWith("/api/jobs/") ||
+    routePath.startsWith("/api/dashboard/stats")
   ) {
-    res.setHeader('Cache-Control', 'private, max-age=8, stale-while-revalidate=20');
+    res.setHeader(
+      "Cache-Control",
+      "private, max-age=8, stale-while-revalidate=20",
+    );
   } else {
-    res.setHeader('Cache-Control', 'private, max-age=0, must-revalidate');
+    res.setHeader("Cache-Control", "private, max-age=0, must-revalidate");
   }
   return next();
 });
@@ -479,7 +564,7 @@ const authLimiter = rateLimit({
   max: 15,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { message: 'Too many attempts, please try again later' },
+  message: { message: "Too many attempts, please try again later" },
 });
 
 const adminLimiter = rateLimit({
@@ -487,7 +572,7 @@ const adminLimiter = rateLimit({
   max: 400,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { message: 'Too many admin requests, please retry shortly.' },
+  message: { message: "Too many admin requests, please retry shortly." },
 });
 
 const publicApiLimiter = rateLimit({
@@ -495,11 +580,11 @@ const publicApiLimiter = rateLimit({
   max: GENERAL_RATE_LIMIT_MAX_REQUESTS,
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => req.path === '/health' || Boolean(req.headers.authorization),
-  message: { message: 'Too many requests, please retry later.' },
+  skip: (req) => req.path === "/health" || Boolean(req.headers.authorization),
+  message: { message: "Too many requests, please retry later." },
 });
 
-app.use('/api', publicApiLimiter);
+app.use("/api", publicApiLimiter);
 
 // Setup multer for file uploads
 //
@@ -507,24 +592,27 @@ app.use('/api', publicApiLimiter);
 // runtimes such as Vercel Functions, where writing to the app directory is not
 // a safe long-term assumption.
 const PDF_MIME_TYPES = new Set([
-  'application/pdf',
-  'application/x-pdf',
-  'application/acrobat',
-  'applications/vnd.pdf',
-  'text/pdf',
+  "application/pdf",
+  "application/x-pdf",
+  "application/acrobat",
+  "applications/vnd.pdf",
+  "text/pdf",
 ]);
 
 const sanitizeUploadFilename = (fileName: string) =>
   path
     .basename(fileName)
-    .replace(/[^a-zA-Z0-9._-]/g, '_')
-    .replace(/_+/g, '_');
+    .replace(/[^a-zA-Z0-9._-]/g, "_")
+    .replace(/_+/g, "_");
 
 const isLikelyPdfFile = (file: Express.Multer.File) => {
-  const ext = path.extname(file.originalname || '').toLowerCase();
-  const mime = String(file.mimetype || '').toLowerCase();
-  const acceptableMime = PDF_MIME_TYPES.has(mime) || mime === '' || mime === 'application/octet-stream';
-  return ext === '.pdf' && acceptableMime;
+  const ext = path.extname(file.originalname || "").toLowerCase();
+  const mime = String(file.mimetype || "").toLowerCase();
+  const acceptableMime =
+    PDF_MIME_TYPES.has(mime) ||
+    mime === "" ||
+    mime === "application/octet-stream";
+  return ext === ".pdf" && acceptableMime;
 };
 
 const upload = multer({
@@ -532,25 +620,35 @@ const upload = multer({
   limits: { fileSize: MAX_RESUME_FILE_SIZE_BYTES },
   fileFilter: (_req, file, cb) => {
     if (!isLikelyPdfFile(file)) {
-      cb(new Error('Only PDF files are allowed.'));
+      cb(new Error("Only PDF files are allowed."));
       return;
     }
     cb(null, true);
   },
 });
 
-const resumeUploadMiddleware = (req: Request, res: Response, next: NextFunction) => {
-  upload.single('file')(req, res, (error: any) => {
+const resumeUploadMiddleware = (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  upload.single("file")(req, res, (error: any) => {
     if (!error) return next();
     if (error instanceof multer.MulterError) {
-      if (error.code === 'LIMIT_FILE_SIZE') {
+      if (error.code === "LIMIT_FILE_SIZE") {
         return res
           .status(400)
-          .json({ message: `File too large. Maximum size is ${MAX_RESUME_FILE_SIZE_MB}MB.` });
+          .json({
+            message: `File too large. Maximum size is ${MAX_RESUME_FILE_SIZE_MB}MB.`,
+          });
       }
-      return res.status(400).json({ message: error.message || 'Invalid upload payload.' });
+      return res
+        .status(400)
+        .json({ message: error.message || "Invalid upload payload." });
     }
-    return res.status(400).json({ message: error?.message || 'Invalid upload payload.' });
+    return res
+      .status(400)
+      .json({ message: error?.message || "Invalid upload payload." });
   });
 };
 
@@ -585,10 +683,12 @@ db.learningPlans = (db.learningPlans || []).map((entry: any) => ({
   createdAt: entry.createdAt || new Date(),
   updatedAt: entry.updatedAt || new Date(),
 }));
-db.mockInterviewSessions = (db.mockInterviewSessions || []).map((entry: any) => ({
-  ...entry,
-  createdAt: entry.createdAt || new Date(),
-}));
+db.mockInterviewSessions = (db.mockInterviewSessions || []).map(
+  (entry: any) => ({
+    ...entry,
+    createdAt: entry.createdAt || new Date(),
+  }),
+);
 db.savedJobs = (db.savedJobs || []).map((entry: any) => ({
   ...entry,
   createdAt: entry.createdAt || new Date(),
@@ -604,15 +704,18 @@ db.adminLogs = (db.adminLogs || []).map((entry: any) => ({
 
 const normalizeMetricPath = (value: string) => {
   return value
-    .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/gi, ':id')
-    .replace(/\/\d+(?=\/|$)/g, '/:id');
+    .replace(
+      /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/gi,
+      ":id",
+    )
+    .replace(/\/\d+(?=\/|$)/g, "/:id");
 };
 
 app.use((req: RequestWithAuth, res, next) => {
   const start = Date.now();
   db.requestMetrics.totalRequests += 1;
 
-  res.on('finish', () => {
+  res.on("finish", () => {
     const durationMs = Date.now() - start;
     const pathPart = normalizeMetricPath(toRequestPath(req));
     const key = `${req.method.toUpperCase()} ${pathPart}`;
@@ -634,7 +737,10 @@ app.use((req: RequestWithAuth, res, next) => {
     current.lastSeenAt = new Date();
     current.recentDurationsMs.push(durationMs);
     if (current.recentDurationsMs.length > METRIC_SAMPLE_LIMIT) {
-      current.recentDurationsMs.splice(0, current.recentDurationsMs.length - METRIC_SAMPLE_LIMIT);
+      current.recentDurationsMs.splice(
+        0,
+        current.recentDurationsMs.length - METRIC_SAMPLE_LIMIT,
+      );
     }
     if (res.statusCode >= 400) {
       current.errors += 1;
@@ -650,43 +756,50 @@ app.use((req: RequestWithAuth, res, next) => {
     db.requestMetrics.endpoints[key] = current;
 
     const authenticatedProfile = req.profile || getProfileFromAuth(req);
-    logEvent(getResponseLogLevel(res.statusCode, durationMs), 'http.request.completed', {
-      requestId: req.requestId,
-      method: req.method,
-      path: pathPart,
-      statusCode: res.statusCode,
-      latencyMs: durationMs,
-      userId: authenticatedProfile?.id || null,
-      userRole: authenticatedProfile ? toCanonicalRole(authenticatedProfile.role) : null,
-    });
+    logEvent(
+      getResponseLogLevel(res.statusCode, durationMs),
+      "http.request.completed",
+      {
+        requestId: req.requestId,
+        method: req.method,
+        path: pathPart,
+        statusCode: res.statusCode,
+        latencyMs: durationMs,
+        userId: authenticatedProfile?.id || null,
+        userRole: authenticatedProfile
+          ? toCanonicalRole(authenticatedProfile.role)
+          : null,
+      },
+    );
   });
 
   next();
 });
 
-type CanonicalRole = 'student' | 'recruiter' | 'admin';
-type SupportedRole = CanonicalRole | 'employer';
+type CanonicalRole = "student" | "recruiter" | "admin";
+type SupportedRole = CanonicalRole | "employer";
 
 const resetTokens = new Map<string, { userId: string; expiresAt: number }>();
 const revokedTokens = new Set<string>();
 
 const toStorageRole = (inputRole: unknown): SupportedRole => {
-  const normalized = String(inputRole || '')
+  const normalized = String(inputRole || "")
     .trim()
     .toLowerCase();
-  if (normalized === 'recruiter') return 'employer';
-  if (normalized === 'employer') return 'employer';
-  if (normalized === 'admin') return 'admin';
-  return 'student';
+  if (normalized === "recruiter") return "employer";
+  if (normalized === "employer") return "employer";
+  if (normalized === "admin") return "admin";
+  return "student";
 };
 
 const toCanonicalRole = (inputRole: unknown): CanonicalRole => {
-  const normalized = String(inputRole || '')
+  const normalized = String(inputRole || "")
     .trim()
     .toLowerCase();
-  if (normalized === 'recruiter' || normalized === 'employer') return 'recruiter';
-  if (normalized === 'admin') return 'admin';
-  return 'student';
+  if (normalized === "recruiter" || normalized === "employer")
+    return "recruiter";
+  if (normalized === "admin") return "admin";
+  return "student";
 };
 
 const roleMatches = (inputRole: unknown, requiredRole: CanonicalRole) => {
@@ -696,13 +809,20 @@ const roleMatches = (inputRole: unknown, requiredRole: CanonicalRole) => {
 const readOptionalBootstrapUser = (
   prefix: string,
   role: SupportedRole,
-  fallbackName: string
-): { email: string; password: string; name: string; role: SupportedRole } | null => {
-  const email = String(process.env[`${prefix}_EMAIL`] || '')
+  fallbackName: string,
+): {
+  email: string;
+  password: string;
+  name: string;
+  role: SupportedRole;
+} | null => {
+  const email = String(process.env[`${prefix}_EMAIL`] || "")
     .trim()
     .toLowerCase();
-  const password = String(process.env[`${prefix}_PASSWORD`] || '').trim();
-  const name = String(process.env[`${prefix}_NAME`] || fallbackName).trim() || fallbackName;
+  const password = String(process.env[`${prefix}_PASSWORD`] || "").trim();
+  const name =
+    String(process.env[`${prefix}_NAME`] || fallbackName).trim() ||
+    fallbackName;
 
   if (!email && !password) {
     return null;
@@ -722,11 +842,11 @@ const readOptionalBootstrapUser = (
 const roleFilterMatches = (inputRole: unknown, filterRole: string) => {
   const normalized = filterRole.trim().toLowerCase();
   if (!normalized) return true;
-  if (normalized === 'employer' || normalized === 'recruiter') {
-    return roleMatches(inputRole, 'recruiter');
+  if (normalized === "employer" || normalized === "recruiter") {
+    return roleMatches(inputRole, "recruiter");
   }
-  if (normalized === 'admin') return roleMatches(inputRole, 'admin');
-  if (normalized === 'student') return roleMatches(inputRole, 'student');
+  if (normalized === "admin") return roleMatches(inputRole, "admin");
+  if (normalized === "student") return roleMatches(inputRole, "student");
   return false;
 };
 
@@ -749,14 +869,14 @@ const createToken = (userId: string) =>
       sessionId: crypto.randomUUID(),
     },
     JWT_SECRET,
-    { expiresIn: '7d' }
+    { expiresIn: "7d" },
   );
 
 const parseBearerToken = (req: Request): string | null => {
   const header = req.headers.authorization;
   if (!header) return null;
-  const [scheme, value] = header.split(' ');
-  if (!scheme || scheme.toLowerCase() !== 'bearer' || !value) return null;
+  const [scheme, value] = header.split(" ");
+  if (!scheme || scheme.toLowerCase() !== "bearer" || !value) return null;
   return value;
 };
 
@@ -782,16 +902,21 @@ const getProfileFromAuth = (req: Request) => {
   return profile;
 };
 
-const requireAuth = (req: RequestWithAuth, res: Response, next: NextFunction) => {
+const requireAuth = (
+  req: RequestWithAuth,
+  res: Response,
+  next: NextFunction,
+) => {
   const token = parseBearerToken(req);
-  if (!token) return res.status(401).json({ message: 'Not authenticated' });
+  if (!token) return res.status(401).json({ message: "Not authenticated" });
 
   const decoded = verifyToken(token);
-  if (!decoded) return res.status(401).json({ message: 'Invalid or expired token' });
+  if (!decoded)
+    return res.status(401).json({ message: "Invalid or expired token" });
 
   const profile = db.profiles.find((entry: any) => entry.id === decoded.userId);
   if (!profile || profile.isActive === false) {
-    return res.status(401).json({ message: 'User not found or disabled' });
+    return res.status(401).json({ message: "User not found or disabled" });
   }
 
   req.authToken = token;
@@ -802,51 +927,66 @@ const requireAuth = (req: RequestWithAuth, res: Response, next: NextFunction) =>
 const requireRoles = (...roles: CanonicalRole[]) => {
   return (req: RequestWithAuth, res: Response, next: NextFunction) => {
     const profile = req.profile;
-    if (!profile) return res.status(401).json({ message: 'Not authenticated' });
+    if (!profile) return res.status(401).json({ message: "Not authenticated" });
 
     const authorized = roles.some((role) => roleMatches(profile.role, role));
-    if (!authorized) return res.status(403).json({ message: 'Not authorized' });
+    if (!authorized) return res.status(403).json({ message: "Not authorized" });
     return next();
   };
 };
 
-const toStorageApplicationStatus = (status: unknown): 'pending' | 'shortlisted' | 'interview' | 'rejected' => {
-  const normalized = String(status || '')
+const toStorageApplicationStatus = (
+  status: unknown,
+): "pending" | "shortlisted" | "interview" | "rejected" => {
+  const normalized = String(status || "")
     .trim()
     .toLowerCase();
-  if (normalized === 'applied' || normalized === 'pending') return 'pending';
-  if (normalized === 'offer' || normalized === 'shortlisted') return 'shortlisted';
-  if (normalized === 'interviewing' || normalized === 'interview') return 'interview';
-  return 'rejected';
+  if (normalized === "applied" || normalized === "pending") return "pending";
+  if (normalized === "offer" || normalized === "shortlisted")
+    return "shortlisted";
+  if (normalized === "interviewing" || normalized === "interview")
+    return "interview";
+  return "rejected";
 };
 
-const toTrackerApplicationStatus = (status: unknown): 'applied' | 'interviewing' | 'offer' | 'rejected' => {
-  const normalized = String(status || '')
+const toTrackerApplicationStatus = (
+  status: unknown,
+): "applied" | "interviewing" | "offer" | "rejected" => {
+  const normalized = String(status || "")
     .trim()
     .toLowerCase();
-  if (normalized === 'pending' || normalized === 'applied') return 'applied';
-  if (normalized === 'interview' || normalized === 'interviewing') return 'interviewing';
-  if (normalized === 'shortlisted' || normalized === 'offer') return 'offer';
-  return 'rejected';
+  if (normalized === "pending" || normalized === "applied") return "applied";
+  if (normalized === "interview" || normalized === "interviewing")
+    return "interviewing";
+  if (normalized === "shortlisted" || normalized === "offer") return "offer";
+  return "rejected";
 };
 
 const withTrackerStatus = (application: any) => ({
   ...application,
   trackerStatus: toTrackerApplicationStatus(application?.status),
-  storageStatus: application?.status || 'pending',
+  storageStatus: application?.status || "pending",
 });
 
 const withApplicationDetails = (applications: any[]) => {
   return applications.map((application) => {
     const job = db.jobs.find((entry: any) => entry.id === application.jobId);
-    const student = db.profiles.find((entry: any) => entry.id === application.candidateId);
-    const candidateProfile = db.candidates.find((entry: any) => entry.userId === application.candidateId) || null;
-    const resume = db.resumes.find((entry: any) => entry.userId === application.candidateId);
+    const student = db.profiles.find(
+      (entry: any) => entry.id === application.candidateId,
+    );
+    const candidateProfile =
+      db.candidates.find(
+        (entry: any) => entry.userId === application.candidateId,
+      ) || null;
+    const resume = db.resumes.find(
+      (entry: any) => entry.userId === application.candidateId,
+    );
     return {
       ...withTrackerStatus(application),
       // Keep recruiter/admin navigation stable even when a student has not
       // uploaded a resume yet and therefore has no dedicated candidate row.
-      candidateProfileId: candidateProfile?.id || application.candidateId || null,
+      candidateProfileId:
+        candidateProfile?.id || application.candidateId || null,
       job,
       student: student ? sanitizeUser(student) : null,
       resume,
@@ -865,10 +1005,14 @@ const toPositiveInt = (value: unknown, fallback: number, max: number) => {
 
 const getPagination = (
   query: Record<string, any>,
-  defaults: { page?: number; limit?: number; maxLimit?: number } = {}
+  defaults: { page?: number; limit?: number; maxLimit?: number } = {},
 ) => {
   const page = toPositiveInt(query?.page, defaults.page || 1, 100000);
-  const limit = toPositiveInt(query?.limit, defaults.limit || 20, defaults.maxLimit || 100);
+  const limit = toPositiveInt(
+    query?.limit,
+    defaults.limit || 20,
+    defaults.maxLimit || 100,
+  );
   const offset = (page - 1) * limit;
   return { page, limit, offset };
 };
@@ -896,10 +1040,15 @@ const average = (items: number[]) => {
 
 const summarizeUserForAdmin = (profile: any) => {
   const canonicalRole = toCanonicalRole(profile.role);
-  const resume = db.resumes.find((entry: any) => entry.userId === profile.id) || null;
+  const resume =
+    db.resumes.find((entry: any) => entry.userId === profile.id) || null;
   const latestResumeScore = getLatestResumeScore(profile.id);
-  const applications = db.applications.filter((entry: any) => entry.candidateId === profile.id);
-  const jobsPosted = db.jobs.filter((entry: any) => entry.employerId === profile.id);
+  const applications = db.applications.filter(
+    (entry: any) => entry.candidateId === profile.id,
+  );
+  const jobsPosted = db.jobs.filter(
+    (entry: any) => entry.employerId === profile.id,
+  );
 
   return {
     ...sanitizeUser(profile),
@@ -923,12 +1072,12 @@ const appendAdminLog = async (
   actionType: string,
   targetType: string,
   targetId: string,
-  details: Record<string, any> = {}
+  details: Record<string, any> = {},
 ) => {
   const record = {
-    id: uuidv4(),
+    id: crypto.randomUUID(),
     adminId: adminProfile?.id || null,
-    adminName: adminProfile?.name || 'Admin',
+    adminName: adminProfile?.name || "Admin",
     actionType,
     targetType,
     targetId,
@@ -943,14 +1092,16 @@ const appendAdminLog = async (
 };
 
 const toSkillList = (value: any): string[] => {
-  if (Array.isArray(value)) return value.map((entry) => String(entry)).filter(Boolean);
-  if (typeof value === 'string') {
+  if (Array.isArray(value))
+    return value.map((entry) => String(entry)).filter(Boolean);
+  if (typeof value === "string") {
     try {
       const parsed = JSON.parse(value);
-      if (Array.isArray(parsed)) return parsed.map((entry) => String(entry)).filter(Boolean);
+      if (Array.isArray(parsed))
+        return parsed.map((entry) => String(entry)).filter(Boolean);
     } catch {
       return value
-        .split(',')
+        .split(",")
         .map((entry) => entry.trim())
         .filter(Boolean);
     }
@@ -960,16 +1111,14 @@ const toSkillList = (value: any): string[] => {
 
 const normalizeStringArray = (value: unknown): string[] => {
   if (!Array.isArray(value)) return [];
-  return value
-    .map((entry) => String(entry || '').trim())
-    .filter(Boolean);
+  return value.map((entry) => String(entry || "").trim()).filter(Boolean);
 };
 
 const normalizeSkillList = (value: unknown): string[] => {
   const raw = Array.isArray(value) ? value : toSkillList(value as any);
   const unique = new Map<string, string>();
   for (const item of raw) {
-    const cleaned = String(item || '').trim();
+    const cleaned = String(item || "").trim();
     if (!cleaned) continue;
     const key = cleaned.toLowerCase();
     if (!unique.has(key)) unique.set(key, cleaned);
@@ -978,26 +1127,34 @@ const normalizeSkillList = (value: unknown): string[] => {
 };
 
 const COURSE_SKILL_ALIASES: Record<string, string[]> = {
-  'data visualization': ['data visualization', 'power bi'],
-  'power bi': ['power bi', 'data visualization'],
-  'c programming': ['c programming', 'embedded c'],
-  'embedded c': ['embedded c', 'c programming'],
-  'microcontrollers': ['microcontrollers', 'iot'],
-  iot: ['iot', 'microcontrollers'],
-  'circuit analysis': ['circuit analysis', 'analog electronics'],
-  'analog electronics': ['analog electronics', 'circuit analysis'],
+  "data visualization": ["data visualization", "power bi"],
+  "power bi": ["power bi", "data visualization"],
+  "c programming": ["c programming", "embedded c"],
+  "embedded c": ["embedded c", "c programming"],
+  microcontrollers: ["microcontrollers", "iot"],
+  iot: ["iot", "microcontrollers"],
+  "circuit analysis": ["circuit analysis", "analog electronics"],
+  "analog electronics": ["analog electronics", "circuit analysis"],
 };
 
 const courseSkillMatches = (courseSkills: string[], skill: string) => {
-  const normalizedSkill = String(skill || '').trim().toLowerCase();
+  const normalizedSkill = String(skill || "")
+    .trim()
+    .toLowerCase();
   if (!normalizedSkill) return false;
   const aliases = COURSE_SKILL_ALIASES[normalizedSkill] || [normalizedSkill];
-  return courseSkills.some((entry) => aliases.includes(String(entry || '').trim().toLowerCase()));
+  return courseSkills.some((entry) =>
+    aliases.includes(
+      String(entry || "")
+        .trim()
+        .toLowerCase(),
+    ),
+  );
 };
 
 const parseJsonArray = (value: unknown): any[] => {
   if (Array.isArray(value)) return value;
-  if (typeof value !== 'string') return [];
+  if (typeof value !== "string") return [];
   try {
     const parsed = JSON.parse(value);
     return Array.isArray(parsed) ? parsed : [];
@@ -1007,12 +1164,12 @@ const parseJsonArray = (value: unknown): any[] => {
 };
 
 const normalizeResumeParsedData = (value: any, profile: any) => {
-  const safe = value && typeof value === 'object' ? value : {};
+  const safe = value && typeof value === "object" ? value : {};
   const parsedSkills = normalizeSkillList(safe.skills);
 
   return {
-    name: safe.name ? String(safe.name) : profile?.name || '',
-    email: safe.email ? String(safe.email) : profile?.email || '',
+    name: safe.name ? String(safe.name) : profile?.name || "",
+    email: safe.email ? String(safe.email) : profile?.email || "",
     phone: safe.phone ? String(safe.phone) : null,
     summary: safe.summary ? String(safe.summary) : null,
     skills: parsedSkills,
@@ -1025,7 +1182,7 @@ const normalizeResumeParsedData = (value: any, profile: any) => {
 };
 
 const buildProcessedFileUrl = (userId: string, fileName: string) => {
-  const safeName = sanitizeUploadFilename(fileName || 'resume.pdf');
+  const safeName = sanitizeUploadFilename(fileName || "resume.pdf");
   return `processed://resumes/${userId}/${Date.now()}-${safeName}`;
 };
 
@@ -1039,14 +1196,22 @@ const safeDeleteTempFile = async (filePath?: string) => {
 };
 
 const getCareerPreference = (userId: string) => {
-  const preference = db.careerPreferences.find((entry: any) => entry.userId === userId);
+  const preference = db.careerPreferences.find(
+    (entry: any) => entry.userId === userId,
+  );
   const roleId = preference?.roleId || CAREER_ROLES[0].id;
-  return CAREER_ROLES.some((entry) => entry.id === roleId) ? roleId : CAREER_ROLES[0].id;
+  return CAREER_ROLES.some((entry) => entry.id === roleId)
+    ? roleId
+    : CAREER_ROLES[0].id;
 };
 
 const setCareerPreference = (userId: string, roleId: string) => {
-  const safeRoleId = CAREER_ROLES.some((entry) => entry.id === roleId) ? roleId : CAREER_ROLES[0].id;
-  const idx = db.careerPreferences.findIndex((entry: any) => entry.userId === userId);
+  const safeRoleId = CAREER_ROLES.some((entry) => entry.id === roleId)
+    ? roleId
+    : CAREER_ROLES[0].id;
+  const idx = db.careerPreferences.findIndex(
+    (entry: any) => entry.userId === userId,
+  );
   const record = {
     userId,
     roleId: safeRoleId,
@@ -1065,7 +1230,7 @@ const getStudentResumeSkills = (userId: string) => {
       ...toSkillList(candidate?.skills),
       ...toSkillList(resume?.skills),
       ...toSkillList(resume?.parsedData?.skills),
-    ])
+    ]),
   );
 };
 
@@ -1073,7 +1238,9 @@ const getStudentRoadmap = (userId: string, roleId?: string) => {
   const safeRoleId = roleId || getCareerPreference(userId);
   const resumeSkills = getStudentResumeSkills(userId);
   const records = db.skillProgress
-    .filter((entry: any) => entry.userId === userId && entry.roleId === safeRoleId)
+    .filter(
+      (entry: any) => entry.userId === userId && entry.roleId === safeRoleId,
+    )
     .map((entry: any) => ({
       skillName: String(entry.skillName),
       status: entry.status as SkillStatus,
@@ -1084,7 +1251,11 @@ const getStudentRoadmap = (userId: string, roleId?: string) => {
 const getLatestResumeScore = (userId: string) => {
   const history = db.resumeScores
     .filter((entry: any) => entry.userId === userId)
-    .sort((left: any, right: any) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
+    .sort(
+      (left: any, right: any) =>
+        new Date(right.createdAt).getTime() -
+        new Date(left.createdAt).getTime(),
+    );
   return history[0] || null;
 };
 
@@ -1094,16 +1265,26 @@ const ensureResumeScoreHistory = async (userId: string) => {
 
   const roleId = getCareerPreference(userId);
   const latest = getLatestResumeScore(userId);
-  const resumeUpdatedAt = new Date(resume.updatedAt || resume.createdAt || Date.now());
+  const resumeUpdatedAt = new Date(
+    resume.updatedAt || resume.createdAt || Date.now(),
+  );
   const latestCreatedAt = latest ? new Date(latest.createdAt) : null;
 
-  if (latest && latestCreatedAt && latestCreatedAt.getTime() >= resumeUpdatedAt.getTime()) {
+  if (
+    latest &&
+    latestCreatedAt &&
+    latestCreatedAt.getTime() >= resumeUpdatedAt.getTime()
+  ) {
     return latest;
   }
 
-  const scorePayload = calculateResumeStrength(resume.parsedData, toSkillList(resume.skills), roleId);
+  const scorePayload = calculateResumeStrength(
+    resume.parsedData,
+    toSkillList(resume.skills),
+    roleId,
+  );
   const record = {
-    id: uuidv4(),
+    id: crypto.randomUUID(),
     userId,
     roleId,
     score: scorePayload.overallScore,
@@ -1116,7 +1297,8 @@ const ensureResumeScoreHistory = async (userId: string) => {
   return record;
 };
 
-const toHumanReadableImpact = (impact: number) => Math.max(3, Math.min(30, Math.round(impact)));
+const toHumanReadableImpact = (impact: number) =>
+  Math.max(3, Math.min(30, Math.round(impact)));
 
 // Local fallback used when the AI service is unavailable or returns invalid data.
 const buildStudentAICoachFallback = (payload: {
@@ -1124,106 +1306,109 @@ const buildStudentAICoachFallback = (payload: {
   prompt: string;
   context: Record<string, any>;
 }) => {
-  const feature = String(payload.feature || 'skill_gap');
-  const roleName = String(payload.context?.targetRole || 'your target role');
-  const missingSkills = normalizeSkillList(payload.context?.missingSkills || []).slice(0, 3);
-  const missingText = missingSkills.length > 0 ? missingSkills.join(', ') : 'core role skills';
+  const feature = String(payload.feature || "skill_gap");
+  const roleName = String(payload.context?.targetRole || "your target role");
+  const missingSkills = normalizeSkillList(
+    payload.context?.missingSkills || [],
+  ).slice(0, 3);
+  const missingText =
+    missingSkills.length > 0 ? missingSkills.join(", ") : "core role skills";
 
-  if (feature === 'resume_improvement') {
+  if (feature === "resume_improvement") {
     return {
-      provider: 'fallback',
+      provider: "fallback",
       model: null,
       feature,
-      title: 'Resume Improvement Checklist',
+      title: "Resume Improvement Checklist",
       summary: `Improve your resume for ${roleName} by emphasizing measurable outcomes and relevant skill evidence.`,
       actionItems: [
-        'Rewrite top 3 bullets with action + outcome + metric format.',
-        'Move role-relevant skills to top section and trim unrelated tools.',
-        'Add one project impact metric (performance, users, accuracy, etc.).',
-        'Keep layout simple and ATS friendly.',
+        "Rewrite top 3 bullets with action + outcome + metric format.",
+        "Move role-relevant skills to top section and trim unrelated tools.",
+        "Add one project impact metric (performance, users, accuracy, etc.).",
+        "Keep layout simple and ATS friendly.",
       ],
       followUpQuestions: [
-        'Want ATS keywords for your target role?',
-        'Need help rewriting one project bullet?',
+        "Want ATS keywords for your target role?",
+        "Need help rewriting one project bullet?",
       ],
     };
   }
 
-  if (feature === 'interview_prep') {
+  if (feature === "interview_prep") {
     return {
-      provider: 'fallback',
+      provider: "fallback",
       model: null,
       feature,
-      title: 'Interview Prep Focus',
+      title: "Interview Prep Focus",
       summary: `Prepare for ${roleName} interviews with targeted technical practice and concise behavioral stories.`,
       actionItems: [
-        'Practice 5 technical questions and keep answers under 2 minutes.',
-        'Prepare 3 STAR-format stories (ownership, teamwork, failure).',
-        'Review one project deeply: architecture, tradeoffs, and testing.',
-        'Run one mock interview this week and capture improvement points.',
+        "Practice 5 technical questions and keep answers under 2 minutes.",
+        "Prepare 3 STAR-format stories (ownership, teamwork, failure).",
+        "Review one project deeply: architecture, tradeoffs, and testing.",
+        "Run one mock interview this week and capture improvement points.",
       ],
       followUpQuestions: [
-        'Need likely interview questions for your role?',
-        'Want a mock interview rubric?',
+        "Need likely interview questions for your role?",
+        "Want a mock interview rubric?",
       ],
     };
   }
 
-  if (feature === 'project_ideas') {
+  if (feature === "project_ideas") {
     return {
-      provider: 'fallback',
+      provider: "fallback",
       model: null,
       feature,
-      title: 'Portfolio Project Plan',
+      title: "Portfolio Project Plan",
       summary: `Build role-aligned projects that close key gaps in ${missingText}.`,
       actionItems: [
-        `Create one mini project centered on ${missingSkills[0] || 'a core skill'} and deploy it.`,
-        'Add testing, error handling, and logging to show production quality.',
-      'Write concise architecture notes and attach a short walkthrough video.',
-        'Highlight measurable outcomes in your resume.',
+        `Create one mini project centered on ${missingSkills[0] || "a core skill"} and deploy it.`,
+        "Add testing, error handling, and logging to show production quality.",
+        "Write concise architecture notes and attach a short walkthrough video.",
+        "Highlight measurable outcomes in your resume.",
       ],
       followUpQuestions: [
-        'Want weekly milestones for one project?',
-        'Need project ideas based on your current skills?',
+        "Want weekly milestones for one project?",
+        "Need project ideas based on your current skills?",
       ],
     };
   }
 
-  if (feature === 'study_plan') {
+  if (feature === "study_plan") {
     return {
-      provider: 'fallback',
+      provider: "fallback",
       model: null,
       feature,
-      title: '4-Week Study Plan',
+      title: "4-Week Study Plan",
       summary: `Structured study plan for ${roleName} with focus on ${missingText}.`,
       actionItems: [
-        'Week 1: learn one missing core skill and finish foundational lessons.',
-        'Week 2: build a small project feature using that skill.',
-        'Week 3: improve quality with tests, documentation, and deployment.',
-        'Week 4: update portfolio, resume, and do one mock interview.',
+        "Week 1: learn one missing core skill and finish foundational lessons.",
+        "Week 2: build a small project feature using that skill.",
+        "Week 3: improve quality with tests, documentation, and deployment.",
+        "Week 4: update portfolio, resume, and do one mock interview.",
       ],
       followUpQuestions: [
-        'Need this split into daily tasks?',
-        'Want free resources for each week?',
+        "Need this split into daily tasks?",
+        "Want free resources for each week?",
       ],
     };
   }
 
   return {
-    provider: 'fallback',
+    provider: "fallback",
     model: null,
-    feature: 'skill_gap',
-    title: 'Skill Gap Guidance',
+    feature: "skill_gap",
+    title: "Skill Gap Guidance",
     summary: `Prioritize missing skills for ${roleName}. Start with ${missingText}.`,
     actionItems: [
-      'Pick one missing skill and finish a focused learning track.',
-      'Apply it in a small practical project and document outcomes.',
-      'Update resume bullets with impact and metrics.',
-      'Re-check role match after one week.',
+      "Pick one missing skill and finish a focused learning track.",
+      "Apply it in a small practical project and document outcomes.",
+      "Update resume bullets with impact and metrics.",
+      "Re-check role match after one week.",
     ],
     followUpQuestions: [
-      'Want your missing skills ranked by impact?',
-      'Need a beginner-to-advanced resource path?',
+      "Want your missing skills ranked by impact?",
+      "Need a beginner-to-advanced resource path?",
     ],
   };
 };
@@ -1240,9 +1425,9 @@ const callStudentAICoach = async (payload: {
     const response = await (async () => {
       try {
         return await fetch(`${AI_SERVICE_URL}/ai/student-assistant`, {
-          method: 'POST',
+          method: "POST",
           headers: buildAiServiceHeaders({
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           }),
           body: JSON.stringify(payload),
           signal: controller.signal,
@@ -1252,10 +1437,13 @@ const callStudentAICoach = async (payload: {
       }
     })();
     if (!response.ok) {
-      throw new Error(`AI service request failed with status ${response.status}`);
+      throw new Error(
+        `AI service request failed with status ${response.status}`,
+      );
     }
     const data: any = await response.json();
-    if (!data || typeof data !== 'object') throw new Error('Invalid AI response');
+    if (!data || typeof data !== "object")
+      throw new Error("Invalid AI response");
     return data;
   } catch {
     return buildStudentAICoachFallback(payload);
@@ -1263,22 +1451,34 @@ const callStudentAICoach = async (payload: {
 };
 
 const buildResumeMonitoringRecord = (resume: any) => {
-  const student = db.profiles.find((entry: any) => entry.id === resume.userId) || null;
+  const student =
+    db.profiles.find((entry: any) => entry.id === resume.userId) || null;
   const latestScore = getLatestResumeScore(resume.userId);
-  const parsedData = resume?.parsedData && typeof resume.parsedData === 'object' ? resume.parsedData : {};
-  const extractedSkills = normalizeSkillList(parsedData.skills || resume.skills || []);
+  const parsedData =
+    resume?.parsedData && typeof resume.parsedData === "object"
+      ? resume.parsedData
+      : {};
+  const extractedSkills = normalizeSkillList(
+    parsedData.skills || resume.skills || [],
+  );
   const hasStructuredData =
     extractedSkills.length > 0 ||
     (Array.isArray(parsedData.education) && parsedData.education.length > 0) ||
-    (Array.isArray(parsedData.experience) && parsedData.experience.length > 0) ||
+    (Array.isArray(parsedData.experience) &&
+      parsedData.experience.length > 0) ||
     (Array.isArray(parsedData.projects) && parsedData.projects.length > 0);
-  const parseStatus = hasStructuredData ? 'success' : 'failed';
+  const parseStatus = hasStructuredData ? "success" : "failed";
 
   const flags: string[] = [];
-  if (!resume.fileName || !String(resume.fileName).toLowerCase().endsWith('.pdf')) flags.push('invalid_filename');
-  if (extractedSkills.length === 0) flags.push('no_skills_extracted');
-  if (!parsedData || Object.keys(parsedData).length === 0) flags.push('empty_parsed_data');
-  if (resume.moderationStatus === 'flagged') flags.push('flagged_by_admin');
+  if (
+    !resume.fileName ||
+    !String(resume.fileName).toLowerCase().endsWith(".pdf")
+  )
+    flags.push("invalid_filename");
+  if (extractedSkills.length === 0) flags.push("no_skills_extracted");
+  if (!parsedData || Object.keys(parsedData).length === 0)
+    flags.push("empty_parsed_data");
+  if (resume.moderationStatus === "flagged") flags.push("flagged_by_admin");
 
   return {
     id: resume.id,
@@ -1291,8 +1491,8 @@ const buildResumeMonitoringRecord = (resume: any) => {
     flags,
     resumeScore: latestScore?.score || 0,
     parsedData,
-    moderationStatus: resume.moderationStatus || 'clean',
-    moderationNotes: resume.moderationNotes || '',
+    moderationStatus: resume.moderationStatus || "clean",
+    moderationNotes: resume.moderationNotes || "",
     moderationUpdatedAt: resume.moderationUpdatedAt || null,
     moderationUpdatedBy: resume.moderationUpdatedBy || null,
     createdAt: resume.createdAt,
@@ -1308,10 +1508,13 @@ const buildAdminApplicationSummary = (days = 30) => {
       acc[key] = (acc[key] || 0) + 1;
       return acc;
     },
-    { pending: 0, shortlisted: 0, interview: 0, rejected: 0 }
+    { pending: 0, shortlisted: 0, interview: 0, rejected: 0 },
   );
 
-  const perJobMap = new Map<string, { jobId: string; title: string; company: string; applications: number }>();
+  const perJobMap = new Map<
+    string,
+    { jobId: string; title: string; company: string; applications: number }
+  >();
   for (const application of db.applications) {
     const job = db.jobs.find((entry: any) => entry.id === application.jobId);
     if (!job) continue;
@@ -1335,7 +1538,9 @@ const buildAdminApplicationSummary = (days = 30) => {
     }
   >();
   for (const application of db.applications) {
-    const student = db.profiles.find((entry: any) => entry.id === application.candidateId);
+    const student = db.profiles.find(
+      (entry: any) => entry.id === application.candidateId,
+    );
     if (!student) continue;
     const current = perStudentMap.get(student.id) || {
       userId: student.id,
@@ -1357,7 +1562,9 @@ const buildAdminApplicationSummary = (days = 30) => {
     dailyMap.set(key, 0);
   }
   for (const application of db.applications) {
-    const date = new Date(application.appliedAt || application.createdAt || Date.now());
+    const date = new Date(
+      application.appliedAt || application.createdAt || Date.now(),
+    );
     const dayKey = date.toISOString().slice(0, 10);
     if (dailyMap.has(dayKey)) {
       dailyMap.set(dayKey, (dailyMap.get(dayKey) || 0) + 1);
@@ -1378,18 +1585,19 @@ const buildAdminApplicationSummary = (days = 30) => {
     applicationsPerStudent: Array.from(perStudentMap.values())
       .sort((left, right) => right.applications - left.applications)
       .slice(0, 10),
-    trendLastDays: Array.from(dailyMap.entries()).map(([date, count]) => ({ date, count })),
+    trendLastDays: Array.from(dailyMap.entries()).map(([date, count]) => ({
+      date,
+      count,
+    })),
   };
 };
 
 const PLATFORM_HEALTH_CACHE_TTL_MS = 8000;
-let platformHealthCache:
-  | {
-      expiresAt: number;
-      key: string;
-      data: any;
-    }
-  | null = null;
+let platformHealthCache: {
+  expiresAt: number;
+  key: string;
+  data: any;
+} | null = null;
 
 const getPlatformHealthSnapshot = async () => {
   const cacheKey = [
@@ -1398,8 +1606,12 @@ const getPlatformHealthSnapshot = async () => {
     Number(db.requestMetrics.authFailures || 0),
     Number(db.requestMetrics.slowRequests || 0),
     Object.keys(db.requestMetrics.endpoints || {}).length,
-  ].join(':');
-  if (platformHealthCache && platformHealthCache.expiresAt > Date.now() && platformHealthCache.key === cacheKey) {
+  ].join(":");
+  if (
+    platformHealthCache &&
+    platformHealthCache.expiresAt > Date.now() &&
+    platformHealthCache.key === cacheKey
+  ) {
     return platformHealthCache.data;
   }
 
@@ -1408,30 +1620,39 @@ const getPlatformHealthSnapshot = async () => {
   const authFailures = Number(db.requestMetrics.authFailures || 0);
   const endpoints = db.requestMetrics.endpoints || {};
 
-  const endpointStats = Object.entries(endpoints).map(([name, entry]: [string, any]) => {
-    const count = Number(entry?.count || 0);
-    const totalDurationMs = Number(entry?.totalDurationMs || 0);
-    const avgDurationMs = count > 0 ? totalDurationMs / count : 0;
-    return {
-      endpoint: name,
-      count,
-      errors: Number(entry?.errors || 0),
-      avgDurationMs: Math.round(avgDurationMs),
-      maxDurationMs: Number(entry?.maxDurationMs || 0),
-      slowCount: Number(entry?.slowCount || 0),
-      errorRate: count > 0 ? Math.round((Number(entry?.errors || 0) / count) * 10000) / 100 : 0,
-      lastStatusCode: Number(entry?.lastStatusCode || 0),
-      lastSeenAt: entry?.lastSeenAt || null,
-    };
-  });
+  const endpointStats = Object.entries(endpoints).map(
+    ([name, entry]: [string, any]) => {
+      const count = Number(entry?.count || 0);
+      const totalDurationMs = Number(entry?.totalDurationMs || 0);
+      const avgDurationMs = count > 0 ? totalDurationMs / count : 0;
+      return {
+        endpoint: name,
+        count,
+        errors: Number(entry?.errors || 0),
+        avgDurationMs: Math.round(avgDurationMs),
+        maxDurationMs: Number(entry?.maxDurationMs || 0),
+        slowCount: Number(entry?.slowCount || 0),
+        errorRate:
+          count > 0
+            ? Math.round((Number(entry?.errors || 0) / count) * 10000) / 100
+            : 0,
+        lastStatusCode: Number(entry?.lastStatusCode || 0),
+        lastSeenAt: entry?.lastSeenAt || null,
+      };
+    },
+  );
 
   const slowEndpoints = [...endpointStats]
-    .filter((entry) => entry.avgDurationMs >= SLOW_ENDPOINT_THRESHOLD_MS || entry.slowCount > 0)
+    .filter(
+      (entry) =>
+        entry.avgDurationMs >= SLOW_ENDPOINT_THRESHOLD_MS ||
+        entry.slowCount > 0,
+    )
     .sort((left, right) => right.avgDurationMs - left.avgDurationMs)
     .slice(0, 6);
 
   const aiHealth = {
-    status: 'unknown',
+    status: "unknown",
     statusCode: null as number | null,
     latencyMs: null as number | null,
   };
@@ -1440,24 +1661,33 @@ const getPlatformHealthSnapshot = async () => {
   const timeout = setTimeout(() => controller.abort(), AI_HEALTH_TIMEOUT_MS);
   try {
     const aiResponse = await fetch(`${AI_SERVICE_URL}/health`, {
-      method: 'GET',
+      method: "GET",
       headers: buildAiServiceHeaders(),
       signal: controller.signal,
     });
-    aiHealth.status = aiResponse.ok ? 'up' : 'degraded';
+    aiHealth.status = aiResponse.ok ? "up" : "degraded";
     aiHealth.statusCode = aiResponse.status;
     aiHealth.latencyMs = Date.now() - started;
   } catch {
-    aiHealth.status = 'down';
+    aiHealth.status = "down";
     aiHealth.latencyMs = Date.now() - started;
   } finally {
     clearTimeout(timeout);
   }
 
   const uptimeSeconds = Math.floor((Date.now() - SERVER_STARTED_AT) / 1000);
-  const apiErrorRate = totalRequests > 0 ? Math.round((totalErrors / totalRequests) * 10000) / 100 : 0;
-  const latencySamples = endpointStats.flatMap((entry) => getMetricSamples(endpoints[entry.endpoint]));
-  const requestsPerMinute = uptimeSeconds > 0 ? Math.round((totalRequests / Math.max(1, uptimeSeconds)) * 60 * 100) / 100 : 0;
+  const apiErrorRate =
+    totalRequests > 0
+      ? Math.round((totalErrors / totalRequests) * 10000) / 100
+      : 0;
+  const latencySamples = endpointStats.flatMap((entry) =>
+    getMetricSamples(endpoints[entry.endpoint]),
+  );
+  const requestsPerMinute =
+    uptimeSeconds > 0
+      ? Math.round((totalRequests / Math.max(1, uptimeSeconds)) * 60 * 100) /
+        100
+      : 0;
 
   const snapshot = {
     uptimeSeconds,
@@ -1470,7 +1700,11 @@ const getPlatformHealthSnapshot = async () => {
     slowThresholdMs: SLOW_ENDPOINT_THRESHOLD_MS,
     avgResponseMs:
       endpointStats.length > 0
-        ? Math.round(average(endpointStats.map((entry) => Number(entry.avgDurationMs || 0))))
+        ? Math.round(
+            average(
+              endpointStats.map((entry) => Number(entry.avgDurationMs || 0)),
+            ),
+          )
         : 0,
     latencyPercentilesMs: {
       p50: toPercentile(latencySamples, 50),
@@ -1489,18 +1723,29 @@ const getPlatformHealthSnapshot = async () => {
 };
 
 const jobRequirementText = (job: any) => {
-  const requirements = Array.isArray(job.requirements) ? job.requirements.join(', ') : String(job.requirements || '');
-  const skills = Array.isArray(job.skills) ? job.skills.join(', ') : String(job.skills || '');
-  return `${job.title || ''}. ${job.description || ''}. Requirements: ${requirements}. Skills: ${skills}`.trim();
+  const requirements = Array.isArray(job.requirements)
+    ? job.requirements.join(", ")
+    : String(job.requirements || "");
+  const skills = Array.isArray(job.skills)
+    ? job.skills.join(", ")
+    : String(job.skills || "");
+  return `${job.title || ""}. ${job.description || ""}. Requirements: ${requirements}. Skills: ${skills}`.trim();
 };
 
 const tokenizeSkillTerms = (skills: string[]) =>
   skills
-    .flatMap((skill) => String(skill).toLowerCase().split(/[^a-z0-9+#.]+/g))
+    .flatMap((skill) =>
+      String(skill)
+        .toLowerCase()
+        .split(/[^a-z0-9+#.]+/g),
+    )
     .map((token) => token.trim())
     .filter(Boolean);
 
-const computeTfIdfCosine = (resumeSkills: string[], requiredSkills: string[]) => {
+const computeTfIdfCosine = (
+  resumeSkills: string[],
+  requiredSkills: string[],
+) => {
   const docA = tokenizeSkillTerms(resumeSkills);
   const docB = tokenizeSkillTerms(requiredSkills);
   if (docA.length === 0 || docB.length === 0) return 0;
@@ -1509,7 +1754,10 @@ const computeTfIdfCosine = (resumeSkills: string[], requiredSkills: string[]) =>
   const vocab = Array.from(new Set([...docA, ...docB]));
   const idf = new Map<string, number>();
   for (const term of vocab) {
-    const docFreq = documents.reduce((count, doc) => count + (doc.includes(term) ? 1 : 0), 0);
+    const docFreq = documents.reduce(
+      (count, doc) => count + (doc.includes(term) ? 1 : 0),
+      0,
+    );
     idf.set(term, Math.log((documents.length + 1) / (docFreq + 1)) + 1);
   }
 
@@ -1536,24 +1784,31 @@ const computeTfIdfCosine = (resumeSkills: string[], requiredSkills: string[]) =>
 
 const toDisplaySkill = (skill: string) =>
   skill
-    .split(' ')
+    .split(" ")
     .map((segment) =>
       segment.length <= 3
         ? segment.toUpperCase()
-        : segment.charAt(0).toUpperCase() + segment.slice(1)
+        : segment.charAt(0).toUpperCase() + segment.slice(1),
     )
-    .join(' ');
+    .join(" ");
 
 const localMatchScore = (resumeSkills: string[], requiredSkills: string[]) => {
   const normalizedResume = Array.from(
-    new Set(resumeSkills.map((skill) => String(skill).trim().toLowerCase()).filter(Boolean))
+    new Set(
+      resumeSkills
+        .map((skill) => String(skill).trim().toLowerCase())
+        .filter(Boolean),
+    ),
   );
   const requiredDisplayMap = new Map<string, string>();
   for (const rawSkill of requiredSkills) {
     const normalized = String(rawSkill).trim().toLowerCase();
     if (!normalized) continue;
     if (!requiredDisplayMap.has(normalized)) {
-      requiredDisplayMap.set(normalized, toDisplaySkill(String(rawSkill).trim()));
+      requiredDisplayMap.set(
+        normalized,
+        toDisplaySkill(String(rawSkill).trim()),
+      );
     }
   }
   const normalizedRequired = Array.from(requiredDisplayMap.keys());
@@ -1561,29 +1816,43 @@ const localMatchScore = (resumeSkills: string[], requiredSkills: string[]) => {
   const matched = normalizedRequired.filter((skill) => resumeSet.has(skill));
   const missing = normalizedRequired.filter((skill) => !resumeSet.has(skill));
 
-  const exactCoverage = normalizedRequired.length > 0 ? matched.length / normalizedRequired.length : 0;
-  const semanticSimilarity = computeTfIdfCosine(normalizedResume, normalizedRequired);
+  const exactCoverage =
+    normalizedRequired.length > 0
+      ? matched.length / normalizedRequired.length
+      : 0;
+  const semanticSimilarity = computeTfIdfCosine(
+    normalizedResume,
+    normalizedRequired,
+  );
   const blendedScore = exactCoverage * 0.65 + semanticSimilarity * 0.35;
   const matchScore = Math.round(Math.max(0, Math.min(1, blendedScore)) * 100);
 
   const matchQuality =
     matchScore >= 75
-      ? 'Strong alignment between profile and required skills.'
+      ? "Strong alignment between profile and required skills."
       : matchScore >= 50
-        ? 'Moderate alignment. Upskilling in missing areas is recommended.'
-        : 'Low alignment. Focus on building core required skills.';
+        ? "Moderate alignment. Upskilling in missing areas is recommended."
+        : "Low alignment. Focus on building core required skills.";
 
   return {
     matchScore,
-    matchedSkills: matched.map((skill) => requiredDisplayMap.get(skill) || toDisplaySkill(skill)),
-    missingSkills: missing.map((skill) => requiredDisplayMap.get(skill) || toDisplaySkill(skill)),
+    matchedSkills: matched.map(
+      (skill) => requiredDisplayMap.get(skill) || toDisplaySkill(skill),
+    ),
+    missingSkills: missing.map(
+      (skill) => requiredDisplayMap.get(skill) || toDisplaySkill(skill),
+    ),
     explanation: matchQuality,
   };
 };
 
 const getMatchInsights = async (resumeSkills: string[], job: any) => {
-  const sanitizedSkills = resumeSkills.map((entry) => String(entry).trim()).filter(Boolean);
-  const requiredSkills = toSkillList(job.skills?.length ? job.skills : job.requirements);
+  const sanitizedSkills = resumeSkills
+    .map((entry) => String(entry).trim())
+    .filter(Boolean);
+  const requiredSkills = toSkillList(
+    job.skills?.length ? job.skills : job.requirements,
+  );
   const requirementsText = jobRequirementText(job);
 
   try {
@@ -1592,8 +1861,10 @@ const getMatchInsights = async (resumeSkills: string[], job: any) => {
     const aiResponse = await (async () => {
       try {
         return await fetch(`${AI_SERVICE_URL}/ai/match`, {
-          method: 'POST',
-          headers: buildAiServiceHeaders({ 'Content-Type': 'application/json' }),
+          method: "POST",
+          headers: buildAiServiceHeaders({
+            "Content-Type": "application/json",
+          }),
           body: JSON.stringify({
             resumeSkills: sanitizedSkills,
             jobRequirements: requirementsText,
@@ -1607,14 +1878,19 @@ const getMatchInsights = async (resumeSkills: string[], job: any) => {
       }
     })();
 
-    if (!aiResponse.ok) throw new Error(`AI match failed with status ${aiResponse.status}`);
+    if (!aiResponse.ok)
+      throw new Error(`AI match failed with status ${aiResponse.status}`);
     const aiData: any = await aiResponse.json();
     const rawScore = Number(aiData.matchScore || 0);
     const normalizedScore = rawScore > 1 ? rawScore / 100 : rawScore;
     return {
       matchScore: Math.round(Math.max(0, Math.min(1, normalizedScore)) * 100),
-      matchedSkills: Array.isArray(aiData.matchedSkills) ? aiData.matchedSkills : [],
-      missingSkills: Array.isArray(aiData.missingSkills) ? aiData.missingSkills : [],
+      matchedSkills: Array.isArray(aiData.matchedSkills)
+        ? aiData.matchedSkills
+        : [],
+      missingSkills: Array.isArray(aiData.missingSkills)
+        ? aiData.missingSkills
+        : [],
       explanation: aiData.explanation || null,
     };
   } catch {
@@ -1622,8 +1898,8 @@ const getMatchInsights = async (resumeSkills: string[], job: any) => {
   }
 };
 
-type CandidateMatchSortBy = 'match' | 'resume' | 'experience';
-type CandidateMatchSortOrder = 'asc' | 'desc';
+type CandidateMatchSortBy = "match" | "resume" | "experience";
+type CandidateMatchSortOrder = "asc" | "desc";
 
 interface CandidateMatchOptions {
   sortBy?: CandidateMatchSortBy;
@@ -1643,7 +1919,7 @@ const candidateMatchCache = new Map<
       candidatesWithResume: number;
       candidatesWithoutResume: number;
       generatedAt: string;
-      source: 'computed' | 'cache';
+      source: "computed" | "cache";
     };
   }
 >();
@@ -1666,9 +1942,15 @@ const recruiterOverviewCache = new Map<
   }
 >();
 
-const getCollectionVersion = (collection: any[], updatedField = 'updatedAt', createdField = 'createdAt') =>
+const getCollectionVersion = (
+  collection: any[],
+  updatedField = "updatedAt",
+  createdField = "createdAt",
+) =>
   collection.reduce((acc: number, entry: any) => {
-    const ts = new Date(entry?.[updatedField] || entry?.[createdField] || 0).getTime();
+    const ts = new Date(
+      entry?.[updatedField] || entry?.[createdField] || 0,
+    ).getTime();
     return Math.max(acc, Number.isFinite(ts) ? ts : 0);
   }, 0);
 
@@ -1680,42 +1962,58 @@ const pruneRecruiterOverviewCache = () => {
 };
 
 const buildRecruiterOverviewCacheKey = (profile: any) => {
-  const scope = roleMatches(profile.role, 'admin') ? 'admin' : `recruiter:${profile.id}`;
-  const jobs = roleMatches(profile.role, 'admin')
+  const scope = roleMatches(profile.role, "admin")
+    ? "admin"
+    : `recruiter:${profile.id}`;
+  const jobs = roleMatches(profile.role, "admin")
     ? db.jobs
     : db.jobs.filter((entry: any) => entry.employerId === profile.id);
   const jobIds = new Set(jobs.map((entry: any) => entry.id));
-  const scopedApplications = db.applications.filter((entry: any) => jobIds.has(entry.jobId));
+  const scopedApplications = db.applications.filter((entry: any) =>
+    jobIds.has(entry.jobId),
+  );
 
   return [
     scope,
     jobs.length,
     getCollectionVersion(jobs),
     scopedApplications.length,
-    getCollectionVersion(scopedApplications, 'updatedAt', 'appliedAt'),
+    getCollectionVersion(scopedApplications, "updatedAt", "appliedAt"),
     db.candidates.length,
     getCollectionVersion(db.candidates),
     db.resumes.length,
     getCollectionVersion(db.resumes),
-  ].join(':');
+  ].join(":");
 };
 
 const parseYearRangeFromText = (text: string) => {
-  const normalized = text.toLowerCase().replace(/\s+/g, ' ');
-  const explicitYears = [...normalized.matchAll(/(\d{1,2}(?:\.\d+)?)\s*\+?\s*(?:years?|yrs?|yr)\b/g)];
+  const normalized = text.toLowerCase().replace(/\s+/g, " ");
+  const explicitYears = [
+    ...normalized.matchAll(/(\d{1,2}(?:\.\d+)?)\s*\+?\s*(?:years?|yrs?|yr)\b/g),
+  ];
   if (explicitYears.length > 0) {
-    const sum = explicitYears.reduce((acc, match) => acc + Number(match[1] || 0), 0);
+    const sum = explicitYears.reduce(
+      (acc, match) => acc + Number(match[1] || 0),
+      0,
+    );
     return Number.isFinite(sum) ? Math.round(sum * 10) / 10 : 0;
   }
 
-  const explicitMonths = [...normalized.matchAll(/(\d{1,2}(?:\.\d+)?)\s*(?:months?|mos?)\b/g)];
+  const explicitMonths = [
+    ...normalized.matchAll(/(\d{1,2}(?:\.\d+)?)\s*(?:months?|mos?)\b/g),
+  ];
   if (explicitMonths.length > 0) {
-    const months = explicitMonths.reduce((acc, match) => acc + Number(match[1] || 0), 0);
+    const months = explicitMonths.reduce(
+      (acc, match) => acc + Number(match[1] || 0),
+      0,
+    );
     const years = months / 12;
     return Number.isFinite(years) ? Math.round(years * 10) / 10 : 0;
   }
 
-  const years = [...normalized.matchAll(/\b(19|20)\d{2}\b/g)].map((match) => Number(match[0]));
+  const years = [...normalized.matchAll(/\b(19|20)\d{2}\b/g)].map((match) =>
+    Number(match[0]),
+  );
   if (years.length >= 2) {
     const minYear = Math.min(...years);
     const maxYear = Math.max(...years);
@@ -1726,7 +2024,9 @@ const parseYearRangeFromText = (text: string) => {
 
 const estimateExperienceYears = (candidate: any, resume: any) => {
   const candidateEntries = parseJsonArray(candidate?.experience);
-  const resumeEntries = Array.isArray(resume?.parsedData?.experience) ? resume.parsedData.experience : [];
+  const resumeEntries = Array.isArray(resume?.parsedData?.experience)
+    ? resume.parsedData.experience
+    : [];
   const allEntries = [...candidateEntries, ...resumeEntries];
 
   if (allEntries.length === 0) return 0;
@@ -1734,12 +2034,12 @@ const estimateExperienceYears = (candidate: any, resume: any) => {
   let years = 0;
   for (const entry of allEntries) {
     const text = [
-      String(entry?.duration || ''),
-      String(entry?.description || ''),
-      String(entry?.title || ''),
-      String(entry?.company || ''),
+      String(entry?.duration || ""),
+      String(entry?.description || ""),
+      String(entry?.title || ""),
+      String(entry?.company || ""),
     ]
-      .join(' ')
+      .join(" ")
       .trim();
     years += parseYearRangeFromText(text);
   }
@@ -1750,7 +2050,10 @@ const estimateExperienceYears = (candidate: any, resume: any) => {
   return Math.round(Math.min(30, years) * 10) / 10;
 };
 
-const buildCandidateMatchCacheKey = (job: any, options: CandidateMatchOptions) => {
+const buildCandidateMatchCacheKey = (
+  job: any,
+  options: CandidateMatchOptions,
+) => {
   const candidatesVersion = db.candidates.reduce((acc: number, entry: any) => {
     const ts = new Date(entry?.updatedAt || entry?.createdAt || 0).getTime();
     return Math.max(acc, ts || 0);
@@ -1759,10 +2062,13 @@ const buildCandidateMatchCacheKey = (job: any, options: CandidateMatchOptions) =
     const ts = new Date(entry?.updatedAt || entry?.createdAt || 0).getTime();
     return Math.max(acc, ts || 0);
   }, 0);
-  const applicationsVersion = db.applications.reduce((acc: number, entry: any) => {
-    const ts = new Date(entry?.updatedAt || entry?.appliedAt || 0).getTime();
-    return Math.max(acc, ts || 0);
-  }, 0);
+  const applicationsVersion = db.applications.reduce(
+    (acc: number, entry: any) => {
+      const ts = new Date(entry?.updatedAt || entry?.appliedAt || 0).getTime();
+      return Math.max(acc, ts || 0);
+    },
+    0,
+  );
 
   return [
     job.id,
@@ -1773,11 +2079,11 @@ const buildCandidateMatchCacheKey = (job: any, options: CandidateMatchOptions) =
     resumesVersion,
     db.applications.length,
     applicationsVersion,
-    options.sortBy || 'match',
-    options.order || 'desc',
+    options.sortBy || "match",
+    options.order || "desc",
     options.limit || 100,
-    options.appliedOnly ? 'applied' : 'all',
-  ].join(':');
+    options.appliedOnly ? "applied" : "all",
+  ].join(":");
 };
 
 const pruneCandidateMatchCache = () => {
@@ -1795,26 +2101,34 @@ const pruneStudentRecommendationCache = () => {
 };
 
 const toSortDirection = (value: unknown): CandidateMatchSortOrder => {
-  const normalized = String(value || '').trim().toLowerCase();
-  return normalized === 'asc' ? 'asc' : 'desc';
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+  return normalized === "asc" ? "asc" : "desc";
 };
 
 const toSortKey = (value: unknown): CandidateMatchSortBy => {
-  const normalized = String(value || '').trim().toLowerCase();
-  if (normalized === 'resume') return 'resume';
-  if (normalized === 'experience') return 'experience';
-  return 'match';
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (normalized === "resume") return "resume";
+  if (normalized === "experience") return "experience";
+  return "match";
 };
 
-const sortCandidateMatches = (matches: any[], options: CandidateMatchOptions) => {
-  const sortBy = options.sortBy || 'match';
-  const direction = options.order === 'asc' ? 1 : -1;
+const sortCandidateMatches = (
+  matches: any[],
+  options: CandidateMatchOptions,
+) => {
+  const sortBy = options.sortBy || "match";
+  const direction = options.order === "asc" ? 1 : -1;
   const sorted = [...matches].sort((left, right) => {
-    if (sortBy === 'resume') {
+    if (sortBy === "resume") {
       const resumeDiff = (left.resumeScore || 0) - (right.resumeScore || 0);
       if (resumeDiff !== 0) return resumeDiff * direction;
-    } else if (sortBy === 'experience') {
-      const experienceDiff = (left.experienceYears || 0) - (right.experienceYears || 0);
+    } else if (sortBy === "experience") {
+      const experienceDiff =
+        (left.experienceYears || 0) - (right.experienceYears || 0);
       if (experienceDiff !== 0) return experienceDiff * direction;
     } else {
       const matchDiff = (left.matchScore || 0) - (right.matchScore || 0);
@@ -1823,7 +2137,7 @@ const sortCandidateMatches = (matches: any[], options: CandidateMatchOptions) =>
 
     const fallbackMatchDiff = (left.matchScore || 0) - (right.matchScore || 0);
     if (fallbackMatchDiff !== 0) return fallbackMatchDiff * direction;
-    return String(left.name || '').localeCompare(String(right.name || ''));
+    return String(left.name || "").localeCompare(String(right.name || ""));
   });
 
   const safeLimit =
@@ -1833,7 +2147,10 @@ const sortCandidateMatches = (matches: any[], options: CandidateMatchOptions) =>
   return sorted.slice(0, safeLimit);
 };
 
-const getCandidateMatchesForJob = async (job: any, options: CandidateMatchOptions = {}) => {
+const getCandidateMatchesForJob = async (
+  job: any,
+  options: CandidateMatchOptions = {},
+) => {
   pruneCandidateMatchCache();
   const cacheKey = buildCandidateMatchCacheKey(job, options);
   const cached = candidateMatchCache.get(cacheKey);
@@ -1842,7 +2159,7 @@ const getCandidateMatchesForJob = async (job: any, options: CandidateMatchOption
       matches: cached.data,
       meta: {
         ...cached.meta,
-        source: 'cache' as const,
+        source: "cache" as const,
       },
     };
   }
@@ -1851,13 +2168,20 @@ const getCandidateMatchesForJob = async (job: any, options: CandidateMatchOption
     db.candidates.map(async (candidate: any) => {
       const candidateSkills = normalizeSkillList(candidate.skills);
       const insights = await getMatchInsights(candidateSkills, job);
-      const student = db.profiles.find((entry: any) => entry.id === candidate.userId);
-      const application = db.applications.find(
-        (entry: any) => entry.jobId === job.id && entry.candidateId === candidate.userId
+      const student = db.profiles.find(
+        (entry: any) => entry.id === candidate.userId,
       );
-      const resume = db.resumes.find((entry: any) => entry.userId === candidate.userId) || null;
+      const application = db.applications.find(
+        (entry: any) =>
+          entry.jobId === job.id && entry.candidateId === candidate.userId,
+      );
+      const resume =
+        db.resumes.find((entry: any) => entry.userId === candidate.userId) ||
+        null;
       const latestResumeScore = getLatestResumeScore(candidate.userId);
-      const resumeScore = latestResumeScore ? Number(latestResumeScore.score || 0) : 0;
+      const resumeScore = latestResumeScore
+        ? Number(latestResumeScore.score || 0)
+        : 0;
       const experienceYears = estimateExperienceYears(candidate, resume);
       const topSkills = insights.matchedSkills.slice(0, 3);
 
@@ -1880,18 +2204,25 @@ const getCandidateMatchesForJob = async (job: any, options: CandidateMatchOption
         latestResumeAt: resume?.updatedAt || resume?.createdAt || null,
         student,
       };
-    })
+    }),
   );
 
-  const candidatesWithResume = allMatches.filter((entry) => entry.resumeScore > 0).length;
-  const filtered = options.appliedOnly ? allMatches.filter((entry) => entry.hasApplied) : allMatches;
+  const candidatesWithResume = allMatches.filter(
+    (entry) => entry.resumeScore > 0,
+  ).length;
+  const filtered = options.appliedOnly
+    ? allMatches.filter((entry) => entry.hasApplied)
+    : allMatches;
   const sorted = sortCandidateMatches(filtered, options);
   const meta = {
     totalCandidates: db.candidates.length,
     candidatesWithResume,
-    candidatesWithoutResume: Math.max(0, db.candidates.length - candidatesWithResume),
+    candidatesWithoutResume: Math.max(
+      0,
+      db.candidates.length - candidatesWithResume,
+    ),
     generatedAt: new Date().toISOString(),
-    source: 'computed' as const,
+    source: "computed" as const,
   };
 
   candidateMatchCache.set(cacheKey, {
@@ -1909,10 +2240,18 @@ const getCandidateMatchesForJob = async (job: any, options: CandidateMatchOption
 const getRecruiterJobAnalytics = (job: any, matches: any[]) => {
   const applicants = matches.filter((entry) => entry.hasApplied);
   const avgMatch = matches.length
-    ? Math.round(matches.reduce((sum, entry) => sum + Number(entry.matchScore || 0), 0) / matches.length)
+    ? Math.round(
+        matches.reduce((sum, entry) => sum + Number(entry.matchScore || 0), 0) /
+          matches.length,
+      )
     : 0;
   const avgApplicantMatch = applicants.length
-    ? Math.round(applicants.reduce((sum, entry) => sum + Number(entry.matchScore || 0), 0) / applicants.length)
+    ? Math.round(
+        applicants.reduce(
+          (sum, entry) => sum + Number(entry.matchScore || 0),
+          0,
+        ) / applicants.length,
+      )
     : 0;
   const highest = matches[0] || null;
   const missingSkillCount = new Map<string, number>();
@@ -1923,7 +2262,9 @@ const getRecruiterJobAnalytics = (job: any, matches: any[]) => {
       missingSkillCount.set(key, (missingSkillCount.get(key) || 0) + 1);
     }
   }
-  const mostMissingSkill = Array.from(missingSkillCount.entries()).sort((a, b) => b[1] - a[1])[0] || null;
+  const mostMissingSkill =
+    Array.from(missingSkillCount.entries()).sort((a, b) => b[1] - a[1])[0] ||
+    null;
 
   return {
     jobId: job.id,
@@ -1958,34 +2299,42 @@ const pruneExpiredResetTokens = () => {
 
 // Auth Routes
 // Authentication routes: registration, login, password reset, logout, and profile state.
-app.post('/api/auth/register', authLimiter, async (req, res) => {
-  const email = String(req.body?.email || '')
+app.post("/api/auth/register", authLimiter, async (req, res) => {
+  const email = String(req.body?.email || "")
     .trim()
     .toLowerCase();
-  const password = String(req.body?.password || '');
-  const name = String(req.body?.name || '').trim();
-  const requestedRole = String(req.body?.role || '').toLowerCase();
-  const safeRole: SupportedRole = 'student';
+  const password = String(req.body?.password || "");
+  const name = String(req.body?.name || "").trim();
+  const requestedRole = String(req.body?.role || "").toLowerCase();
+  const safeRole: SupportedRole = "student";
 
   if (!email || !password || !name) {
-    return res.status(400).json({ message: 'Name, email and password are required' });
+    return res
+      .status(400)
+      .json({ message: "Name, email and password are required" });
   }
-  if (requestedRole && requestedRole !== 'student') {
+  if (requestedRole && requestedRole !== "student") {
     return res.status(403).json({
-      message: 'Only student accounts can register. Employers and admins please login.',
+      message:
+        "Only student accounts can register. Employers and admins please login.",
     });
   }
   if (password.length < 6) {
-    return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    return res
+      .status(400)
+      .json({ message: "Password must be at least 6 characters" });
   }
 
-  const existing = db.profiles.find((p: any) => p.email?.toLowerCase() === email);
-  if (existing) return res.status(400).json({ message: 'Email already registered' });
+  const existing = db.profiles.find(
+    (p: any) => p.email?.toLowerCase() === email,
+  );
+  if (existing)
+    return res.status(400).json({ message: "Email already registered" });
 
   const passwordHash = await bcrypt.hash(password, 10);
 
   const profile = {
-    id: uuidv4(),
+    id: crypto.randomUUID(),
     email,
     passwordHash,
     name,
@@ -2002,43 +2351,52 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
   res.status(201).json({ token, user: sanitizeUser(profile) });
 });
 
-app.post('/api/auth/login', authLimiter, async (req, res) => {
-  const email = String(req.body?.email || '')
+app.post("/api/auth/login", authLimiter, async (req, res) => {
+  const email = String(req.body?.email || "")
     .trim()
     .toLowerCase();
-  const password = String(req.body?.password || '');
+  const password = String(req.body?.password || "");
   if (!email || !password) {
-    return res.status(400).json({ message: 'Email and password are required' });
+    return res.status(400).json({ message: "Email and password are required" });
   }
 
-  const profile = db.profiles.find((p: any) => p.email?.toLowerCase() === email);
-  if (!profile || profile.isActive === false) return res.status(401).json({ message: 'Invalid credentials' });
+  const profile = db.profiles.find(
+    (p: any) => p.email?.toLowerCase() === email,
+  );
+  if (!profile || profile.isActive === false)
+    return res.status(401).json({ message: "Invalid credentials" });
 
-  const isValid = profile.passwordHash ? await bcrypt.compare(password, profile.passwordHash) : false;
-  if (!isValid) return res.status(401).json({ message: 'Invalid credentials' });
+  const isValid = profile.passwordHash
+    ? await bcrypt.compare(password, profile.passwordHash)
+    : false;
+  if (!isValid) return res.status(401).json({ message: "Invalid credentials" });
 
   const token = createToken(profile.id);
   res.json({ token, user: sanitizeUser(profile) });
 });
 
-app.get('/api/auth/me', requireAuth, (req: RequestWithAuth, res) => {
+app.get("/api/auth/me", requireAuth, (req: RequestWithAuth, res) => {
   res.json({ user: sanitizeUser(req.profile) });
 });
 
-app.post('/api/auth/logout', requireAuth, (req: RequestWithAuth, res) => {
+app.post("/api/auth/logout", requireAuth, (req: RequestWithAuth, res) => {
   if (req.authToken) revokedTokens.add(req.authToken);
-  res.json({ message: 'Logged out successfully' });
+  res.json({ message: "Logged out successfully" });
 });
 
-app.put('/api/auth/profile', requireAuth, async (req: RequestWithAuth, res) => {
+app.put("/api/auth/profile", requireAuth, async (req: RequestWithAuth, res) => {
   const profile = req.profile;
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
+  if (!profile) return res.status(401).json({ message: "Not authenticated" });
 
-  const name = typeof req.body?.name === 'string' ? req.body.name.trim() : undefined;
-  const avatarUrl = typeof req.body?.avatarUrl === 'string' ? req.body.avatarUrl.trim() : undefined;
+  const name =
+    typeof req.body?.name === "string" ? req.body.name.trim() : undefined;
+  const avatarUrl =
+    typeof req.body?.avatarUrl === "string"
+      ? req.body.avatarUrl.trim()
+      : undefined;
 
   if (name !== undefined && name.length === 0) {
-    return res.status(400).json({ message: 'name cannot be empty' });
+    return res.status(400).json({ message: "name cannot be empty" });
   }
 
   if (name !== undefined) profile.name = name;
@@ -2049,75 +2407,97 @@ app.put('/api/auth/profile', requireAuth, async (req: RequestWithAuth, res) => {
   res.json({ user: sanitizeUser(profile) });
 });
 
-app.put('/api/auth/password', authLimiter, requireAuth, async (req: RequestWithAuth, res) => {
-  const profile = req.profile;
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
+app.put(
+  "/api/auth/password",
+  authLimiter,
+  requireAuth,
+  async (req: RequestWithAuth, res) => {
+    const profile = req.profile;
+    if (!profile) return res.status(401).json({ message: "Not authenticated" });
 
-  const currentPassword = String(req.body?.currentPassword || '');
-  const newPassword = String(req.body?.newPassword || '');
-  if (!currentPassword || !newPassword) {
-    return res.status(400).json({ message: 'currentPassword and newPassword are required' });
-  }
-  if (newPassword.length < 6) {
-    return res.status(400).json({ message: 'newPassword must be at least 6 characters' });
-  }
+    const currentPassword = String(req.body?.currentPassword || "");
+    const newPassword = String(req.body?.newPassword || "");
+    if (!currentPassword || !newPassword) {
+      return res
+        .status(400)
+        .json({ message: "currentPassword and newPassword are required" });
+    }
+    if (newPassword.length < 6) {
+      return res
+        .status(400)
+        .json({ message: "newPassword must be at least 6 characters" });
+    }
 
-  const isValid = profile.passwordHash ? await bcrypt.compare(currentPassword, profile.passwordHash) : false;
-  if (!isValid) return res.status(401).json({ message: 'Current password is invalid' });
+    const isValid = profile.passwordHash
+      ? await bcrypt.compare(currentPassword, profile.passwordHash)
+      : false;
+    if (!isValid)
+      return res.status(401).json({ message: "Current password is invalid" });
 
-  profile.passwordHash = await bcrypt.hash(newPassword, 10);
-  profile.updatedAt = new Date();
-  await supabaseStore.upsertUser(profile);
+    profile.passwordHash = await bcrypt.hash(newPassword, 10);
+    profile.updatedAt = new Date();
+    await supabaseStore.upsertUser(profile);
 
-  res.json({ message: 'Password updated successfully' });
-});
+    res.json({ message: "Password updated successfully" });
+  },
+);
 
-app.post('/api/auth/password/forgot', authLimiter, (req, res) => {
+app.post("/api/auth/password/forgot", authLimiter, (req, res) => {
   pruneExpiredResetTokens();
-  const email = String(req.body?.email || '')
+  const email = String(req.body?.email || "")
     .trim()
     .toLowerCase();
-  if (!email) return res.status(400).json({ message: 'Email is required' });
+  if (!email) return res.status(400).json({ message: "Email is required" });
 
-  const profile = db.profiles.find((entry: any) => entry.email?.toLowerCase() === email);
+  const profile = db.profiles.find(
+    (entry: any) => entry.email?.toLowerCase() === email,
+  );
   if (profile && profile.isActive !== false) {
-    const token = crypto.randomBytes(24).toString('hex');
+    const token = crypto.randomBytes(24).toString("hex");
     const expiresAt = Date.now() + 15 * 60 * 1000;
     resetTokens.set(token, { userId: profile.id, expiresAt });
 
     if (ALLOW_INSECURE_PASSWORD_RESET_TOKEN_RESPONSE) {
       return res.json({
-        message: 'Password reset token generated for local-only testing.',
+        message: "Password reset token generated for local-only testing.",
         resetToken: token,
         expiresAt: new Date(expiresAt).toISOString(),
       });
     }
   }
 
-  return res.json({ message: 'If the account exists, a password reset link was sent.' });
+  return res.json({
+    message: "If the account exists, a password reset link was sent.",
+  });
 });
 
-app.post('/api/auth/password/reset', authLimiter, async (req, res) => {
+app.post("/api/auth/password/reset", authLimiter, async (req, res) => {
   pruneExpiredResetTokens();
-  const resetToken = String(req.body?.token || '');
-  const newPassword = String(req.body?.newPassword || '');
+  const resetToken = String(req.body?.token || "");
+  const newPassword = String(req.body?.newPassword || "");
   if (!resetToken || !newPassword) {
-    return res.status(400).json({ message: 'token and newPassword are required' });
+    return res
+      .status(400)
+      .json({ message: "token and newPassword are required" });
   }
   if (newPassword.length < 6) {
-    return res.status(400).json({ message: 'newPassword must be at least 6 characters' });
+    return res
+      .status(400)
+      .json({ message: "newPassword must be at least 6 characters" });
   }
 
   const tokenPayload = resetTokens.get(resetToken);
   if (!tokenPayload || tokenPayload.expiresAt <= Date.now()) {
     resetTokens.delete(resetToken);
-    return res.status(400).json({ message: 'Invalid or expired reset token' });
+    return res.status(400).json({ message: "Invalid or expired reset token" });
   }
 
-  const profile = db.profiles.find((entry: any) => entry.id === tokenPayload.userId);
+  const profile = db.profiles.find(
+    (entry: any) => entry.id === tokenPayload.userId,
+  );
   if (!profile || profile.isActive === false) {
     resetTokens.delete(resetToken);
-    return res.status(400).json({ message: 'Invalid or expired reset token' });
+    return res.status(400).json({ message: "Invalid or expired reset token" });
   }
 
   profile.passwordHash = await bcrypt.hash(newPassword, 10);
@@ -2125,197 +2505,318 @@ app.post('/api/auth/password/reset', authLimiter, async (req, res) => {
   resetTokens.delete(resetToken);
   await supabaseStore.upsertUser(profile);
 
-  res.json({ message: 'Password has been reset' });
+  res.json({ message: "Password has been reset" });
 });
 
 // Users Routes (admin only)
-app.get('/api/users', requireAuth, requireRoles('admin'), adminLimiter, (req, res) => {
-  const { search, role, sortBy, order } = req.query;
-  const { page, limit } = getPagination(req.query as any, { page: 1, limit: 20, maxLimit: 100 });
-  const direction = String(order || 'desc').toLowerCase() === 'asc' ? 1 : -1;
-  const sortKey = String(sortBy || 'createdAt').toLowerCase();
+app.get(
+  "/api/users",
+  requireAuth,
+  requireRoles("admin"),
+  adminLimiter,
+  (req, res) => {
+    const { search, role, sortBy, order } = req.query;
+    const { page, limit } = getPagination(req.query as any, {
+      page: 1,
+      limit: 20,
+      maxLimit: 100,
+    });
+    const direction = String(order || "desc").toLowerCase() === "asc" ? 1 : -1;
+    const sortKey = String(sortBy || "createdAt").toLowerCase();
 
-  let users = db.profiles.map((entry: any) => summarizeUserForAdmin(entry));
+    let users = db.profiles.map((entry: any) => summarizeUserForAdmin(entry));
 
-  if (search) {
-    const searchText = String(search).toLowerCase();
-    users = users.filter(
-      (entry: any) =>
-        entry.name?.toLowerCase().includes(searchText) ||
-        entry.email?.toLowerCase().includes(searchText)
-    );
-  }
-
-  if (role) {
-    users = users.filter((entry: any) => roleFilterMatches(entry.role, String(role)));
-  }
-
-  users.sort((left: any, right: any) => {
-    if (sortKey === 'name') return String(left.name || '').localeCompare(String(right.name || '')) * direction;
-    if (sortKey === 'email') return String(left.email || '').localeCompare(String(right.email || '')) * direction;
-    if (sortKey === 'role') return String(left.canonicalRole || '').localeCompare(String(right.canonicalRole || '')) * direction;
-    if (sortKey === 'applications') return (Number(left.totalApplications || 0) - Number(right.totalApplications || 0)) * direction;
-    if (sortKey === 'jobs') return (Number(left.totalJobsPosted || 0) - Number(right.totalJobsPosted || 0)) * direction;
-    if (sortKey === 'resumescore') return (Number(left.latestResumeScore || 0) - Number(right.latestResumeScore || 0)) * direction;
-    return (
-      (new Date(left.createdAt || 0).getTime() - new Date(right.createdAt || 0).getTime()) * direction
-    );
-  });
-
-  const paginated = paginateData(users, page, limit);
-  res.json({ data: paginated.data, meta: paginated.meta });
-});
-
-app.get('/api/users/:id', requireAuth, requireRoles('admin'), adminLimiter, (req, res) => {
-  const target = db.profiles.find((entry: any) => entry.id === req.params.id);
-  if (!target) return res.status(404).json({ message: 'User not found' });
-
-  const summary = summarizeUserForAdmin(target);
-  const resume = db.resumes.find((entry: any) => entry.userId === target.id) || null;
-  const recentApplications = withApplicationDetails(
-    db.applications
-      .filter((entry: any) => entry.candidateId === target.id)
-      .sort((left: any, right: any) => new Date(right.appliedAt || 0).getTime() - new Date(left.appliedAt || 0).getTime())
-      .slice(0, 10)
-  );
-  const jobsPosted = db.jobs
-    .filter((entry: any) => entry.employerId === target.id)
-    .sort((left: any, right: any) => new Date(right.createdAt || 0).getTime() - new Date(left.createdAt || 0).getTime())
-    .slice(0, 10);
-
-  res.json({
-    data: {
-      ...summary,
-      resume,
-      recentApplications,
-      jobsPosted,
-    },
-  });
-});
-
-app.put('/api/users/:id', requireAuth, requireRoles('admin'), adminLimiter, async (req: RequestWithAuth, res) => {
-  const profile = req.profile;
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
-
-  const idx = db.profiles.findIndex((entry: any) => entry.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ message: 'User not found' });
-
-  if (req.params.id === profile.id && req.body.isActive === false) {
-    return res.status(400).json({ message: 'You cannot deactivate your own account' });
-  }
-
-  const current = db.profiles[idx];
-  const updates: Record<string, any> = {};
-  if (typeof req.body?.name === 'string') updates.name = req.body.name.trim();
-  if (typeof req.body?.email === 'string') updates.email = req.body.email.trim().toLowerCase();
-  if (typeof req.body?.avatarUrl === 'string' || req.body?.avatarUrl === null) {
-    updates.avatarUrl = req.body.avatarUrl;
-  }
-  if (typeof req.body?.isActive === 'boolean') updates.isActive = req.body.isActive;
-  if (req.body?.role) updates.role = toStorageRole(req.body.role);
-
-  const next = { ...current, ...updates, updatedAt: new Date() };
-  db.profiles[idx] = next;
-  await supabaseStore.upsertUser(next);
-
-  const changedFields: Record<string, any> = {};
-  for (const key of ['name', 'email', 'role', 'isActive'] as const) {
-    if (current[key] !== next[key]) {
-      changedFields[key] = { from: current[key], to: next[key] };
+    if (search) {
+      const searchText = String(search).toLowerCase();
+      users = users.filter(
+        (entry: any) =>
+          entry.name?.toLowerCase().includes(searchText) ||
+          entry.email?.toLowerCase().includes(searchText),
+      );
     }
-  }
-  if (Object.keys(changedFields).length > 0) {
-    await appendAdminLog(profile, 'user_updated', 'user', next.id, { changedFields });
-  }
 
-  res.json({ data: summarizeUserForAdmin(next) });
-});
+    if (role) {
+      users = users.filter((entry: any) =>
+        roleFilterMatches(entry.role, String(role)),
+      );
+    }
 
-app.delete('/api/users/:id', requireAuth, requireRoles('admin'), adminLimiter, async (req: RequestWithAuth, res) => {
-  const profile = req.profile;
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
-  if (req.params.id === profile.id) return res.status(400).json({ message: 'You cannot delete your own account' });
+    users.sort((left: any, right: any) => {
+      if (sortKey === "name")
+        return (
+          String(left.name || "").localeCompare(String(right.name || "")) *
+          direction
+        );
+      if (sortKey === "email")
+        return (
+          String(left.email || "").localeCompare(String(right.email || "")) *
+          direction
+        );
+      if (sortKey === "role")
+        return (
+          String(left.canonicalRole || "").localeCompare(
+            String(right.canonicalRole || ""),
+          ) * direction
+        );
+      if (sortKey === "applications")
+        return (
+          (Number(left.totalApplications || 0) -
+            Number(right.totalApplications || 0)) *
+          direction
+        );
+      if (sortKey === "jobs")
+        return (
+          (Number(left.totalJobsPosted || 0) -
+            Number(right.totalJobsPosted || 0)) *
+          direction
+        );
+      if (sortKey === "resumescore")
+        return (
+          (Number(left.latestResumeScore || 0) -
+            Number(right.latestResumeScore || 0)) *
+          direction
+        );
+      return (
+        (new Date(left.createdAt || 0).getTime() -
+          new Date(right.createdAt || 0).getTime()) *
+        direction
+      );
+    });
 
-  const idx = db.profiles.findIndex((entry: any) => entry.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ message: 'User not found' });
+    const paginated = paginateData(users, page, limit);
+    res.json({ data: paginated.data, meta: paginated.meta });
+  },
+);
 
-  const target = db.profiles[idx];
-  const softDelete = String(req.query?.soft || '').toLowerCase() === 'true';
-  const activeAdminCount = db.profiles.filter((entry: any) => roleMatches(entry.role, 'admin') && entry.isActive !== false).length;
-  if (roleMatches(target.role, 'admin') && activeAdminCount <= 1) {
-    return res.status(400).json({ message: 'Cannot delete the last active admin account' });
-  }
+app.get(
+  "/api/users/:id",
+  requireAuth,
+  requireRoles("admin"),
+  adminLimiter,
+  (req, res) => {
+    const target = db.profiles.find((entry: any) => entry.id === req.params.id);
+    if (!target) return res.status(404).json({ message: "User not found" });
 
-  if (softDelete) {
-    db.profiles[idx] = {
-      ...target,
-      isActive: false,
-      updatedAt: new Date(),
-    };
-    await supabaseStore.upsertUser(db.profiles[idx]);
-    await appendAdminLog(profile, 'user_deactivated', 'user', target.id, { softDelete: true });
-    return res.json({ message: 'User deactivated', data: summarizeUserForAdmin(db.profiles[idx]) });
-  }
+    const summary = summarizeUserForAdmin(target);
+    const resume =
+      db.resumes.find((entry: any) => entry.userId === target.id) || null;
+    const recentApplications = withApplicationDetails(
+      db.applications
+        .filter((entry: any) => entry.candidateId === target.id)
+        .sort(
+          (left: any, right: any) =>
+            new Date(right.appliedAt || 0).getTime() -
+            new Date(left.appliedAt || 0).getTime(),
+        )
+        .slice(0, 10),
+    );
+    const jobsPosted = db.jobs
+      .filter((entry: any) => entry.employerId === target.id)
+      .sort(
+        (left: any, right: any) =>
+          new Date(right.createdAt || 0).getTime() -
+          new Date(left.createdAt || 0).getTime(),
+      )
+      .slice(0, 10);
 
-  const recruiterJobIds = db.jobs
-    .filter((entry: any) => entry.employerId === target.id)
-    .map((entry: any) => entry.id);
+    res.json({
+      data: {
+        ...summary,
+        resume,
+        recentApplications,
+        jobsPosted,
+      },
+    });
+  },
+);
 
-  db.profiles.splice(idx, 1);
-  db.candidates = db.candidates.filter((entry: any) => entry.userId !== req.params.id);
-  db.resumes = db.resumes.filter((entry: any) => entry.userId !== req.params.id);
-  db.applications = db.applications.filter(
-    (entry: any) => entry.candidateId !== req.params.id && !recruiterJobIds.includes(entry.jobId)
-  );
-  db.jobs = db.jobs.filter((entry: any) => entry.employerId !== req.params.id);
-  db.recommendations = db.recommendations.filter((entry: any) => entry.userId !== req.params.id);
-  db.resumeScores = db.resumeScores.filter((entry: any) => entry.userId !== req.params.id);
-  db.skillProgress = db.skillProgress.filter((entry: any) => entry.userId !== req.params.id);
-  db.learningPlans = db.learningPlans.filter((entry: any) => entry.userId !== req.params.id);
-  db.mockInterviewSessions = db.mockInterviewSessions.filter((entry: any) => entry.userId !== req.params.id);
-  db.savedJobs = db.savedJobs.filter((entry: any) => entry.userId !== req.params.id);
-  db.careerPreferences = db.careerPreferences.filter((entry: any) => entry.userId !== req.params.id);
+app.put(
+  "/api/users/:id",
+  requireAuth,
+  requireRoles("admin"),
+  adminLimiter,
+  async (req: RequestWithAuth, res) => {
+    const profile = req.profile;
+    if (!profile) return res.status(401).json({ message: "Not authenticated" });
 
-  await supabaseStore.deleteUser(req.params.id);
-  await supabaseStore.deleteCandidatesByUser(req.params.id);
-  await supabaseStore.deleteResumesByUser(req.params.id);
-  await supabaseStore.deleteApplicationsByCandidate(req.params.id);
-  await supabaseStore.deleteRecommendationsByUser(req.params.id);
-  await supabaseStore.deleteResumeScoresByUser(req.params.id);
-  await supabaseStore.deleteSkillProgressByUser(req.params.id);
-  await supabaseStore.deleteLearningPlansByUser(req.params.id);
-  await supabaseStore.deleteMockInterviewSessionsByUser(req.params.id);
-  await supabaseStore.deleteSavedJobsByUser(req.params.id);
-  await supabaseStore.deleteCareerPreference(req.params.id);
-  for (const jobId of recruiterJobIds) {
-    await supabaseStore.deleteApplicationsByJob(jobId);
-    await supabaseStore.deleteJob(jobId);
-  }
+    const idx = db.profiles.findIndex(
+      (entry: any) => entry.id === req.params.id,
+    );
+    if (idx === -1) return res.status(404).json({ message: "User not found" });
 
-  await appendAdminLog(profile, 'user_deleted', 'user', target.id, {
-    cascade: {
-      recruiterJobsRemoved: recruiterJobIds.length,
-    },
-  });
-  res.json({ message: 'User deleted' });
-});
+    if (req.params.id === profile.id && req.body.isActive === false) {
+      return res
+        .status(400)
+        .json({ message: "You cannot deactivate your own account" });
+    }
+
+    const current = db.profiles[idx];
+    const updates: Record<string, any> = {};
+    if (typeof req.body?.name === "string") updates.name = req.body.name.trim();
+    if (typeof req.body?.email === "string")
+      updates.email = req.body.email.trim().toLowerCase();
+    if (
+      typeof req.body?.avatarUrl === "string" ||
+      req.body?.avatarUrl === null
+    ) {
+      updates.avatarUrl = req.body.avatarUrl;
+    }
+    if (typeof req.body?.isActive === "boolean")
+      updates.isActive = req.body.isActive;
+    if (req.body?.role) updates.role = toStorageRole(req.body.role);
+
+    const next = { ...current, ...updates, updatedAt: new Date() };
+    db.profiles[idx] = next;
+    await supabaseStore.upsertUser(next);
+
+    const changedFields: Record<string, any> = {};
+    for (const key of ["name", "email", "role", "isActive"] as const) {
+      if (current[key] !== next[key]) {
+        changedFields[key] = { from: current[key], to: next[key] };
+      }
+    }
+    if (Object.keys(changedFields).length > 0) {
+      await appendAdminLog(profile, "user_updated", "user", next.id, {
+        changedFields,
+      });
+    }
+
+    res.json({ data: summarizeUserForAdmin(next) });
+  },
+);
+
+app.delete(
+  "/api/users/:id",
+  requireAuth,
+  requireRoles("admin"),
+  adminLimiter,
+  async (req: RequestWithAuth, res) => {
+    const profile = req.profile;
+    if (!profile) return res.status(401).json({ message: "Not authenticated" });
+    if (req.params.id === profile.id)
+      return res
+        .status(400)
+        .json({ message: "You cannot delete your own account" });
+
+    const idx = db.profiles.findIndex(
+      (entry: any) => entry.id === req.params.id,
+    );
+    if (idx === -1) return res.status(404).json({ message: "User not found" });
+
+    const target = db.profiles[idx];
+    const softDelete = String(req.query?.soft || "").toLowerCase() === "true";
+    const activeAdminCount = db.profiles.filter(
+      (entry: any) =>
+        roleMatches(entry.role, "admin") && entry.isActive !== false,
+    ).length;
+    if (roleMatches(target.role, "admin") && activeAdminCount <= 1) {
+      return res
+        .status(400)
+        .json({ message: "Cannot delete the last active admin account" });
+    }
+
+    if (softDelete) {
+      db.profiles[idx] = {
+        ...target,
+        isActive: false,
+        updatedAt: new Date(),
+      };
+      await supabaseStore.upsertUser(db.profiles[idx]);
+      await appendAdminLog(profile, "user_deactivated", "user", target.id, {
+        softDelete: true,
+      });
+      return res.json({
+        message: "User deactivated",
+        data: summarizeUserForAdmin(db.profiles[idx]),
+      });
+    }
+
+    const recruiterJobIds = db.jobs
+      .filter((entry: any) => entry.employerId === target.id)
+      .map((entry: any) => entry.id);
+
+    db.profiles.splice(idx, 1);
+    db.candidates = db.candidates.filter(
+      (entry: any) => entry.userId !== req.params.id,
+    );
+    db.resumes = db.resumes.filter(
+      (entry: any) => entry.userId !== req.params.id,
+    );
+    db.applications = db.applications.filter(
+      (entry: any) =>
+        entry.candidateId !== req.params.id &&
+        !recruiterJobIds.includes(entry.jobId),
+    );
+    db.jobs = db.jobs.filter(
+      (entry: any) => entry.employerId !== req.params.id,
+    );
+    db.recommendations = db.recommendations.filter(
+      (entry: any) => entry.userId !== req.params.id,
+    );
+    db.resumeScores = db.resumeScores.filter(
+      (entry: any) => entry.userId !== req.params.id,
+    );
+    db.skillProgress = db.skillProgress.filter(
+      (entry: any) => entry.userId !== req.params.id,
+    );
+    db.learningPlans = db.learningPlans.filter(
+      (entry: any) => entry.userId !== req.params.id,
+    );
+    db.mockInterviewSessions = db.mockInterviewSessions.filter(
+      (entry: any) => entry.userId !== req.params.id,
+    );
+    db.savedJobs = db.savedJobs.filter(
+      (entry: any) => entry.userId !== req.params.id,
+    );
+    db.careerPreferences = db.careerPreferences.filter(
+      (entry: any) => entry.userId !== req.params.id,
+    );
+
+    await supabaseStore.deleteUser(req.params.id);
+    await supabaseStore.deleteCandidatesByUser(req.params.id);
+    await supabaseStore.deleteResumesByUser(req.params.id);
+    await supabaseStore.deleteApplicationsByCandidate(req.params.id);
+    await supabaseStore.deleteRecommendationsByUser(req.params.id);
+    await supabaseStore.deleteResumeScoresByUser(req.params.id);
+    await supabaseStore.deleteSkillProgressByUser(req.params.id);
+    await supabaseStore.deleteLearningPlansByUser(req.params.id);
+    await supabaseStore.deleteMockInterviewSessionsByUser(req.params.id);
+    await supabaseStore.deleteSavedJobsByUser(req.params.id);
+    await supabaseStore.deleteCareerPreference(req.params.id);
+    for (const jobId of recruiterJobIds) {
+      await supabaseStore.deleteApplicationsByJob(jobId);
+      await supabaseStore.deleteJob(jobId);
+    }
+
+    await appendAdminLog(profile, "user_deleted", "user", target.id, {
+      cascade: {
+        recruiterJobsRemoved: recruiterJobIds.length,
+      },
+    });
+    res.json({ message: "User deleted" });
+  },
+);
 
 // Resume Upload Route
 app.post(
-  '/api/resume/upload',
+  "/api/resume/upload",
   requireAuth,
-  requireRoles('student'),
+  requireRoles("student"),
   resumeUploadMiddleware,
   async (req: RequestWithAuth, res) => {
     const profile = req.profile;
-    if (!profile) return res.status(401).json({ message: 'Not authenticated' });
-    if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
+    if (!profile) return res.status(401).json({ message: "Not authenticated" });
+    if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
-    const shouldReplaceExisting = String(req.body?.replaceExisting ?? 'true').toLowerCase() !== 'false';
-    const existingResumeIndex = db.resumes.findIndex((entry: any) => entry.userId === profile.id);
+    const shouldReplaceExisting =
+      String(req.body?.replaceExisting ?? "true").toLowerCase() !== "false";
+    const existingResumeIndex = db.resumes.findIndex(
+      (entry: any) => entry.userId === profile.id,
+    );
     if (existingResumeIndex >= 0 && !shouldReplaceExisting) {
       return res.status(409).json({
-        message: 'A resume already exists. Set replaceExisting=true to replace it.',
+        message:
+          "A resume already exists. Set replaceExisting=true to replace it.",
       });
     }
 
@@ -2330,7 +2831,7 @@ app.post(
         projects: [],
         skills: [],
       },
-      profile
+      profile,
     );
     let parsedData = fallbackParsedData;
     let skills: string[] = normalizeSkillList(fallbackParsedData.skills);
@@ -2344,13 +2845,17 @@ app.post(
               ? await fs.promises.readFile(req.file.path)
               : Buffer.alloc(0);
         const formData = new FormData();
-        formData.append('file', new Blob([fileBuffer], { type: 'application/pdf' }), req.file.originalname);
+        formData.append(
+          "file",
+          new Blob([fileBuffer], { type: "application/pdf" }),
+          req.file.originalname,
+        );
 
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 15000);
         try {
           const aiResponse = await fetch(`${AI_SERVICE_URL}/ai/parse-resume`, {
-            method: 'POST',
+            method: "POST",
             headers: buildAiServiceHeaders(),
             body: formData,
             signal: controller.signal,
@@ -2359,10 +2864,12 @@ app.post(
           if (aiResponse.ok) {
             const aiData: any = await aiResponse.json();
             parsedData = normalizeResumeParsedData(aiData?.parsedData, profile);
-            skills = normalizeSkillList(aiData?.skills?.length ? aiData.skills : parsedData.skills);
+            skills = normalizeSkillList(
+              aiData?.skills?.length ? aiData.skills : parsedData.skills,
+            );
             parsedData.skills = skills;
           } else {
-            logEvent('warn', 'ai.resume_parse.degraded', {
+            logEvent("warn", "ai.resume_parse.degraded", {
               requestId: req.requestId,
               statusCode: aiResponse.status,
             });
@@ -2371,20 +2878,22 @@ app.post(
           clearTimeout(timeout);
         }
       } catch (aiError) {
-        logError('ai.resume_parse.unavailable', aiError, {
+        logError("ai.resume_parse.unavailable", aiError, {
           requestId: req.requestId,
         });
       }
 
       const replaced = existingResumeIndex >= 0;
       const resume = {
-        id: replaced ? db.resumes[existingResumeIndex].id : uuidv4(),
+        id: replaced ? db.resumes[existingResumeIndex].id : crypto.randomUUID(),
         userId: profile.id,
         fileUrl: buildProcessedFileUrl(profile.id, req.file.originalname),
         fileName: req.file.originalname,
         parsedData,
         skills,
-        createdAt: replaced ? db.resumes[existingResumeIndex].createdAt : new Date(),
+        createdAt: replaced
+          ? db.resumes[existingResumeIndex].createdAt
+          : new Date(),
         updatedAt: new Date(),
       };
 
@@ -2395,7 +2904,9 @@ app.post(
       }
       await supabaseStore.upsertResume(resume);
 
-      let candidate = db.candidates.find((entry: any) => entry.userId === profile.id);
+      let candidate = db.candidates.find(
+        (entry: any) => entry.userId === profile.id,
+      );
       if (candidate) {
         candidate.skills = JSON.stringify(skills);
         candidate.education = JSON.stringify(parsedData.education || []);
@@ -2405,17 +2916,17 @@ app.post(
         await supabaseStore.upsertCandidate(candidate);
       } else {
         candidate = {
-          id: uuidv4(),
+          id: crypto.randomUUID(),
           userId: profile.id,
           name: profile.name,
           email: profile.email,
-          role: 'Student',
+          role: "Student",
           skills: JSON.stringify(skills),
           education: JSON.stringify(parsedData.education || []),
           experience: JSON.stringify(parsedData.experience || []),
           parsedData,
           matchScore: 0,
-          status: 'new',
+          status: "new",
           createdAt: new Date(),
           updatedAt: new Date(),
         };
@@ -2425,190 +2936,299 @@ app.post(
 
       const latestScore = await ensureResumeScoreHistory(profile.id);
 
-      return res.status(replaced ? 200 : 201).json({ data: { ...resume, latestScore, replaced } });
+      return res
+        .status(replaced ? 200 : 201)
+        .json({ data: { ...resume, latestScore, replaced } });
     } catch (error: any) {
-      logError('resume.upload.failed', error, {
+      logError("resume.upload.failed", error, {
         requestId: req.requestId,
         userId: profile.id,
       });
-      return res.status(500).json({ message: error.message || 'Failed to upload resume' });
+      return res
+        .status(500)
+        .json({ message: error.message || "Failed to upload resume" });
     } finally {
       await safeDeleteTempFile(req.file.path);
     }
-  }
+  },
 );
 
 // Get my resume
-app.get('/api/resume', requireAuth, requireRoles('student'), (req: RequestWithAuth, res) => {
-  const profile = req.profile;
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
+app.get(
+  "/api/resume",
+  requireAuth,
+  requireRoles("student"),
+  (req: RequestWithAuth, res) => {
+    const profile = req.profile;
+    if (!profile) return res.status(401).json({ message: "Not authenticated" });
 
-  const resume = db.resumes.find((r: any) => r.userId === profile.id);
-  if (!resume) return res.status(404).json({ message: 'No resume found' });
+    const resume = db.resumes.find((r: any) => r.userId === profile.id);
+    if (!resume) return res.status(404).json({ message: "No resume found" });
 
-  const latestScore = getLatestResumeScore(profile.id);
-  res.json({ data: { ...resume, latestScore } });
-});
+    const latestScore = getLatestResumeScore(profile.id);
+    res.json({ data: { ...resume, latestScore } });
+  },
+);
 
 // Delete resume
-app.delete('/api/resume/:id', requireAuth, requireRoles('student'), async (req: RequestWithAuth, res) => {
-  const profile = req.profile;
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
+app.delete(
+  "/api/resume/:id",
+  requireAuth,
+  requireRoles("student"),
+  async (req: RequestWithAuth, res) => {
+    const profile = req.profile;
+    if (!profile) return res.status(401).json({ message: "Not authenticated" });
 
-  const idx = db.resumes.findIndex((r: any) => r.id === req.params.id && r.userId === profile.id);
-  if (idx === -1) return res.status(404).json({ message: 'Resume not found' });
+    const idx = db.resumes.findIndex(
+      (r: any) => r.id === req.params.id && r.userId === profile.id,
+    );
+    if (idx === -1)
+      return res.status(404).json({ message: "Resume not found" });
 
-  db.resumes.splice(idx, 1);
-  await supabaseStore.deleteResume(req.params.id);
-  res.json({ message: 'Resume deleted' });
-});
+    db.resumes.splice(idx, 1);
+    await supabaseStore.deleteResume(req.params.id);
+    res.json({ message: "Resume deleted" });
+  },
+);
 
 // Resume moderation routes (admin)
-app.get('/api/admin/resumes', requireAuth, requireRoles('admin'), adminLimiter, (req: RequestWithAuth, res) => {
-  const { search, parseStatus, flaggedOnly, sortBy, order } = req.query;
-  const pagination = getPagination(req.query as any, { page: 1, limit: 20, maxLimit: 100 });
-  const direction = String(order || 'desc').toLowerCase() === 'asc' ? 1 : -1;
-  const sortKey = String(sortBy || 'updatedAt').toLowerCase();
-
-  let resumes = db.resumes.map((entry: any) => buildResumeMonitoringRecord(entry));
-  if (search) {
-    const searchText = String(search).toLowerCase();
-    resumes = resumes.filter((entry: any) => {
-      const haystack = [
-        entry.fileName,
-        entry.student?.name,
-        entry.student?.email,
-        ...(entry.skills || []),
-      ]
-        .join(' ')
-        .toLowerCase();
-      return haystack.includes(searchText);
+app.get(
+  "/api/admin/resumes",
+  requireAuth,
+  requireRoles("admin"),
+  adminLimiter,
+  (req: RequestWithAuth, res) => {
+    const { search, parseStatus, flaggedOnly, sortBy, order } = req.query;
+    const pagination = getPagination(req.query as any, {
+      page: 1,
+      limit: 20,
+      maxLimit: 100,
     });
-  }
+    const direction = String(order || "desc").toLowerCase() === "asc" ? 1 : -1;
+    const sortKey = String(sortBy || "updatedAt").toLowerCase();
 
-  if (parseStatus && ['success', 'failed'].includes(String(parseStatus))) {
-    resumes = resumes.filter((entry: any) => entry.parseStatus === String(parseStatus));
-  }
-
-  if (String(flaggedOnly || '').toLowerCase() === 'true') {
-    resumes = resumes.filter((entry: any) => entry.moderationStatus === 'flagged' || entry.flags.length > 0);
-  }
-
-  resumes.sort((left: any, right: any) => {
-    if (sortKey === 'score') return (Number(left.resumeScore || 0) - Number(right.resumeScore || 0)) * direction;
-    if (sortKey === 'student') {
-      return String(left.student?.name || '').localeCompare(String(right.student?.name || '')) * direction;
+    let resumes = db.resumes.map((entry: any) =>
+      buildResumeMonitoringRecord(entry),
+    );
+    if (search) {
+      const searchText = String(search).toLowerCase();
+      resumes = resumes.filter((entry: any) => {
+        const haystack = [
+          entry.fileName,
+          entry.student?.name,
+          entry.student?.email,
+          ...(entry.skills || []),
+        ]
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(searchText);
+      });
     }
-    if (sortKey === 'createdat') {
-      return (new Date(left.createdAt || 0).getTime() - new Date(right.createdAt || 0).getTime()) * direction;
+
+    if (parseStatus && ["success", "failed"].includes(String(parseStatus))) {
+      resumes = resumes.filter(
+        (entry: any) => entry.parseStatus === String(parseStatus),
+      );
     }
-    return (new Date(left.updatedAt || 0).getTime() - new Date(right.updatedAt || 0).getTime()) * direction;
-  });
 
-  const summary = {
-    total: resumes.length,
-    success: resumes.filter((entry: any) => entry.parseStatus === 'success').length,
-    failed: resumes.filter((entry: any) => entry.parseStatus === 'failed').length,
-    flagged: resumes.filter((entry: any) => entry.moderationStatus === 'flagged').length,
-  };
-  const paginated = paginateData(resumes, pagination.page, pagination.limit);
-  res.json({ data: paginated.data, meta: paginated.meta, summary });
-});
+    if (String(flaggedOnly || "").toLowerCase() === "true") {
+      resumes = resumes.filter(
+        (entry: any) =>
+          entry.moderationStatus === "flagged" || entry.flags.length > 0,
+      );
+    }
 
-app.get('/api/admin/resumes/:id', requireAuth, requireRoles('admin'), adminLimiter, (req, res) => {
-  const resume = db.resumes.find((entry: any) => entry.id === req.params.id);
-  if (!resume) return res.status(404).json({ message: 'Resume not found' });
-  return res.json({ data: buildResumeMonitoringRecord(resume) });
-});
+    resumes.sort((left: any, right: any) => {
+      if (sortKey === "score")
+        return (
+          (Number(left.resumeScore || 0) - Number(right.resumeScore || 0)) *
+          direction
+        );
+      if (sortKey === "student") {
+        return (
+          String(left.student?.name || "").localeCompare(
+            String(right.student?.name || ""),
+          ) * direction
+        );
+      }
+      if (sortKey === "createdat") {
+        return (
+          (new Date(left.createdAt || 0).getTime() -
+            new Date(right.createdAt || 0).getTime()) *
+          direction
+        );
+      }
+      return (
+        (new Date(left.updatedAt || 0).getTime() -
+          new Date(right.updatedAt || 0).getTime()) *
+        direction
+      );
+    });
 
-app.put('/api/admin/resumes/:id/moderation', requireAuth, requireRoles('admin'), adminLimiter, async (req: RequestWithAuth, res) => {
-  const profile = req.profile;
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
+    const summary = {
+      total: resumes.length,
+      success: resumes.filter((entry: any) => entry.parseStatus === "success")
+        .length,
+      failed: resumes.filter((entry: any) => entry.parseStatus === "failed")
+        .length,
+      flagged: resumes.filter(
+        (entry: any) => entry.moderationStatus === "flagged",
+      ).length,
+    };
+    const paginated = paginateData(resumes, pagination.page, pagination.limit);
+    res.json({ data: paginated.data, meta: paginated.meta, summary });
+  },
+);
 
-  const idx = db.resumes.findIndex((entry: any) => entry.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ message: 'Resume not found' });
+app.get(
+  "/api/admin/resumes/:id",
+  requireAuth,
+  requireRoles("admin"),
+  adminLimiter,
+  (req, res) => {
+    const resume = db.resumes.find((entry: any) => entry.id === req.params.id);
+    if (!resume) return res.status(404).json({ message: "Resume not found" });
+    return res.json({ data: buildResumeMonitoringRecord(resume) });
+  },
+);
 
-  const status = String(req.body?.status || '').trim().toLowerCase();
-  if (!['clean', 'flagged', 'review'].includes(status)) {
-    return res.status(400).json({ message: 'status must be one of clean, flagged, or review' });
-  }
+app.put(
+  "/api/admin/resumes/:id/moderation",
+  requireAuth,
+  requireRoles("admin"),
+  adminLimiter,
+  async (req: RequestWithAuth, res) => {
+    const profile = req.profile;
+    if (!profile) return res.status(401).json({ message: "Not authenticated" });
 
-  db.resumes[idx] = {
-    ...db.resumes[idx],
-    moderationStatus: status,
-    moderationNotes: typeof req.body?.notes === 'string' ? req.body.notes.trim() : '',
-    moderationUpdatedBy: profile.id,
-    moderationUpdatedAt: new Date(),
-    updatedAt: new Date(),
-  };
-  await supabaseStore.upsertResume(db.resumes[idx]);
-  await appendAdminLog(profile, 'resume_moderated', 'resume', db.resumes[idx].id, {
-    status,
-    notes: db.resumes[idx].moderationNotes,
-  });
+    const idx = db.resumes.findIndex(
+      (entry: any) => entry.id === req.params.id,
+    );
+    if (idx === -1)
+      return res.status(404).json({ message: "Resume not found" });
 
-  return res.json({ data: buildResumeMonitoringRecord(db.resumes[idx]) });
-});
+    const status = String(req.body?.status || "")
+      .trim()
+      .toLowerCase();
+    if (!["clean", "flagged", "review"].includes(status)) {
+      return res
+        .status(400)
+        .json({ message: "status must be one of clean, flagged, or review" });
+    }
 
-app.delete('/api/admin/resumes/:id', requireAuth, requireRoles('admin'), adminLimiter, async (req: RequestWithAuth, res) => {
-  const profile = req.profile;
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
-
-  const idx = db.resumes.findIndex((entry: any) => entry.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ message: 'Resume not found' });
-
-  const removed = db.resumes[idx];
-  db.resumes.splice(idx, 1);
-  await supabaseStore.deleteResume(removed.id);
-
-  const candidateIdx = db.candidates.findIndex((entry: any) => entry.userId === removed.userId);
-  if (candidateIdx >= 0) {
-    db.candidates[candidateIdx] = {
-      ...db.candidates[candidateIdx],
-      skills: JSON.stringify([]),
-      parsedData: null,
+    db.resumes[idx] = {
+      ...db.resumes[idx],
+      moderationStatus: status,
+      moderationNotes:
+        typeof req.body?.notes === "string" ? req.body.notes.trim() : "",
+      moderationUpdatedBy: profile.id,
+      moderationUpdatedAt: new Date(),
       updatedAt: new Date(),
     };
-    await supabaseStore.upsertCandidate(db.candidates[candidateIdx]);
-  }
+    await supabaseStore.upsertResume(db.resumes[idx]);
+    await appendAdminLog(
+      profile,
+      "resume_moderated",
+      "resume",
+      db.resumes[idx].id,
+      {
+        status,
+        notes: db.resumes[idx].moderationNotes,
+      },
+    );
 
-  await appendAdminLog(profile, 'resume_deleted', 'resume', removed.id, {
-    userId: removed.userId,
-    fileName: removed.fileName,
-  });
-  return res.json({ message: 'Resume deleted' });
-});
+    return res.json({ data: buildResumeMonitoringRecord(db.resumes[idx]) });
+  },
+);
+
+app.delete(
+  "/api/admin/resumes/:id",
+  requireAuth,
+  requireRoles("admin"),
+  adminLimiter,
+  async (req: RequestWithAuth, res) => {
+    const profile = req.profile;
+    if (!profile) return res.status(401).json({ message: "Not authenticated" });
+
+    const idx = db.resumes.findIndex(
+      (entry: any) => entry.id === req.params.id,
+    );
+    if (idx === -1)
+      return res.status(404).json({ message: "Resume not found" });
+
+    const removed = db.resumes[idx];
+    db.resumes.splice(idx, 1);
+    await supabaseStore.deleteResume(removed.id);
+
+    const candidateIdx = db.candidates.findIndex(
+      (entry: any) => entry.userId === removed.userId,
+    );
+    if (candidateIdx >= 0) {
+      db.candidates[candidateIdx] = {
+        ...db.candidates[candidateIdx],
+        skills: JSON.stringify([]),
+        parsedData: null,
+        updatedAt: new Date(),
+      };
+      await supabaseStore.upsertCandidate(db.candidates[candidateIdx]);
+    }
+
+    await appendAdminLog(profile, "resume_deleted", "resume", removed.id, {
+      userId: removed.userId,
+      fileName: removed.fileName,
+    });
+    return res.json({ message: "Resume deleted" });
+  },
+);
 
 // Jobs Routes
 // Job and application routes used by students and recruiters.
-app.get('/api/jobs', (req, res) => {
-  const { search, jobType, location, status, limit, my, recruiterId, page } = req.query;
+app.get("/api/jobs", (req, res) => {
+  const { search, jobType, location, status, limit, my, recruiterId, page } =
+    req.query;
   let jobs = [...db.jobs];
   const profile = getProfileFromAuth(req);
 
   if (search) {
     const s = (search as string).toLowerCase();
-    jobs = jobs.filter((j: any) => j.title.toLowerCase().includes(s) || j.company.toLowerCase().includes(s) || j.description.toLowerCase().includes(s));
+    jobs = jobs.filter(
+      (j: any) =>
+        j.title.toLowerCase().includes(s) ||
+        j.company.toLowerCase().includes(s) ||
+        j.description.toLowerCase().includes(s),
+    );
   }
   if (jobType) jobs = jobs.filter((j: any) => j.jobType === jobType);
-  if (location) jobs = jobs.filter((j: any) => j.location.toLowerCase().includes((location as string).toLowerCase()));
-  if (status && status !== 'all') jobs = jobs.filter((j: any) => j.status === status);
-  else if (!status) jobs = jobs.filter((j: any) => j.status === 'active');
+  if (location)
+    jobs = jobs.filter((j: any) =>
+      j.location.toLowerCase().includes((location as string).toLowerCase()),
+    );
+  if (status && status !== "all")
+    jobs = jobs.filter((j: any) => j.status === status);
+  else if (!status) jobs = jobs.filter((j: any) => j.status === "active");
 
-  if (my === 'true') {
-    if (profile && roleMatches(profile.role, 'recruiter')) {
+  if (my === "true") {
+    if (profile && roleMatches(profile.role, "recruiter")) {
       jobs = jobs.filter((j: any) => j.employerId === profile.id);
     }
   }
 
-  if (recruiterId && profile && roleMatches(profile.role, 'admin')) {
+  if (recruiterId && profile && roleMatches(profile.role, "admin")) {
     jobs = jobs.filter((j: any) => j.employerId === String(recruiterId));
   }
 
-  jobs.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  const hasPage = page !== undefined && page !== null && String(page).trim() !== '';
+  jobs.sort(
+    (a: any, b: any) =>
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+  const hasPage =
+    page !== undefined && page !== null && String(page).trim() !== "";
   if (hasPage) {
-    const pagination = getPagination(req.query as any, { page: 1, limit: 20, maxLimit: 100 });
+    const pagination = getPagination(req.query as any, {
+      page: 1,
+      limit: 20,
+      maxLimit: 100,
+    });
     const paginated = paginateData(jobs, pagination.page, pagination.limit);
     return res.json({
       data: { jobs: paginated.data },
@@ -2632,186 +3252,276 @@ app.get('/api/jobs', (req, res) => {
   });
 });
 
-app.get('/api/jobs/:id', (req, res) => {
+app.get("/api/jobs/:id", (req, res) => {
   const job = db.jobs.find((j: any) => j.id === req.params.id);
-  if (!job) return res.status(404).json({ message: 'Job not found' });
+  if (!job) return res.status(404).json({ message: "Job not found" });
   res.json({ data: job });
 });
 
-app.post('/api/jobs', requireAuth, requireRoles('recruiter', 'admin'), async (req: RequestWithAuth, res) => {
-  const profile = getProfileFromAuth(req);
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
-  if (!profile || !(roleMatches(profile.role, 'recruiter') || roleMatches(profile.role, 'admin'))) {
-    return res.status(403).json({ message: 'Not authorized' });
-  }
+app.post(
+  "/api/jobs",
+  requireAuth,
+  requireRoles("recruiter", "admin"),
+  async (req: RequestWithAuth, res) => {
+    const profile = getProfileFromAuth(req);
+    if (!profile) return res.status(401).json({ message: "Not authenticated" });
+    if (
+      !profile ||
+      !(
+        roleMatches(profile.role, "recruiter") ||
+        roleMatches(profile.role, "admin")
+      )
+    ) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
 
-  const title = String(req.body?.title || '').trim();
-  const company = String(req.body?.company || '').trim();
-  const description = String(req.body?.description || '').trim();
-  const experienceLevel = String(req.body?.experienceLevel || 'mid').trim().toLowerCase();
+    const title = String(req.body?.title || "").trim();
+    const company = String(req.body?.company || "").trim();
+    const description = String(req.body?.description || "").trim();
+    const experienceLevel = String(req.body?.experienceLevel || "mid")
+      .trim()
+      .toLowerCase();
 
-  const requirements = Array.isArray(req.body.requirements)
-    ? normalizeSkillList(req.body.requirements)
-    : String(req.body.requirements || '')
-      .split(',')
-      .map((item) => item.trim())
-      .filter(Boolean);
-  const skills = normalizeSkillList(
-    Array.isArray(req.body.skills) && req.body.skills.length > 0 ? req.body.skills : requirements
-  );
-  if (!title || !company || !description || skills.length === 0) {
-    return res.status(400).json({
-      message: 'title, company, description, and required skills are required',
-    });
-  }
+    const requirements = Array.isArray(req.body.requirements)
+      ? normalizeSkillList(req.body.requirements)
+      : String(req.body.requirements || "")
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean);
+    const skills = normalizeSkillList(
+      Array.isArray(req.body.skills) && req.body.skills.length > 0
+        ? req.body.skills
+        : requirements,
+    );
+    if (!title || !company || !description || skills.length === 0) {
+      return res.status(400).json({
+        message:
+          "title, company, description, and required skills are required",
+      });
+    }
 
-  const safeJobType = ['full_time', 'part_time', 'internship', 'contract'].includes(req.body.jobType)
-    ? req.body.jobType
-    : 'full_time';
-  const safeStatus = ['active', 'closed'].includes(req.body.status) ? req.body.status : 'active';
-  const safeExperienceLevel = ['entry', 'junior', 'mid', 'senior', 'lead'].includes(experienceLevel)
-    ? experienceLevel
-    : 'mid';
+    const safeJobType = [
+      "full_time",
+      "part_time",
+      "internship",
+      "contract",
+    ].includes(req.body.jobType)
+      ? req.body.jobType
+      : "full_time";
+    const safeStatus = ["active", "closed"].includes(req.body.status)
+      ? req.body.status
+      : "active";
+    const safeExperienceLevel = [
+      "entry",
+      "junior",
+      "mid",
+      "senior",
+      "lead",
+    ].includes(experienceLevel)
+      ? experienceLevel
+      : "mid";
 
-  const job = {
-    ...req.body,
-    title,
-    company,
-    description,
-    id: uuidv4(),
-    employerId: profile.id,
-    requirements,
-    skills,
-    experienceLevel: safeExperienceLevel,
-    jobType: safeJobType,
-    status: safeStatus,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
-  db.jobs.push(job);
-  await supabaseStore.upsertJob(job);
-  if (roleMatches(profile.role, 'admin')) {
-    await appendAdminLog(profile, 'job_created', 'job', job.id, {
-      title: job.title,
-      recruiterId: job.employerId,
-    });
-  }
-  res.status(201).json({ data: job });
-});
+    const job = {
+      ...req.body,
+      title,
+      company,
+      description,
+      id: crypto.randomUUID(),
+      employerId: profile.id,
+      requirements,
+      skills,
+      experienceLevel: safeExperienceLevel,
+      jobType: safeJobType,
+      status: safeStatus,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    db.jobs.push(job);
+    await supabaseStore.upsertJob(job);
+    if (roleMatches(profile.role, "admin")) {
+      await appendAdminLog(profile, "job_created", "job", job.id, {
+        title: job.title,
+        recruiterId: job.employerId,
+      });
+    }
+    res.status(201).json({ data: job });
+  },
+);
 
-app.put('/api/jobs/:id', requireAuth, requireRoles('recruiter', 'admin'), async (req: RequestWithAuth, res) => {
-  const profile = getProfileFromAuth(req);
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
+app.put(
+  "/api/jobs/:id",
+  requireAuth,
+  requireRoles("recruiter", "admin"),
+  async (req: RequestWithAuth, res) => {
+    const profile = getProfileFromAuth(req);
+    if (!profile) return res.status(401).json({ message: "Not authenticated" });
 
-  const idx = db.jobs.findIndex((j: any) => j.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ message: 'Job not found' });
+    const idx = db.jobs.findIndex((j: any) => j.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ message: "Job not found" });
 
-  const current = db.jobs[idx];
-  if (!roleMatches(profile.role, 'admin') && current.employerId !== profile.id) {
-    return res.status(403).json({ message: 'Not authorized' });
-  }
+    const current = db.jobs[idx];
+    if (
+      !roleMatches(profile.role, "admin") &&
+      current.employerId !== profile.id
+    ) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
 
-  const title =
-    req.body?.title !== undefined ? String(req.body.title).trim() : String(current.title || '').trim();
-  const company =
-    req.body?.company !== undefined ? String(req.body.company).trim() : String(current.company || '').trim();
-  const description =
-    req.body?.description !== undefined
-      ? String(req.body.description).trim()
-      : String(current.description || '').trim();
-  const location =
-    req.body?.location !== undefined ? String(req.body.location).trim() : String(current.location || '');
-  const requestedRequirements =
-    req.body?.requirements !== undefined ? req.body.requirements : current.requirements;
-  const requirements = normalizeSkillList(requestedRequirements);
-  const requestedSkills = req.body?.skills !== undefined ? req.body.skills : current.skills;
-  const skills = normalizeSkillList(Array.isArray(requestedSkills) ? requestedSkills : requirements);
+    const title =
+      req.body?.title !== undefined
+        ? String(req.body.title).trim()
+        : String(current.title || "").trim();
+    const company =
+      req.body?.company !== undefined
+        ? String(req.body.company).trim()
+        : String(current.company || "").trim();
+    const description =
+      req.body?.description !== undefined
+        ? String(req.body.description).trim()
+        : String(current.description || "").trim();
+    const location =
+      req.body?.location !== undefined
+        ? String(req.body.location).trim()
+        : String(current.location || "");
+    const requestedRequirements =
+      req.body?.requirements !== undefined
+        ? req.body.requirements
+        : current.requirements;
+    const requirements = normalizeSkillList(requestedRequirements);
+    const requestedSkills =
+      req.body?.skills !== undefined ? req.body.skills : current.skills;
+    const skills = normalizeSkillList(
+      Array.isArray(requestedSkills) ? requestedSkills : requirements,
+    );
 
-  if (!title || !company || !description || skills.length === 0) {
-    return res.status(400).json({
-      message: 'title, company, description, and required skills are required',
-    });
-  }
+    if (!title || !company || !description || skills.length === 0) {
+      return res.status(400).json({
+        message:
+          "title, company, description, and required skills are required",
+      });
+    }
 
-  const requestedExperienceLevel =
-    req.body?.experienceLevel !== undefined
-      ? String(req.body.experienceLevel).trim().toLowerCase()
-      : String(current.experienceLevel || 'mid').trim().toLowerCase();
-  const safeExperienceLevel = ['entry', 'junior', 'mid', 'senior', 'lead'].includes(requestedExperienceLevel)
-    ? requestedExperienceLevel
-    : 'mid';
-  const requestedJobType = req.body?.jobType !== undefined ? String(req.body.jobType) : current.jobType;
-  const safeJobType = ['full_time', 'part_time', 'internship', 'contract'].includes(requestedJobType)
-    ? requestedJobType
-    : 'full_time';
-  const requestedStatus = req.body?.status !== undefined ? String(req.body.status) : current.status;
-  const safeStatus = ['active', 'closed'].includes(requestedStatus) ? requestedStatus : 'active';
-  const salaryMin =
-    req.body?.salaryMin !== undefined && req.body?.salaryMin !== null && req.body?.salaryMin !== ''
-      ? Number(req.body.salaryMin)
-      : current.salaryMin ?? null;
-  const salaryMax =
-    req.body?.salaryMax !== undefined && req.body?.salaryMax !== null && req.body?.salaryMax !== ''
-      ? Number(req.body.salaryMax)
-      : current.salaryMax ?? null;
+    const requestedExperienceLevel =
+      req.body?.experienceLevel !== undefined
+        ? String(req.body.experienceLevel).trim().toLowerCase()
+        : String(current.experienceLevel || "mid")
+            .trim()
+            .toLowerCase();
+    const safeExperienceLevel = [
+      "entry",
+      "junior",
+      "mid",
+      "senior",
+      "lead",
+    ].includes(requestedExperienceLevel)
+      ? requestedExperienceLevel
+      : "mid";
+    const requestedJobType =
+      req.body?.jobType !== undefined
+        ? String(req.body.jobType)
+        : current.jobType;
+    const safeJobType = [
+      "full_time",
+      "part_time",
+      "internship",
+      "contract",
+    ].includes(requestedJobType)
+      ? requestedJobType
+      : "full_time";
+    const requestedStatus =
+      req.body?.status !== undefined ? String(req.body.status) : current.status;
+    const safeStatus = ["active", "closed"].includes(requestedStatus)
+      ? requestedStatus
+      : "active";
+    const salaryMin =
+      req.body?.salaryMin !== undefined &&
+      req.body?.salaryMin !== null &&
+      req.body?.salaryMin !== ""
+        ? Number(req.body.salaryMin)
+        : (current.salaryMin ?? null);
+    const salaryMax =
+      req.body?.salaryMax !== undefined &&
+      req.body?.salaryMax !== null &&
+      req.body?.salaryMax !== ""
+        ? Number(req.body.salaryMax)
+        : (current.salaryMax ?? null);
 
-  db.jobs[idx] = {
-    ...current,
-    title,
-    company,
-    description,
-    location,
-    requirements,
-    skills,
-    experienceLevel: safeExperienceLevel,
-    jobType: safeJobType,
-    status: safeStatus,
-    salaryMin: Number.isFinite(salaryMin) ? salaryMin : null,
-    salaryMax: Number.isFinite(salaryMax) ? salaryMax : null,
-    employerId: current.employerId,
-    updatedAt: new Date(),
-  };
-  await supabaseStore.upsertJob(db.jobs[idx]);
-  if (roleMatches(profile.role, 'admin')) {
-    await appendAdminLog(profile, 'job_updated', 'job', db.jobs[idx].id, {
-      title: db.jobs[idx].title,
-      status: db.jobs[idx].status,
-    });
-  }
-  res.json({ data: db.jobs[idx] });
-});
+    db.jobs[idx] = {
+      ...current,
+      title,
+      company,
+      description,
+      location,
+      requirements,
+      skills,
+      experienceLevel: safeExperienceLevel,
+      jobType: safeJobType,
+      status: safeStatus,
+      salaryMin: Number.isFinite(salaryMin) ? salaryMin : null,
+      salaryMax: Number.isFinite(salaryMax) ? salaryMax : null,
+      employerId: current.employerId,
+      updatedAt: new Date(),
+    };
+    await supabaseStore.upsertJob(db.jobs[idx]);
+    if (roleMatches(profile.role, "admin")) {
+      await appendAdminLog(profile, "job_updated", "job", db.jobs[idx].id, {
+        title: db.jobs[idx].title,
+        status: db.jobs[idx].status,
+      });
+    }
+    res.json({ data: db.jobs[idx] });
+  },
+);
 
-app.delete('/api/jobs/:id', requireAuth, requireRoles('recruiter', 'admin'), async (req: RequestWithAuth, res) => {
-  const profile = getProfileFromAuth(req);
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
+app.delete(
+  "/api/jobs/:id",
+  requireAuth,
+  requireRoles("recruiter", "admin"),
+  async (req: RequestWithAuth, res) => {
+    const profile = getProfileFromAuth(req);
+    if (!profile) return res.status(401).json({ message: "Not authenticated" });
 
-  const idx = db.jobs.findIndex((j: any) => j.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ message: 'Job not found' });
+    const idx = db.jobs.findIndex((j: any) => j.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ message: "Job not found" });
 
-  if (!roleMatches(profile.role, 'admin') && db.jobs[idx].employerId !== profile.id) {
-    return res.status(403).json({ message: 'Not authorized' });
-  }
+    if (
+      !roleMatches(profile.role, "admin") &&
+      db.jobs[idx].employerId !== profile.id
+    ) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
 
-  const removedJob = db.jobs[idx];
-  const removedApplications = db.applications.filter((entry: any) => entry.jobId === req.params.id).length;
-  db.jobs.splice(idx, 1);
-  db.applications = db.applications.filter((entry: any) => entry.jobId !== req.params.id);
-  await supabaseStore.deleteJob(req.params.id);
-  await supabaseStore.deleteApplicationsByJob(req.params.id);
-  if (roleMatches(profile.role, 'admin')) {
-    await appendAdminLog(profile, 'job_deleted', 'job', req.params.id, {
-      title: removedJob?.title || '',
-      removedApplications,
-    });
-  }
-  res.json({ message: 'Job deleted' });
-});
+    const removedJob = db.jobs[idx];
+    const removedApplications = db.applications.filter(
+      (entry: any) => entry.jobId === req.params.id,
+    ).length;
+    db.jobs.splice(idx, 1);
+    db.applications = db.applications.filter(
+      (entry: any) => entry.jobId !== req.params.id,
+    );
+    await supabaseStore.deleteJob(req.params.id);
+    await supabaseStore.deleteApplicationsByJob(req.params.id);
+    if (roleMatches(profile.role, "admin")) {
+      await appendAdminLog(profile, "job_deleted", "job", req.params.id, {
+        title: removedJob?.title || "",
+        removedApplications,
+      });
+    }
+    res.json({ message: "Job deleted" });
+  },
+);
 
 // Candidates Routes
-app.get('/api/candidates', (req, res) => {
+app.get("/api/candidates", (req, res) => {
   const profile = getProfileFromAuth(req);
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
-  if (!(roleMatches(profile.role, 'recruiter') || roleMatches(profile.role, 'admin'))) return res.status(403).json({ message: 'Not authorized' });
+  if (!profile) return res.status(401).json({ message: "Not authenticated" });
+  if (
+    !(
+      roleMatches(profile.role, "recruiter") ||
+      roleMatches(profile.role, "admin")
+    )
+  )
+    return res.status(403).json({ message: "Not authorized" });
 
   const candidates = db.candidates.map((candidate: any) => ({
     ...candidate,
@@ -2823,30 +3533,43 @@ app.get('/api/candidates', (req, res) => {
   res.json({ data: candidates });
 });
 
-app.get('/api/candidates/:id', async (req, res) => {
+app.get("/api/candidates/:id", async (req, res) => {
   const profile = getProfileFromAuth(req);
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
-  if (!(roleMatches(profile.role, 'recruiter') || roleMatches(profile.role, 'admin'))) {
-    return res.status(403).json({ message: 'Not authorized' });
+  if (!profile) return res.status(401).json({ message: "Not authenticated" });
+  if (
+    !(
+      roleMatches(profile.role, "recruiter") ||
+      roleMatches(profile.role, "admin")
+    )
+  ) {
+    return res.status(403).json({ message: "Not authorized" });
   }
 
   const candidate =
-    db.candidates.find((c: any) => c.id === req.params.id || c.userId === req.params.id) ||
+    db.candidates.find(
+      (c: any) => c.id === req.params.id || c.userId === req.params.id,
+    ) ||
     (() => {
       const fallbackProfile = db.profiles.find(
-        (entry: any) => entry.id === req.params.id && roleMatches(entry.role, 'student')
+        (entry: any) =>
+          entry.id === req.params.id && roleMatches(entry.role, "student"),
       );
       if (!fallbackProfile) return null;
 
-      const resume = db.resumes.find((entry: any) => entry.userId === fallbackProfile.id) || null;
-      const parsedData = normalizeResumeParsedData(resume?.parsedData || {}, fallbackProfile);
+      const resume =
+        db.resumes.find((entry: any) => entry.userId === fallbackProfile.id) ||
+        null;
+      const parsedData = normalizeResumeParsedData(
+        resume?.parsedData || {},
+        fallbackProfile,
+      );
 
       return {
         id: fallbackProfile.id,
         userId: fallbackProfile.id,
         name: fallbackProfile.name,
         email: fallbackProfile.email,
-        role: 'Student',
+        role: "Student",
         skills: JSON.stringify(parsedData.skills || []),
         education: JSON.stringify(parsedData.education || []),
         experience: JSON.stringify(parsedData.experience || []),
@@ -2855,27 +3578,33 @@ app.get('/api/candidates/:id', async (req, res) => {
         updatedAt: fallbackProfile.updatedAt || fallbackProfile.createdAt,
       };
     })();
-  if (!candidate) return res.status(404).json({ message: 'Candidate not found' });
-  const selectedJobId = String(req.query?.jobId || '').trim();
-  const selectedJob = selectedJobId ? db.jobs.find((entry: any) => entry.id === selectedJobId) : null;
+  if (!candidate)
+    return res.status(404).json({ message: "Candidate not found" });
+  const selectedJobId = String(req.query?.jobId || "").trim();
+  const selectedJob = selectedJobId
+    ? db.jobs.find((entry: any) => entry.id === selectedJobId)
+    : null;
 
-  if (roleMatches(profile.role, 'recruiter')) {
+  if (roleMatches(profile.role, "recruiter")) {
     const myJobIds = db.jobs
       .filter((entry: any) => entry.employerId === profile.id)
       .map((entry: any) => entry.id);
     if (selectedJob && !myJobIds.includes(selectedJob.id)) {
-      return res.status(403).json({ message: 'Not authorized' });
+      return res.status(403).json({ message: "Not authorized" });
     }
     const hasCandidateRelationship = db.applications.some(
-      (entry: any) => entry.candidateId === candidate.userId && myJobIds.includes(entry.jobId)
+      (entry: any) =>
+        entry.candidateId === candidate.userId &&
+        myJobIds.includes(entry.jobId),
     );
     if (!selectedJob && !hasCandidateRelationship) {
-      return res.status(403).json({ message: 'Not authorized' });
+      return res.status(403).json({ message: "Not authorized" });
     }
   }
 
   const latestResumeScore = getLatestResumeScore(candidate.userId);
-  const resume = db.resumes.find((entry: any) => entry.userId === candidate.userId) || null;
+  const resume =
+    db.resumes.find((entry: any) => entry.userId === candidate.userId) || null;
   const parsedSkills = normalizeSkillList(candidate.skills);
   const parsedEducation = (() => {
     return parseJsonArray(candidate.education);
@@ -2892,9 +3621,15 @@ app.get('/api/candidates/:id', async (req, res) => {
     const match = await getMatchInsights(parsedSkills, selectedJob);
     const explanationMeta = buildRecommendationExplanation(
       parsedSkills,
-      toSkillList(selectedJob.skills?.length ? selectedJob.skills : selectedJob.requirements)
+      toSkillList(
+        selectedJob.skills?.length
+          ? selectedJob.skills
+          : selectedJob.requirements,
+      ),
     );
-    const improvementSuggestions = (explanationMeta.improvementImpacts || []).map((entry) => {
+    const improvementSuggestions = (
+      explanationMeta.improvementImpacts || []
+    ).map((entry) => {
       return `Learning ${entry.skill} can increase fit by about ${toHumanReadableImpact(entry.impact)}%.`;
     });
     matchBreakdown = {
@@ -2923,161 +3658,245 @@ app.get('/api/candidates/:id', async (req, res) => {
   });
 });
 
-app.post('/api/candidates', requireAuth, requireRoles('recruiter', 'admin'), async (req, res) => {
-  const candidate = { ...req.body, id: uuidv4(), status: 'new', matchScore: 0, createdAt: new Date() };
-  db.candidates.push(candidate);
-  await supabaseStore.upsertCandidate(candidate);
-  res.status(201).json({ data: candidate });
-});
+app.post(
+  "/api/candidates",
+  requireAuth,
+  requireRoles("recruiter", "admin"),
+  async (req, res) => {
+    const candidate = {
+      ...req.body,
+      id: crypto.randomUUID(),
+      status: "new",
+      matchScore: 0,
+      createdAt: new Date(),
+    };
+    db.candidates.push(candidate);
+    await supabaseStore.upsertCandidate(candidate);
+    res.status(201).json({ data: candidate });
+  },
+);
 
-app.put('/api/candidates/:id', requireAuth, requireRoles('recruiter', 'admin'), async (req, res) => {
-  const idx = db.candidates.findIndex((c: any) => c.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ message: 'Candidate not found' });
-  db.candidates[idx] = { ...db.candidates[idx], ...req.body, updatedAt: new Date() };
-  await supabaseStore.upsertCandidate(db.candidates[idx]);
-  res.json({ data: db.candidates[idx] });
-});
+app.put(
+  "/api/candidates/:id",
+  requireAuth,
+  requireRoles("recruiter", "admin"),
+  async (req, res) => {
+    const idx = db.candidates.findIndex((c: any) => c.id === req.params.id);
+    if (idx === -1)
+      return res.status(404).json({ message: "Candidate not found" });
+    db.candidates[idx] = {
+      ...db.candidates[idx],
+      ...req.body,
+      updatedAt: new Date(),
+    };
+    await supabaseStore.upsertCandidate(db.candidates[idx]);
+    res.json({ data: db.candidates[idx] });
+  },
+);
 
 // Applications Routes
-app.get('/api/applications', (req, res) => {
+app.get("/api/applications", (req, res) => {
   const profile = getProfileFromAuth(req);
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
-  if (!(roleMatches(profile.role, 'recruiter') || roleMatches(profile.role, 'admin'))) return res.status(403).json({ message: 'Not authorized' });
+  if (!profile) return res.status(401).json({ message: "Not authenticated" });
+  if (
+    !(
+      roleMatches(profile.role, "recruiter") ||
+      roleMatches(profile.role, "admin")
+    )
+  )
+    return res.status(403).json({ message: "Not authorized" });
 
   const { status, jobId, studentId } = req.query;
-  const pagination = getPagination(req.query as any, { page: 1, limit: 25, maxLimit: 100 });
+  const pagination = getPagination(req.query as any, {
+    page: 1,
+    limit: 25,
+    maxLimit: 100,
+  });
   let applications = [...db.applications];
 
-  if (roleMatches(profile.role, 'recruiter')) {
-    const myJobIds = db.jobs.filter((job: any) => job.employerId === profile.id).map((job: any) => job.id);
-    applications = applications.filter((entry: any) => myJobIds.includes(entry.jobId));
+  if (roleMatches(profile.role, "recruiter")) {
+    const myJobIds = db.jobs
+      .filter((job: any) => job.employerId === profile.id)
+      .map((job: any) => job.id);
+    applications = applications.filter((entry: any) =>
+      myJobIds.includes(entry.jobId),
+    );
   }
 
   if (status) {
     applications = applications.filter((entry: any) => entry.status === status);
   }
   if (jobId) {
-    applications = applications.filter((entry: any) => entry.jobId === String(jobId));
+    applications = applications.filter(
+      (entry: any) => entry.jobId === String(jobId),
+    );
   }
-  if (studentId && roleMatches(profile.role, 'admin')) {
-    applications = applications.filter((entry: any) => entry.candidateId === String(studentId));
+  if (studentId && roleMatches(profile.role, "admin")) {
+    applications = applications.filter(
+      (entry: any) => entry.candidateId === String(studentId),
+    );
   }
 
-  applications.sort((a: any, b: any) => new Date(b.appliedAt).getTime() - new Date(a.appliedAt).getTime());
+  applications.sort(
+    (a: any, b: any) =>
+      new Date(b.appliedAt).getTime() - new Date(a.appliedAt).getTime(),
+  );
   const detailed = withApplicationDetails(applications);
   const paginated = paginateData(detailed, pagination.page, pagination.limit);
   res.json({ data: paginated.data, meta: paginated.meta });
 });
 
-app.get('/api/applications/my', (req, res) => {
+app.get("/api/applications/my", (req, res) => {
   const profile = getProfileFromAuth(req);
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
+  if (!profile) return res.status(401).json({ message: "Not authenticated" });
 
   const myApps = db.applications
     .filter((a: any) => a.candidateId === profile.id)
-    .sort((a: any, b: any) => new Date(b.appliedAt).getTime() - new Date(a.appliedAt).getTime());
+    .sort(
+      (a: any, b: any) =>
+        new Date(b.appliedAt).getTime() - new Date(a.appliedAt).getTime(),
+    );
 
   res.json({ data: withApplicationDetails(myApps) });
 });
 
-app.post('/api/applications', requireAuth, requireRoles('student'), async (req: RequestWithAuth, res) => {
-  const profile = getProfileFromAuth(req);
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
-  if (profile.role !== 'student') return res.status(403).json({ message: 'Not authorized' });
+app.post(
+  "/api/applications",
+  requireAuth,
+  requireRoles("student"),
+  async (req: RequestWithAuth, res) => {
+    const profile = getProfileFromAuth(req);
+    if (!profile) return res.status(401).json({ message: "Not authenticated" });
+    if (profile.role !== "student")
+      return res.status(403).json({ message: "Not authorized" });
 
-  const { jobId, notes } = req.body;
-  if (!jobId) return res.status(400).json({ message: 'jobId is required' });
+    const { jobId, notes } = req.body;
+    if (!jobId) return res.status(400).json({ message: "jobId is required" });
 
-  const existing = db.applications.find((a: any) => a.jobId === jobId && a.candidateId === profile.id);
-  if (existing) return res.status(400).json({ message: 'Already applied' });
+    const existing = db.applications.find(
+      (a: any) => a.jobId === jobId && a.candidateId === profile.id,
+    );
+    if (existing) return res.status(400).json({ message: "Already applied" });
 
-  const job = db.jobs.find((j: any) => j.id === jobId);
-  if (!job || job.status !== 'active') return res.status(404).json({ message: 'Job not found or inactive' });
+    const job = db.jobs.find((j: any) => j.id === jobId);
+    if (!job || job.status !== "active")
+      return res.status(404).json({ message: "Job not found or inactive" });
 
-  const candidate = db.candidates.find((c: any) => c.userId === profile.id);
+    const candidate = db.candidates.find((c: any) => c.userId === profile.id);
 
-  let matchScore = 0;
-  let matchedSkills: string[] = [];
-  let missingSkills: string[] = [];
-  let explanation: string | null = null;
-  if (job && candidate) {
-    const candidateSkills = toSkillList(candidate.skills);
-    const insights = await getMatchInsights(candidateSkills, job);
-    matchScore = insights.matchScore;
-    matchedSkills = insights.matchedSkills;
-    missingSkills = insights.missingSkills;
-    explanation = insights.explanation;
-  }
+    let matchScore = 0;
+    let matchedSkills: string[] = [];
+    let missingSkills: string[] = [];
+    let explanation: string | null = null;
+    if (job && candidate) {
+      const candidateSkills = toSkillList(candidate.skills);
+      const insights = await getMatchInsights(candidateSkills, job);
+      matchScore = insights.matchScore;
+      matchedSkills = insights.matchedSkills;
+      missingSkills = insights.missingSkills;
+      explanation = insights.explanation;
+    }
 
-  const application = {
-    id: uuidv4(),
-    jobId,
-    candidateId: profile.id,
-    status: 'pending',
-    matchScore,
-    matchedSkills,
-    missingSkills,
-    explanation,
-    notes: notes ? String(notes) : '',
-    appliedAt: new Date(),
-    updatedAt: new Date(),
-  };
-  db.applications.push(application);
-  await supabaseStore.upsertApplication(application);
-  res.status(201).json({ data: withApplicationDetails([application])[0] });
-});
+    const application = {
+      id: crypto.randomUUID(),
+      jobId,
+      candidateId: profile.id,
+      status: "pending",
+      matchScore,
+      matchedSkills,
+      missingSkills,
+      explanation,
+      notes: notes ? String(notes) : "",
+      appliedAt: new Date(),
+      updatedAt: new Date(),
+    };
+    db.applications.push(application);
+    await supabaseStore.upsertApplication(application);
+    res.status(201).json({ data: withApplicationDetails([application])[0] });
+  },
+);
 
 app.put(
-  '/api/applications/:id/status',
+  "/api/applications/:id/status",
   requireAuth,
-  requireRoles('recruiter', 'admin'),
+  requireRoles("recruiter", "admin"),
   async (req: RequestWithAuth, res) => {
-  const profile = getProfileFromAuth(req);
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
-  if (!(roleMatches(profile.role, 'recruiter') || roleMatches(profile.role, 'admin'))) return res.status(403).json({ message: 'Not authorized' });
+    const profile = getProfileFromAuth(req);
+    if (!profile) return res.status(401).json({ message: "Not authenticated" });
+    if (
+      !(
+        roleMatches(profile.role, "recruiter") ||
+        roleMatches(profile.role, "admin")
+      )
+    )
+      return res.status(403).json({ message: "Not authorized" });
 
-  const idx = db.applications.findIndex((a: any) => a.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ message: 'Application not found' });
+    const idx = db.applications.findIndex((a: any) => a.id === req.params.id);
+    if (idx === -1)
+      return res.status(404).json({ message: "Application not found" });
 
-  const { status, notes } = req.body;
-  if (!['pending', 'shortlisted', 'interview', 'rejected', 'applied', 'interviewing', 'offer'].includes(status)) {
-    return res.status(400).json({ message: 'Invalid status' });
-  }
+    const { status, notes } = req.body;
+    if (
+      ![
+        "pending",
+        "shortlisted",
+        "interview",
+        "rejected",
+        "applied",
+        "interviewing",
+        "offer",
+      ].includes(status)
+    ) {
+      return res.status(400).json({ message: "Invalid status" });
+    }
 
-  const record = db.applications[idx];
-  const job = db.jobs.find((entry: any) => entry.id === record.jobId);
-  if (roleMatches(profile.role, 'recruiter') && (!job || job.employerId !== profile.id)) {
-    return res.status(403).json({ message: 'Not authorized' });
-  }
+    const record = db.applications[idx];
+    const job = db.jobs.find((entry: any) => entry.id === record.jobId);
+    if (
+      roleMatches(profile.role, "recruiter") &&
+      (!job || job.employerId !== profile.id)
+    ) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
 
-  db.applications[idx] = {
-    ...record,
-    status: toStorageApplicationStatus(status),
-    notes: typeof notes === 'string' ? notes : record.notes || '',
-    updatedAt: new Date(),
-  };
-  await supabaseStore.upsertApplication(db.applications[idx]);
-  if (roleMatches(profile.role, 'admin')) {
-    await appendAdminLog(profile, 'application_status_updated', 'application', db.applications[idx].id, {
-      from: record.status,
-      to: db.applications[idx].status,
-    });
-  }
-  res.json({ data: withApplicationDetails([db.applications[idx]])[0] });
-});
+    db.applications[idx] = {
+      ...record,
+      status: toStorageApplicationStatus(status),
+      notes: typeof notes === "string" ? notes : record.notes || "",
+      updatedAt: new Date(),
+    };
+    await supabaseStore.upsertApplication(db.applications[idx]);
+    if (roleMatches(profile.role, "admin")) {
+      await appendAdminLog(
+        profile,
+        "application_status_updated",
+        "application",
+        db.applications[idx].id,
+        {
+          from: record.status,
+          to: db.applications[idx].status,
+        },
+      );
+    }
+    res.json({ data: withApplicationDetails([db.applications[idx]])[0] });
+  },
+);
 
 // Recommendation Routes
-app.get('/api/recommendations', async (req, res) => {
+app.get("/api/recommendations", async (req, res) => {
   const profile = getProfileFromAuth(req);
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
-  if (profile.role !== 'student') return res.status(403).json({ message: 'Not authorized' });
+  if (!profile) return res.status(401).json({ message: "Not authenticated" });
+  if (profile.role !== "student")
+    return res.status(403).json({ message: "Not authorized" });
   const requestedLimit = Number(req.query.limit || 3);
   const recommendationLimit = Number.isFinite(requestedLimit)
     ? Math.max(1, Math.min(10, Math.floor(requestedLimit)))
     : 3;
 
   pruneStudentRecommendationCache();
-  const candidate = db.candidates.find((entry: any) => entry.userId === profile.id);
+  const candidate = db.candidates.find(
+    (entry: any) => entry.userId === profile.id,
+  );
   const resume = db.resumes.find((entry: any) => entry.userId === profile.id);
   const recommendationCacheKey = [
     profile.id,
@@ -3088,8 +3907,10 @@ app.get('/api/recommendations', async (req, res) => {
     getCollectionVersion(db.jobs),
     db.courses.length,
     getCollectionVersion(db.courses),
-  ].join(':');
-  const cachedRecommendations = studentRecommendationCache.get(recommendationCacheKey);
+  ].join(":");
+  const cachedRecommendations = studentRecommendationCache.get(
+    recommendationCacheKey,
+  );
   if (cachedRecommendations && cachedRecommendations.expiresAt > Date.now()) {
     return res.json({ data: cachedRecommendations.data });
   }
@@ -3098,7 +3919,7 @@ app.get('/api/recommendations', async (req, res) => {
       ...toSkillList(candidate?.skills),
       ...toSkillList(resume?.skills),
       ...toSkillList(resume?.parsedData?.skills),
-    ])
+    ]),
   );
 
   if (resumeSkills.length === 0) {
@@ -3115,12 +3936,17 @@ app.get('/api/recommendations', async (req, res) => {
     return res.json({ data: emptyPayload });
   }
 
-  const activeJobs = db.jobs.filter((job: any) => job.status === 'active');
+  const activeJobs = db.jobs.filter((job: any) => job.status === "active");
   const scoredJobs = await Promise.all(
     activeJobs.map(async (job: any) => {
       const insights = await getMatchInsights(resumeSkills, job);
-      const requiredSkills = toSkillList(job.skills?.length ? job.skills : job.requirements);
-      const explanation = buildRecommendationExplanation(resumeSkills, requiredSkills);
+      const requiredSkills = toSkillList(
+        job.skills?.length ? job.skills : job.requirements,
+      );
+      const explanation = buildRecommendationExplanation(
+        resumeSkills,
+        requiredSkills,
+      );
       return {
         job,
         matchScore: insights.matchScore,
@@ -3128,7 +3954,10 @@ app.get('/api/recommendations', async (req, res) => {
         matchedSkills: insights.matchedSkills,
         missingSkills: insights.missingSkills,
         explanation: insights.explanation || explanation.summary,
-        shortSummary: (insights.explanation || explanation.summary || '').slice(0, 180),
+        shortSummary: (insights.explanation || explanation.summary || "").slice(
+          0,
+          180,
+        ),
         explanationMeta: {
           summary: explanation.summary,
           matchedCount: explanation.matchedCount,
@@ -3139,7 +3968,7 @@ app.get('/api/recommendations', async (req, res) => {
           })),
         },
       };
-    })
+    }),
   );
 
   const recommendedJobs = scoredJobs
@@ -3151,14 +3980,18 @@ app.get('/api/recommendations', async (req, res) => {
       recommendedJobs
         .slice(0, 5)
         .flatMap((entry) => entry.missingSkills)
-        .map((entry) => entry.toLowerCase())
-    )
+        .map((entry) => entry.toLowerCase()),
+    ),
   );
 
   const recommendedCourses = db.courses
     .map((course: any) => {
-      const courseSkills = toSkillList(course.skills).map((entry) => entry.toLowerCase());
-      const matchedMissing = missingSkills.filter((skill) => courseSkillMatches(courseSkills, skill));
+      const courseSkills = toSkillList(course.skills).map((entry) =>
+        entry.toLowerCase(),
+      );
+      const matchedMissing = missingSkills.filter((skill) =>
+        courseSkillMatches(courseSkills, skill),
+      );
       return {
         ...course,
         matchedMissingSkills: matchedMissing,
@@ -3166,15 +3999,21 @@ app.get('/api/recommendations', async (req, res) => {
       };
     })
     .filter((course: any) => course.relevanceScore > 0)
-    .sort((left: any, right: any) => right.relevanceScore - left.relevanceScore || (right.rating || 0) - (left.rating || 0))
+    .sort(
+      (left: any, right: any) =>
+        right.relevanceScore - left.relevanceScore ||
+        (right.rating || 0) - (left.rating || 0),
+    )
     .slice(0, 6);
 
-  db.recommendations = db.recommendations.filter((entry: any) => entry.userId !== profile.id);
+  db.recommendations = db.recommendations.filter(
+    (entry: any) => entry.userId !== profile.id,
+  );
   await supabaseStore.deleteRecommendationsByUser(profile.id);
   const now = new Date();
   for (const recommendation of recommendedJobs) {
     const recommendationRecord = {
-      id: uuidv4(),
+      id: crypto.randomUUID(),
       userId: profile.id,
       jobId: recommendation.job.id,
       matchScore: recommendation.matchScore,
@@ -3198,8 +4037,8 @@ app.get('/api/recommendations', async (req, res) => {
           recommendedJobs[0].explanationMeta?.totalRequired || 0
         } key skills for your top role.`
       : activeJobs.length === 0
-        ? 'Your resume is parsed. Recommendations will appear once active jobs are available.'
-        : 'Your resume is parsed. Keep improving your missing skills to unlock stronger recommendations.',
+        ? "Your resume is parsed. Recommendations will appear once active jobs are available."
+        : "Your resume is parsed. Keep improving your missing skills to unlock stronger recommendations.",
   };
   studentRecommendationCache.set(recommendationCacheKey, {
     expiresAt: Date.now() + STUDENT_RECOMMENDATIONS_CACHE_TTL_MS,
@@ -3210,61 +4049,95 @@ app.get('/api/recommendations', async (req, res) => {
 });
 
 // Career Growth Routes (student-focused)
-app.get('/api/career/roles', (_req, res) => {
+app.get("/api/career/roles", (_req, res) => {
   res.json({ data: getRoleExplorerData() });
 });
 
-app.post('/api/career/target-role', requireAuth, requireRoles('student'), async (req: RequestWithAuth, res) => {
-  const profile = getProfileFromAuth(req);
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
-  if (profile.role !== 'student') return res.status(403).json({ message: 'Not authorized' });
+app.post(
+  "/api/career/target-role",
+  requireAuth,
+  requireRoles("student"),
+  async (req: RequestWithAuth, res) => {
+    const profile = getProfileFromAuth(req);
+    if (!profile) return res.status(401).json({ message: "Not authenticated" });
+    if (profile.role !== "student")
+      return res.status(403).json({ message: "Not authorized" });
 
-  const requestedRoleId = String(req.body?.roleId || '');
-  const preference = setCareerPreference(profile.id, requestedRoleId);
-  await supabaseStore.upsertCareerPreference(preference);
-  res.json({ data: { roleId: preference.roleId } });
-});
+    const requestedRoleId = String(req.body?.roleId || "");
+    const preference = setCareerPreference(profile.id, requestedRoleId);
+    await supabaseStore.upsertCareerPreference(preference);
+    res.json({ data: { roleId: preference.roleId } });
+  },
+);
 
 // Student career routes: overview, roadmap, AI coach, learning plan, and progress tools.
-app.get('/api/career/overview', async (req, res) => {
+app.get("/api/career/overview", async (req, res) => {
   const profile = getProfileFromAuth(req);
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
-  if (profile.role !== 'student') return res.status(403).json({ message: 'Not authorized' });
+  if (!profile) return res.status(401).json({ message: "Not authenticated" });
+  if (profile.role !== "student")
+    return res.status(403).json({ message: "Not authorized" });
 
   const roleId = getCareerPreference(profile.id);
-  const role = CAREER_ROLES.find((entry) => entry.id === roleId) || CAREER_ROLES[0];
+  const role =
+    CAREER_ROLES.find((entry) => entry.id === roleId) || CAREER_ROLES[0];
   await ensureResumeScoreHistory(profile.id);
 
   const history = db.resumeScores
     .filter((entry: any) => entry.userId === profile.id)
-    .sort((left: any, right: any) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime())
+    .sort(
+      (left: any, right: any) =>
+        new Date(left.createdAt).getTime() -
+        new Date(right.createdAt).getTime(),
+    )
     .slice(-12);
   const latestScore = history[history.length - 1] || null;
 
   const roadmap = getStudentRoadmap(profile.id, roleId);
-  const completedSkills = roadmap.filter((entry) => entry.status === 'completed').length;
-  const inProgressSkills = roadmap.filter((entry) => entry.status === 'in_progress').length;
+  const completedSkills = roadmap.filter(
+    (entry) => entry.status === "completed",
+  ).length;
+  const inProgressSkills = roadmap.filter(
+    (entry) => entry.status === "in_progress",
+  ).length;
 
   const myApplications = db.applications
     .filter((entry: any) => entry.candidateId === profile.id)
-    .sort((left: any, right: any) => new Date(left.appliedAt).getTime() - new Date(right.appliedAt).getTime());
-  const mySavedJobs = db.savedJobs.filter((entry: any) => entry.userId === profile.id);
+    .sort(
+      (left: any, right: any) =>
+        new Date(left.appliedAt).getTime() -
+        new Date(right.appliedAt).getTime(),
+    );
+  const mySavedJobs = db.savedJobs.filter(
+    (entry: any) => entry.userId === profile.id,
+  );
   const applicationStatusCounts = myApplications.reduce(
     (acc: any, entry: any) => {
       const trackerStatus = toTrackerApplicationStatus(entry.status);
       acc[trackerStatus] += 1;
       return acc;
     },
-    { saved: mySavedJobs.length, applied: 0, interviewing: 0, offer: 0, rejected: 0 }
+    {
+      saved: mySavedJobs.length,
+      applied: 0,
+      interviewing: 0,
+      offer: 0,
+      rejected: 0,
+    },
   );
   const appProgress =
     myApplications.length >= 2
-      ? Math.max(0, Math.round((myApplications[myApplications.length - 1].matchScore || 0) - (myApplications[0].matchScore || 0)))
+      ? Math.max(
+          0,
+          Math.round(
+            (myApplications[myApplications.length - 1].matchScore || 0) -
+              (myApplications[0].matchScore || 0),
+          ),
+        )
       : 0;
 
   const weeklyPlanner = generateWeeklyPlanner(roadmap);
   const missingSkills = roadmap
-    .filter((entry) => entry.status !== 'completed')
+    .filter((entry) => entry.status !== "completed")
     .map((entry) => entry.skill)
     .slice(0, 3);
 
@@ -3281,7 +4154,7 @@ app.get('/api/career/overview', async (req, res) => {
           history.map((entry: any) => ({
             score: Number(entry.score || 0),
             createdAt: new Date(entry.createdAt),
-          }))
+          })),
         ),
         skillsCompleted: completedSkills,
         skillsInProgress: inProgressSkills,
@@ -3294,167 +4167,204 @@ app.get('/api/career/overview', async (req, res) => {
   });
 });
 
-app.get('/api/career/roadmap', (req, res) => {
+app.get("/api/career/roadmap", (req, res) => {
   const profile = getProfileFromAuth(req);
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
-  if (profile.role !== 'student') return res.status(403).json({ message: 'Not authorized' });
+  if (!profile) return res.status(401).json({ message: "Not authenticated" });
+  if (profile.role !== "student")
+    return res.status(403).json({ message: "Not authorized" });
 
   const roleId = String(req.query.roleId || getCareerPreference(profile.id));
   const roadmap = getStudentRoadmap(profile.id, roleId);
-  const role = CAREER_ROLES.find((entry) => entry.id === roleId) || CAREER_ROLES[0];
+  const role =
+    CAREER_ROLES.find((entry) => entry.id === roleId) || CAREER_ROLES[0];
   res.json({ data: { role, roadmap } });
 });
 
-app.post('/api/career/ai-coach', requireAuth, requireRoles('student'), async (req: RequestWithAuth, res) => {
-  const profile = getProfileFromAuth(req);
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
-  if (profile.role !== 'student') return res.status(403).json({ message: 'Not authorized' });
+app.post(
+  "/api/career/ai-coach",
+  requireAuth,
+  requireRoles("student"),
+  async (req: RequestWithAuth, res) => {
+    const profile = getProfileFromAuth(req);
+    if (!profile) return res.status(401).json({ message: "Not authenticated" });
+    if (profile.role !== "student")
+      return res.status(403).json({ message: "Not authorized" });
 
-  const feature = String(req.body?.feature || 'skill_gap')
-    .trim()
-    .toLowerCase();
-  const supported = new Set([
-    'skill_gap',
-    'resume_improvement',
-    'interview_prep',
-    'project_ideas',
-    'study_plan',
-  ]);
-  const safeFeature = supported.has(feature) ? feature : 'skill_gap';
-  const prompt = String(req.body?.prompt || '').trim().slice(0, 1200);
+    const feature = String(req.body?.feature || "skill_gap")
+      .trim()
+      .toLowerCase();
+    const supported = new Set([
+      "skill_gap",
+      "resume_improvement",
+      "interview_prep",
+      "project_ideas",
+      "study_plan",
+    ]);
+    const safeFeature = supported.has(feature) ? feature : "skill_gap";
+    const prompt = String(req.body?.prompt || "")
+      .trim()
+      .slice(0, 1200);
 
-  const roleId = getCareerPreference(profile.id);
-  const role = CAREER_ROLES.find((entry) => entry.id === roleId) || CAREER_ROLES[0];
-  const resume = db.resumes.find((entry: any) => entry.userId === profile.id) || null;
-  const latestScore = await ensureResumeScoreHistory(profile.id);
-  const roadmap = getStudentRoadmap(profile.id, roleId);
-  const roadmapHighlights = roadmap
-    .map((entry) => `${entry.skill} (${entry.status.replace('_', ' ')})`)
-    .slice(0, 8);
-  const missingSkills = roadmap
-    .filter((entry) => entry.status !== 'completed')
-    .map((entry) => entry.skill)
-    .slice(0, 8);
-  const skills = normalizeSkillList([
-    ...toSkillList(resume?.skills || []),
-    ...toSkillList(resume?.parsedData?.skills || []),
-  ]).slice(0, 30);
-  const resumeSummary = String(resume?.parsedData?.summary || '').trim();
-  const studentApplications = db.applications.filter((entry: any) => entry.candidateId === profile.id);
-  const studentSavedJobs = db.savedJobs.filter((entry: any) => entry.userId === profile.id);
-  const applicationStatusCounts = studentApplications.reduce(
-    (acc: Record<string, number>, entry: any) => {
-      const trackerStatus = toTrackerApplicationStatus(entry.status);
-      acc[trackerStatus] = (acc[trackerStatus] || 0) + 1;
-      return acc;
-    },
-    {
-      saved: studentSavedJobs.length,
-      applied: 0,
-      interviewing: 0,
-      offer: 0,
-      rejected: 0,
+    const roleId = getCareerPreference(profile.id);
+    const role =
+      CAREER_ROLES.find((entry) => entry.id === roleId) || CAREER_ROLES[0];
+    const resume =
+      db.resumes.find((entry: any) => entry.userId === profile.id) || null;
+    const latestScore = await ensureResumeScoreHistory(profile.id);
+    const roadmap = getStudentRoadmap(profile.id, roleId);
+    const roadmapHighlights = roadmap
+      .map((entry) => `${entry.skill} (${entry.status.replace("_", " ")})`)
+      .slice(0, 8);
+    const missingSkills = roadmap
+      .filter((entry) => entry.status !== "completed")
+      .map((entry) => entry.skill)
+      .slice(0, 8);
+    const skills = normalizeSkillList([
+      ...toSkillList(resume?.skills || []),
+      ...toSkillList(resume?.parsedData?.skills || []),
+    ]).slice(0, 30);
+    const resumeSummary = String(resume?.parsedData?.summary || "").trim();
+    const studentApplications = db.applications.filter(
+      (entry: any) => entry.candidateId === profile.id,
+    );
+    const studentSavedJobs = db.savedJobs.filter(
+      (entry: any) => entry.userId === profile.id,
+    );
+    const applicationStatusCounts = studentApplications.reduce(
+      (acc: Record<string, number>, entry: any) => {
+        const trackerStatus = toTrackerApplicationStatus(entry.status);
+        acc[trackerStatus] = (acc[trackerStatus] || 0) + 1;
+        return acc;
+      },
+      {
+        saved: studentSavedJobs.length,
+        applied: 0,
+        interviewing: 0,
+        offer: 0,
+        rejected: 0,
+      },
+    );
+    const topRecommendedJobs = db.recommendations
+      .filter((entry: any) => entry.userId === profile.id)
+      .sort(
+        (left: any, right: any) =>
+          Number(right.matchScore || 0) - Number(left.matchScore || 0),
+      )
+      .slice(0, 3)
+      .map((entry: any) => {
+        const job = db.jobs.find((jobItem: any) => jobItem.id === entry.jobId);
+        return {
+          title: job?.title || "Recommended role",
+          company: job?.company || "Unknown company",
+          matchScore: Math.round(Number(entry.matchScore || 0)),
+        };
+      });
+    const topResources = generateLearningPlan(roleId, roadmap, 30)
+      .weeks.flatMap((week) => week.resources || [])
+      .slice(0, 3)
+      .map((resource) => ({
+        title: resource.title,
+        provider: resource.provider,
+        url: resource.url,
+      }));
+
+    const aiPayload = {
+      feature: safeFeature,
+      prompt,
+      context: {
+        targetRole: role.name,
+        skills,
+        missingSkills,
+        resumeSummary,
+        readinessScore: latestScore?.score || 0,
+        roadmapHighlights,
+        scoreSections: latestScore?.sectionScores || {},
+        applicationStatusCounts,
+        topRecommendedJobs,
+        topResources,
+      },
+    };
+    const response = await callStudentAICoach(aiPayload);
+    res.json({ data: response });
+  },
+);
+
+app.put(
+  "/api/career/roadmap/skill",
+  requireAuth,
+  requireRoles("student"),
+  async (req: RequestWithAuth, res) => {
+    const profile = getProfileFromAuth(req);
+    if (!profile) return res.status(401).json({ message: "Not authenticated" });
+    if (profile.role !== "student")
+      return res.status(403).json({ message: "Not authorized" });
+
+    const roleId = String(req.body?.roleId || getCareerPreference(profile.id));
+    const skillName = String(req.body?.skillName || "").trim();
+    const status = String(req.body?.status || "missing") as SkillStatus;
+    if (!skillName)
+      return res.status(400).json({ message: "skillName is required" });
+    if (!["completed", "in_progress", "missing"].includes(status)) {
+      return res.status(400).json({ message: "Invalid skill status" });
     }
-  );
-  const topRecommendedJobs = db.recommendations
-    .filter((entry: any) => entry.userId === profile.id)
-    .sort((left: any, right: any) => Number(right.matchScore || 0) - Number(left.matchScore || 0))
-    .slice(0, 3)
-    .map((entry: any) => {
-      const job = db.jobs.find((jobItem: any) => jobItem.id === entry.jobId);
-      return {
-        title: job?.title || 'Recommended role',
-        company: job?.company || 'Unknown company',
-        matchScore: Math.round(Number(entry.matchScore || 0)),
-      };
-    });
-  const topResources = generateLearningPlan(roleId, roadmap, 30)
-    .weeks.flatMap((week) => week.resources || [])
-    .slice(0, 3)
-    .map((resource) => ({
-      title: resource.title,
-      provider: resource.provider,
-      url: resource.url,
-    }));
 
-  const aiPayload = {
-    feature: safeFeature,
-    prompt,
-    context: {
-      targetRole: role.name,
-      skills,
-      missingSkills,
-      resumeSummary,
-      readinessScore: latestScore?.score || 0,
-      roadmapHighlights,
-      scoreSections: latestScore?.sectionScores || {},
-      applicationStatusCounts,
-      topRecommendedJobs,
-      topResources,
-    },
-  };
-  const response = await callStudentAICoach(aiPayload);
-  res.json({ data: response });
-});
+    const idx = db.skillProgress.findIndex(
+      (entry: any) =>
+        entry.userId === profile.id &&
+        entry.roleId === roleId &&
+        String(entry.skillName).toLowerCase() === skillName.toLowerCase(),
+    );
+    const record = {
+      id: idx >= 0 ? db.skillProgress[idx].id : crypto.randomUUID(),
+      userId: profile.id,
+      roleId,
+      skillName,
+      status,
+      updatedAt: new Date(),
+      createdAt: idx >= 0 ? db.skillProgress[idx].createdAt : new Date(),
+    };
+    if (idx >= 0) db.skillProgress[idx] = record;
+    else db.skillProgress.push(record);
+    await supabaseStore.upsertSkillProgress(record);
 
-app.put('/api/career/roadmap/skill', requireAuth, requireRoles('student'), async (req: RequestWithAuth, res) => {
+    const roadmap = getStudentRoadmap(profile.id, roleId);
+    res.json({ data: { roadmap } });
+  },
+);
+
+app.get("/api/career/learning-plan", async (req, res) => {
   const profile = getProfileFromAuth(req);
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
-  if (profile.role !== 'student') return res.status(403).json({ message: 'Not authorized' });
-
-  const roleId = String(req.body?.roleId || getCareerPreference(profile.id));
-  const skillName = String(req.body?.skillName || '').trim();
-  const status = String(req.body?.status || 'missing') as SkillStatus;
-  if (!skillName) return res.status(400).json({ message: 'skillName is required' });
-  if (!['completed', 'in_progress', 'missing'].includes(status)) {
-    return res.status(400).json({ message: 'Invalid skill status' });
-  }
-
-  const idx = db.skillProgress.findIndex(
-    (entry: any) =>
-      entry.userId === profile.id &&
-      entry.roleId === roleId &&
-      String(entry.skillName).toLowerCase() === skillName.toLowerCase()
-  );
-  const record = {
-    id: idx >= 0 ? db.skillProgress[idx].id : uuidv4(),
-    userId: profile.id,
-    roleId,
-    skillName,
-    status,
-    updatedAt: new Date(),
-    createdAt: idx >= 0 ? db.skillProgress[idx].createdAt : new Date(),
-  };
-  if (idx >= 0) db.skillProgress[idx] = record;
-  else db.skillProgress.push(record);
-  await supabaseStore.upsertSkillProgress(record);
-
-  const roadmap = getStudentRoadmap(profile.id, roleId);
-  res.json({ data: { roadmap } });
-});
-
-app.get('/api/career/learning-plan', async (req, res) => {
-  const profile = getProfileFromAuth(req);
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
-  if (profile.role !== 'student') return res.status(403).json({ message: 'Not authorized' });
+  if (!profile) return res.status(401).json({ message: "Not authenticated" });
+  if (profile.role !== "student")
+    return res.status(403).json({ message: "Not authorized" });
 
   const roleId = String(req.query.roleId || getCareerPreference(profile.id));
   const durationDays = Number(req.query.durationDays) === 60 ? 60 : 30;
   const existing = db.learningPlans
     .filter(
       (entry: any) =>
-        entry.userId === profile.id && entry.roleId === roleId && Number(entry.durationDays) === durationDays
+        entry.userId === profile.id &&
+        entry.roleId === roleId &&
+        Number(entry.durationDays) === durationDays,
     )
-    .sort((left: any, right: any) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())[0];
+    .sort(
+      (left: any, right: any) =>
+        new Date(right.updatedAt).getTime() -
+        new Date(left.updatedAt).getTime(),
+    )[0];
 
   if (existing) {
     return res.json({ data: existing });
   }
 
   const roadmap = getStudentRoadmap(profile.id, roleId);
-  const planData = generateLearningPlan(roleId, roadmap, durationDays as 30 | 60);
+  const planData = generateLearningPlan(
+    roleId,
+    roadmap,
+    durationDays as 30 | 60,
+  );
   const record = {
-    id: uuidv4(),
+    id: crypto.randomUUID(),
     userId: profile.id,
     roleId,
     durationDays,
@@ -3467,88 +4377,115 @@ app.get('/api/career/learning-plan', async (req, res) => {
   return res.json({ data: record });
 });
 
-app.post('/api/career/learning-plan', requireAuth, requireRoles('student'), async (req: RequestWithAuth, res) => {
-  const profile = getProfileFromAuth(req);
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
-  if (profile.role !== 'student') return res.status(403).json({ message: 'Not authorized' });
+app.post(
+  "/api/career/learning-plan",
+  requireAuth,
+  requireRoles("student"),
+  async (req: RequestWithAuth, res) => {
+    const profile = getProfileFromAuth(req);
+    if (!profile) return res.status(401).json({ message: "Not authenticated" });
+    if (profile.role !== "student")
+      return res.status(403).json({ message: "Not authorized" });
 
-  const roleId = String(req.body?.roleId || getCareerPreference(profile.id));
-  const durationDays = Number(req.body?.durationDays) === 60 ? 60 : 30;
-  const roadmap = getStudentRoadmap(profile.id, roleId);
-  const planData = generateLearningPlan(roleId, roadmap, durationDays as 30 | 60);
-  const idx = db.learningPlans.findIndex(
-    (entry: any) =>
-      entry.userId === profile.id && entry.roleId === roleId && Number(entry.durationDays) === durationDays
-  );
-  const record = {
-    id: idx >= 0 ? db.learningPlans[idx].id : uuidv4(),
-    userId: profile.id,
-    roleId,
-    durationDays,
-    planData,
-    createdAt: idx >= 0 ? db.learningPlans[idx].createdAt : new Date(),
-    updatedAt: new Date(),
-  };
-  if (idx >= 0) db.learningPlans[idx] = record;
-  else db.learningPlans.push(record);
-  await supabaseStore.upsertLearningPlan(record);
-  res.json({ data: record });
-});
+    const roleId = String(req.body?.roleId || getCareerPreference(profile.id));
+    const durationDays = Number(req.body?.durationDays) === 60 ? 60 : 30;
+    const roadmap = getStudentRoadmap(profile.id, roleId);
+    const planData = generateLearningPlan(
+      roleId,
+      roadmap,
+      durationDays as 30 | 60,
+    );
+    const idx = db.learningPlans.findIndex(
+      (entry: any) =>
+        entry.userId === profile.id &&
+        entry.roleId === roleId &&
+        Number(entry.durationDays) === durationDays,
+    );
+    const record = {
+      id: idx >= 0 ? db.learningPlans[idx].id : crypto.randomUUID(),
+      userId: profile.id,
+      roleId,
+      durationDays,
+      planData,
+      createdAt: idx >= 0 ? db.learningPlans[idx].createdAt : new Date(),
+      updatedAt: new Date(),
+    };
+    if (idx >= 0) db.learningPlans[idx] = record;
+    else db.learningPlans.push(record);
+    await supabaseStore.upsertLearningPlan(record);
+    res.json({ data: record });
+  },
+);
 
-app.get('/api/career/mock-interview', (req, res) => {
+app.get("/api/career/mock-interview", (req, res) => {
   const profile = getProfileFromAuth(req);
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
-  if (profile.role !== 'student') return res.status(403).json({ message: 'Not authorized' });
+  if (!profile) return res.status(401).json({ message: "Not authenticated" });
+  if (profile.role !== "student")
+    return res.status(403).json({ message: "Not authorized" });
 
   const roleId = String(req.query.roleId || getCareerPreference(profile.id));
   const pack = generateMockInterview(roleId);
   res.json({ data: pack });
 });
 
-app.post('/api/career/mock-interview/session', requireAuth, requireRoles('student'), async (req: RequestWithAuth, res) => {
+app.post(
+  "/api/career/mock-interview/session",
+  requireAuth,
+  requireRoles("student"),
+  async (req: RequestWithAuth, res) => {
+    const profile = getProfileFromAuth(req);
+    if (!profile) return res.status(401).json({ message: "Not authenticated" });
+    if (profile.role !== "student")
+      return res.status(403).json({ message: "Not authorized" });
+
+    const roleId = String(req.body?.roleId || getCareerPreference(profile.id));
+    const question = String(req.body?.question || "").trim();
+    const answer = String(req.body?.answer || "").trim();
+    const rating = Number(req.body?.rating || 0);
+    if (!question || !answer) {
+      return res
+        .status(400)
+        .json({ message: "question and answer are required" });
+    }
+
+    const session = {
+      id: crypto.randomUUID(),
+      userId: profile.id,
+      roleId,
+      question,
+      answer,
+      rating: Number.isFinite(rating) ? rating : 0,
+      createdAt: new Date(),
+    };
+    db.mockInterviewSessions.push(session);
+    await supabaseStore.upsertMockInterviewSession(session);
+
+    res.status(201).json({ data: session });
+  },
+);
+
+app.get("/api/career/mock-interview/sessions", (req, res) => {
   const profile = getProfileFromAuth(req);
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
-  if (profile.role !== 'student') return res.status(403).json({ message: 'Not authorized' });
-
-  const roleId = String(req.body?.roleId || getCareerPreference(profile.id));
-  const question = String(req.body?.question || '').trim();
-  const answer = String(req.body?.answer || '').trim();
-  const rating = Number(req.body?.rating || 0);
-  if (!question || !answer) {
-    return res.status(400).json({ message: 'question and answer are required' });
-  }
-
-  const session = {
-    id: uuidv4(),
-    userId: profile.id,
-    roleId,
-    question,
-    answer,
-    rating: Number.isFinite(rating) ? rating : 0,
-    createdAt: new Date(),
-  };
-  db.mockInterviewSessions.push(session);
-  await supabaseStore.upsertMockInterviewSession(session);
-
-  res.status(201).json({ data: session });
-});
-
-app.get('/api/career/mock-interview/sessions', (req, res) => {
-  const profile = getProfileFromAuth(req);
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
-  if (profile.role !== 'student') return res.status(403).json({ message: 'Not authorized' });
+  if (!profile) return res.status(401).json({ message: "Not authenticated" });
+  if (profile.role !== "student")
+    return res.status(403).json({ message: "Not authorized" });
 
   const sessions = db.mockInterviewSessions
     .filter((entry: any) => entry.userId === profile.id)
-    .sort((left: any, right: any) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
+    .sort(
+      (left: any, right: any) =>
+        new Date(right.createdAt).getTime() -
+        new Date(left.createdAt).getTime(),
+    )
     .slice(0, 30);
   res.json({ data: sessions });
 });
 
-app.get('/api/career/job-tracker', (req, res) => {
+app.get("/api/career/job-tracker", (req, res) => {
   const profile = getProfileFromAuth(req);
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
-  if (profile.role !== 'student') return res.status(403).json({ message: 'Not authorized' });
+  if (!profile) return res.status(401).json({ message: "Not authenticated" });
+  if (profile.role !== "student")
+    return res.status(403).json({ message: "Not authorized" });
 
   const saved = db.savedJobs
     .filter((entry: any) => entry.userId === profile.id)
@@ -3558,140 +4495,186 @@ app.get('/api/career/job-tracker', (req, res) => {
     }))
     .filter((entry: any) => entry.job !== null);
   const applications = withApplicationDetails(
-    db.applications.filter((entry: any) => entry.candidateId === profile.id)
+    db.applications.filter((entry: any) => entry.candidateId === profile.id),
   );
   const statusCounts = applications.reduce(
     (acc: any, entry: any) => {
       acc[entry.trackerStatus] = (acc[entry.trackerStatus] || 0) + 1;
       return acc;
     },
-    { saved: saved.length, applied: 0, interviewing: 0, offer: 0, rejected: 0 }
+    { saved: saved.length, applied: 0, interviewing: 0, offer: 0, rejected: 0 },
   );
   res.json({
     data: {
       savedJobs: saved.sort(
-        (left: any, right: any) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
+        (left: any, right: any) =>
+          new Date(right.createdAt).getTime() -
+          new Date(left.createdAt).getTime(),
       ),
       applications: applications.sort(
         (left: any, right: any) =>
           new Date(right.appliedAt || right.createdAt || Date.now()).getTime() -
-          new Date(left.appliedAt || left.createdAt || Date.now()).getTime()
+          new Date(left.appliedAt || left.createdAt || Date.now()).getTime(),
       ),
       statusCounts,
     },
   });
 });
 
-app.post('/api/career/job-tracker/save', requireAuth, requireRoles('student'), async (req: RequestWithAuth, res) => {
-  const profile = getProfileFromAuth(req);
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
-  if (profile.role !== 'student') return res.status(403).json({ message: 'Not authorized' });
-
-  const jobId = String(req.body?.jobId || '');
-  if (!jobId) return res.status(400).json({ message: 'jobId is required' });
-  const job = db.jobs.find((entry: any) => entry.id === jobId && entry.status === 'active');
-  if (!job) return res.status(404).json({ message: 'Job not found' });
-
-  const exists = db.savedJobs.find((entry: any) => entry.userId === profile.id && entry.jobId === jobId);
-  if (exists) return res.json({ data: exists });
-
-  const record = {
-    id: uuidv4(),
-    userId: profile.id,
-    jobId,
-    createdAt: new Date(),
-  };
-  db.savedJobs.push(record);
-  await supabaseStore.upsertSavedJob(record);
-  res.status(201).json({ data: record });
-});
-
-app.delete('/api/career/job-tracker/save/:jobId', requireAuth, requireRoles('student'), async (req: RequestWithAuth, res) => {
-  const profile = getProfileFromAuth(req);
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
-  if (profile.role !== 'student') return res.status(403).json({ message: 'Not authorized' });
-
-  const idx = db.savedJobs.findIndex(
-    (entry: any) => entry.userId === profile.id && entry.jobId === req.params.jobId
-  );
-  if (idx === -1) return res.status(404).json({ message: 'Saved job not found' });
-  const record = db.savedJobs[idx];
-  db.savedJobs.splice(idx, 1);
-  await supabaseStore.deleteSavedJob(record.id);
-  res.json({ message: 'Saved job removed' });
-});
-
-app.put(
-  '/api/career/job-tracker/application/:applicationId',
+app.post(
+  "/api/career/job-tracker/save",
   requireAuth,
-  requireRoles('student'),
+  requireRoles("student"),
   async (req: RequestWithAuth, res) => {
-  const profile = getProfileFromAuth(req);
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
-  if (profile.role !== 'student') return res.status(403).json({ message: 'Not authorized' });
+    const profile = getProfileFromAuth(req);
+    if (!profile) return res.status(401).json({ message: "Not authenticated" });
+    if (profile.role !== "student")
+      return res.status(403).json({ message: "Not authorized" });
 
-  const idx = db.applications.findIndex(
-    (entry: any) => entry.id === req.params.applicationId && entry.candidateId === profile.id
-  );
-  if (idx === -1) return res.status(404).json({ message: 'Application not found' });
+    const jobId = String(req.body?.jobId || "");
+    if (!jobId) return res.status(400).json({ message: "jobId is required" });
+    const job = db.jobs.find(
+      (entry: any) => entry.id === jobId && entry.status === "active",
+    );
+    if (!job) return res.status(404).json({ message: "Job not found" });
 
-  const updates: any = {};
-  if (typeof req.body?.notes === 'string') updates.notes = req.body.notes;
-  if (typeof req.body?.status === 'string') {
-    const normalized = String(req.body.status).trim().toLowerCase();
-    if (
-      ['pending', 'shortlisted', 'interview', 'rejected', 'applied', 'interviewing', 'offer'].includes(
-        normalized
-      )
-    ) {
-      updates.status = toStorageApplicationStatus(normalized);
-    }
-  }
-  db.applications[idx] = {
-    ...db.applications[idx],
-    ...updates,
-    updatedAt: new Date(),
-  };
-  await supabaseStore.upsertApplication(db.applications[idx]);
-  res.json({ data: withApplicationDetails([db.applications[idx]])[0] });
-});
+    const exists = db.savedJobs.find(
+      (entry: any) => entry.userId === profile.id && entry.jobId === jobId,
+    );
+    if (exists) return res.json({ data: exists });
+
+    const record = {
+      id: crypto.randomUUID(),
+      userId: profile.id,
+      jobId,
+      createdAt: new Date(),
+    };
+    db.savedJobs.push(record);
+    await supabaseStore.upsertSavedJob(record);
+    res.status(201).json({ data: record });
+  },
+);
 
 app.delete(
-  '/api/career/job-tracker/application/:applicationId',
+  "/api/career/job-tracker/save/:jobId",
   requireAuth,
-  requireRoles('student'),
+  requireRoles("student"),
   async (req: RequestWithAuth, res) => {
+    const profile = getProfileFromAuth(req);
+    if (!profile) return res.status(401).json({ message: "Not authenticated" });
+    if (profile.role !== "student")
+      return res.status(403).json({ message: "Not authorized" });
+
+    const idx = db.savedJobs.findIndex(
+      (entry: any) =>
+        entry.userId === profile.id && entry.jobId === req.params.jobId,
+    );
+    if (idx === -1)
+      return res.status(404).json({ message: "Saved job not found" });
+    const record = db.savedJobs[idx];
+    db.savedJobs.splice(idx, 1);
+    await supabaseStore.deleteSavedJob(record.id);
+    res.json({ message: "Saved job removed" });
+  },
+);
+
+app.put(
+  "/api/career/job-tracker/application/:applicationId",
+  requireAuth,
+  requireRoles("student"),
+  async (req: RequestWithAuth, res) => {
+    const profile = getProfileFromAuth(req);
+    if (!profile) return res.status(401).json({ message: "Not authenticated" });
+    if (profile.role !== "student")
+      return res.status(403).json({ message: "Not authorized" });
+
+    const idx = db.applications.findIndex(
+      (entry: any) =>
+        entry.id === req.params.applicationId &&
+        entry.candidateId === profile.id,
+    );
+    if (idx === -1)
+      return res.status(404).json({ message: "Application not found" });
+
+    const updates: any = {};
+    if (typeof req.body?.notes === "string") updates.notes = req.body.notes;
+    if (typeof req.body?.status === "string") {
+      const normalized = String(req.body.status).trim().toLowerCase();
+      if (
+        [
+          "pending",
+          "shortlisted",
+          "interview",
+          "rejected",
+          "applied",
+          "interviewing",
+          "offer",
+        ].includes(normalized)
+      ) {
+        updates.status = toStorageApplicationStatus(normalized);
+      }
+    }
+    db.applications[idx] = {
+      ...db.applications[idx],
+      ...updates,
+      updatedAt: new Date(),
+    };
+    await supabaseStore.upsertApplication(db.applications[idx]);
+    res.json({ data: withApplicationDetails([db.applications[idx]])[0] });
+  },
+);
+
+app.delete(
+  "/api/career/job-tracker/application/:applicationId",
+  requireAuth,
+  requireRoles("student"),
+  async (req: RequestWithAuth, res) => {
+    const profile = getProfileFromAuth(req);
+    if (!profile) return res.status(401).json({ message: "Not authenticated" });
+    if (profile.role !== "student")
+      return res.status(403).json({ message: "Not authorized" });
+
+    const idx = db.applications.findIndex(
+      (entry: any) =>
+        entry.id === req.params.applicationId &&
+        entry.candidateId === profile.id,
+    );
+    if (idx === -1)
+      return res.status(404).json({ message: "Application not found" });
+
+    const removed = db.applications[idx];
+    db.applications.splice(idx, 1);
+    await supabaseStore.deleteApplication(removed.id);
+    res.json({ message: "Application removed from tracker" });
+  },
+);
+
+app.get("/api/jobs/:id/candidate-matches", async (req, res) => {
   const profile = getProfileFromAuth(req);
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
-  if (profile.role !== 'student') return res.status(403).json({ message: 'Not authorized' });
-
-  const idx = db.applications.findIndex(
-    (entry: any) => entry.id === req.params.applicationId && entry.candidateId === profile.id
-  );
-  if (idx === -1) return res.status(404).json({ message: 'Application not found' });
-
-  const removed = db.applications[idx];
-  db.applications.splice(idx, 1);
-  await supabaseStore.deleteApplication(removed.id);
-  res.json({ message: 'Application removed from tracker' });
-});
-
-app.get('/api/jobs/:id/candidate-matches', async (req, res) => {
-  const profile = getProfileFromAuth(req);
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
-  if (!(roleMatches(profile.role, 'recruiter') || roleMatches(profile.role, 'admin'))) return res.status(403).json({ message: 'Not authorized' });
+  if (!profile) return res.status(401).json({ message: "Not authenticated" });
+  if (
+    !(
+      roleMatches(profile.role, "recruiter") ||
+      roleMatches(profile.role, "admin")
+    )
+  )
+    return res.status(403).json({ message: "Not authorized" });
 
   const job = db.jobs.find((entry: any) => entry.id === req.params.id);
-  if (!job) return res.status(404).json({ message: 'Job not found' });
-  if (roleMatches(profile.role, 'recruiter') && job.employerId !== profile.id) {
-    return res.status(403).json({ message: 'Not authorized' });
+  if (!job) return res.status(404).json({ message: "Job not found" });
+  if (roleMatches(profile.role, "recruiter") && job.employerId !== profile.id) {
+    return res.status(403).json({ message: "Not authorized" });
   }
 
   const sortBy = toSortKey(req.query?.sortBy);
   const order = toSortDirection(req.query?.order);
-  const appliedOnly = String(req.query?.appliedOnly || '').toLowerCase() === 'true';
+  const appliedOnly =
+    String(req.query?.appliedOnly || "").toLowerCase() === "true";
   const requestedLimit = Number(req.query?.limit);
-  const limit = Number.isFinite(requestedLimit) && requestedLimit > 0 ? requestedLimit : 100;
+  const limit =
+    Number.isFinite(requestedLimit) && requestedLimit > 0
+      ? requestedLimit
+      : 100;
 
   const { matches, meta } = await getCandidateMatchesForJob(job, {
     sortBy,
@@ -3713,11 +4696,16 @@ app.get('/api/jobs/:id/candidate-matches', async (req, res) => {
 });
 
 // Recruiter routes: recruiter dashboard, candidate ranking, and hiring analytics.
-app.get('/api/recruiter/overview', async (req, res) => {
+app.get("/api/recruiter/overview", async (req, res) => {
   const profile = getProfileFromAuth(req);
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
-  if (!(roleMatches(profile.role, 'recruiter') || roleMatches(profile.role, 'admin'))) {
-    return res.status(403).json({ message: 'Not authorized' });
+  if (!profile) return res.status(401).json({ message: "Not authenticated" });
+  if (
+    !(
+      roleMatches(profile.role, "recruiter") ||
+      roleMatches(profile.role, "admin")
+    )
+  ) {
+    return res.status(403).json({ message: "Not authorized" });
   }
 
   pruneRecruiterOverviewCache();
@@ -3727,32 +4715,40 @@ app.get('/api/recruiter/overview', async (req, res) => {
     return res.json({ data: cachedOverview.data });
   }
 
-  const recruiterJobs = roleMatches(profile.role, 'admin')
+  const recruiterJobs = roleMatches(profile.role, "admin")
     ? [...db.jobs]
     : db.jobs.filter((entry: any) => entry.employerId === profile.id);
   const recentJobs = [...recruiterJobs]
-    .sort((left: any, right: any) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
+    .sort(
+      (left: any, right: any) =>
+        new Date(right.createdAt).getTime() -
+        new Date(left.createdAt).getTime(),
+    )
     .slice(0, 6);
   const allJobIds = recruiterJobs.map((entry: any) => entry.id);
-  const applications = db.applications.filter((entry: any) => allJobIds.includes(entry.jobId));
-  const appliedCandidates = new Set(applications.map((entry: any) => entry.candidateId));
+  const applications = db.applications.filter((entry: any) =>
+    allJobIds.includes(entry.jobId),
+  );
+  const appliedCandidates = new Set(
+    applications.map((entry: any) => entry.candidateId),
+  );
 
   const perJobAnalytics = await Promise.all(
     recentJobs.map(async (job: any) => {
       const { matches } = await getCandidateMatchesForJob(job, {
-        sortBy: 'match',
-        order: 'desc',
+        sortBy: "match",
+        order: "desc",
         limit: 50,
       });
       return getRecruiterJobAnalytics(job, matches);
-    })
+    }),
   );
 
   const topCandidateMap = new Map<string, any>();
   for (const job of recentJobs) {
     const { matches } = await getCandidateMatchesForJob(job, {
-      sortBy: 'match',
-      order: 'desc',
+      sortBy: "match",
+      order: "desc",
       limit: 5,
       appliedOnly: true,
     });
@@ -3769,14 +4765,17 @@ app.get('/api/recruiter/overview', async (req, res) => {
   }
 
   const rankedTopCandidates = Array.from(topCandidateMap.values())
-    .sort((left, right) => Number(right.matchScore || 0) - Number(left.matchScore || 0))
+    .sort(
+      (left, right) =>
+        Number(right.matchScore || 0) - Number(left.matchScore || 0),
+    )
     .slice(0, 5);
 
   const missingSkillFrequency = new Map<string, number>();
   for (const job of recentJobs) {
     const { matches } = await getCandidateMatchesForJob(job, {
-      sortBy: 'match',
-      order: 'desc',
+      sortBy: "match",
+      order: "desc",
       limit: 50,
       appliedOnly: true,
     });
@@ -3784,7 +4783,10 @@ app.get('/api/recruiter/overview', async (req, res) => {
       for (const skill of match.missingSkills || []) {
         const key = String(skill).trim();
         if (!key) continue;
-        missingSkillFrequency.set(key, (missingSkillFrequency.get(key) || 0) + 1);
+        missingSkillFrequency.set(
+          key,
+          (missingSkillFrequency.get(key) || 0) + 1,
+        );
       }
     }
   }
@@ -3797,14 +4799,17 @@ app.get('/api/recruiter/overview', async (req, res) => {
   const averageMatchAcrossJobs =
     perJobAnalytics.length > 0
       ? Math.round(
-          perJobAnalytics.reduce((sum: number, entry: any) => sum + Number(entry.averageMatch || 0), 0) /
-            perJobAnalytics.length
+          perJobAnalytics.reduce(
+            (sum: number, entry: any) => sum + Number(entry.averageMatch || 0),
+            0,
+          ) / perJobAnalytics.length,
         )
       : 0;
 
   const responsePayload = {
     postedJobs: recruiterJobs.length,
-    activeJobs: recruiterJobs.filter((entry: any) => entry.status === 'active').length,
+    activeJobs: recruiterJobs.filter((entry: any) => entry.status === "active")
+      .length,
     totalApplicants: applications.length,
     uniqueApplicants: appliedCandidates.size,
     averageMatchAcrossJobs,
@@ -3821,22 +4826,27 @@ app.get('/api/recruiter/overview', async (req, res) => {
   res.json({ data: responsePayload });
 });
 
-app.get('/api/recruiter/jobs/:id/analytics', async (req, res) => {
+app.get("/api/recruiter/jobs/:id/analytics", async (req, res) => {
   const profile = getProfileFromAuth(req);
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
-  if (!(roleMatches(profile.role, 'recruiter') || roleMatches(profile.role, 'admin'))) {
-    return res.status(403).json({ message: 'Not authorized' });
+  if (!profile) return res.status(401).json({ message: "Not authenticated" });
+  if (
+    !(
+      roleMatches(profile.role, "recruiter") ||
+      roleMatches(profile.role, "admin")
+    )
+  ) {
+    return res.status(403).json({ message: "Not authorized" });
   }
 
   const job = db.jobs.find((entry: any) => entry.id === req.params.id);
-  if (!job) return res.status(404).json({ message: 'Job not found' });
-  if (roleMatches(profile.role, 'recruiter') && job.employerId !== profile.id) {
-    return res.status(403).json({ message: 'Not authorized' });
+  if (!job) return res.status(404).json({ message: "Job not found" });
+  if (roleMatches(profile.role, "recruiter") && job.employerId !== profile.id) {
+    return res.status(403).json({ message: "Not authorized" });
   }
 
   const { matches, meta } = await getCandidateMatchesForJob(job, {
-    sortBy: 'match',
-    order: 'desc',
+    sortBy: "match",
+    order: "desc",
     limit: 100,
   });
   const analytics = getRecruiterJobAnalytics(job, matches);
@@ -3850,85 +4860,133 @@ app.get('/api/recruiter/jobs/:id/analytics', async (req, res) => {
 });
 
 // Courses Routes
-app.get('/api/courses', (_req, res) => {
-  const courses = [...db.courses].sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+app.get("/api/courses", (_req, res) => {
+  const courses = [...db.courses].sort(
+    (a: any, b: any) =>
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
   res.json({ data: courses });
 });
 
-app.get('/api/courses/:id', (req, res) => {
+app.get("/api/courses/:id", (req, res) => {
   const course = db.courses.find((c: any) => c.id === req.params.id);
-  if (!course) return res.status(404).json({ message: 'Course not found' });
+  if (!course) return res.status(404).json({ message: "Course not found" });
   res.json({ data: course });
 });
 
-app.post('/api/courses', requireAuth, requireRoles('admin'), adminLimiter, async (req: RequestWithAuth, res) => {
-  const profile = getProfileFromAuth(req);
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
-  if (profile.role !== 'admin') return res.status(403).json({ message: 'Not authorized' });
+app.post(
+  "/api/courses",
+  requireAuth,
+  requireRoles("admin"),
+  adminLimiter,
+  async (req: RequestWithAuth, res) => {
+    const profile = getProfileFromAuth(req);
+    if (!profile) return res.status(401).json({ message: "Not authenticated" });
+    if (profile.role !== "admin")
+      return res.status(403).json({ message: "Not authorized" });
 
-  const { title, description, provider, url } = req.body;
-  if (!title || !description || !provider || !url) {
-    return res.status(400).json({ message: 'title, description, provider and url are required' });
-  }
+    const { title, description, provider, url } = req.body;
+    if (!title || !description || !provider || !url) {
+      return res
+        .status(400)
+        .json({ message: "title, description, provider and url are required" });
+    }
 
-  const course = { ...req.body, id: uuidv4(), createdAt: new Date(), updatedAt: new Date() };
-  db.courses.push(course);
-  await supabaseStore.upsertCourse(course);
-  res.status(201).json({ data: course });
-});
+    const course = {
+      ...req.body,
+      id: crypto.randomUUID(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    db.courses.push(course);
+    await supabaseStore.upsertCourse(course);
+    res.status(201).json({ data: course });
+  },
+);
 
-app.put('/api/courses/:id', requireAuth, requireRoles('admin'), adminLimiter, async (req: RequestWithAuth, res) => {
-  const profile = getProfileFromAuth(req);
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
-  if (profile.role !== 'admin') return res.status(403).json({ message: 'Not authorized' });
+app.put(
+  "/api/courses/:id",
+  requireAuth,
+  requireRoles("admin"),
+  adminLimiter,
+  async (req: RequestWithAuth, res) => {
+    const profile = getProfileFromAuth(req);
+    if (!profile) return res.status(401).json({ message: "Not authenticated" });
+    if (profile.role !== "admin")
+      return res.status(403).json({ message: "Not authorized" });
 
-  const idx = db.courses.findIndex((entry: any) => entry.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ message: 'Course not found' });
+    const idx = db.courses.findIndex(
+      (entry: any) => entry.id === req.params.id,
+    );
+    if (idx === -1)
+      return res.status(404).json({ message: "Course not found" });
 
-  db.courses[idx] = { ...db.courses[idx], ...req.body, updatedAt: new Date() };
-  await supabaseStore.upsertCourse(db.courses[idx]);
-  res.json({ data: db.courses[idx] });
-});
+    db.courses[idx] = {
+      ...db.courses[idx],
+      ...req.body,
+      updatedAt: new Date(),
+    };
+    await supabaseStore.upsertCourse(db.courses[idx]);
+    res.json({ data: db.courses[idx] });
+  },
+);
 
-app.delete('/api/courses/:id', requireAuth, requireRoles('admin'), adminLimiter, async (req: RequestWithAuth, res) => {
-  const profile = getProfileFromAuth(req);
-  if (!profile) return res.status(401).json({ message: 'Not authenticated' });
-  if (profile.role !== 'admin') return res.status(403).json({ message: 'Not authorized' });
+app.delete(
+  "/api/courses/:id",
+  requireAuth,
+  requireRoles("admin"),
+  adminLimiter,
+  async (req: RequestWithAuth, res) => {
+    const profile = getProfileFromAuth(req);
+    if (!profile) return res.status(401).json({ message: "Not authenticated" });
+    if (profile.role !== "admin")
+      return res.status(403).json({ message: "Not authorized" });
 
-  const idx = db.courses.findIndex((entry: any) => entry.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ message: 'Course not found' });
+    const idx = db.courses.findIndex(
+      (entry: any) => entry.id === req.params.id,
+    );
+    if (idx === -1)
+      return res.status(404).json({ message: "Course not found" });
 
-  db.courses.splice(idx, 1);
-  await supabaseStore.deleteCourse(req.params.id);
-  res.json({ message: 'Course deleted' });
-});
+    db.courses.splice(idx, 1);
+    await supabaseStore.deleteCourse(req.params.id);
+    res.json({ message: "Course deleted" });
+  },
+);
 
 // Dashboard Stats
 // Shared dashboard summary route used to render role-specific top-line metrics.
-app.get('/api/dashboard/stats', (req, res) => {
+app.get("/api/dashboard/stats", (req, res) => {
   const profile = getProfileFromAuth(req);
   if (!profile) return res.json({ data: {} });
 
-  if (profile.role === 'student') {
-    const myApps = db.applications.filter((a: any) => a.candidateId === profile.id);
+  if (profile.role === "student") {
+    const myApps = db.applications.filter(
+      (a: any) => a.candidateId === profile.id,
+    );
     res.json({
       data: {
         myApplications: myApps.length,
-        shortlisted: myApps.filter((a: any) => a.status === 'shortlisted').length,
-        interviews: myApps.filter((a: any) => a.status === 'interview').length,
-        pending: myApps.filter((a: any) => a.status === 'pending').length
-      }
+        shortlisted: myApps.filter((a: any) => a.status === "shortlisted")
+          .length,
+        interviews: myApps.filter((a: any) => a.status === "interview").length,
+        pending: myApps.filter((a: any) => a.status === "pending").length,
+      },
     });
-  } else if (roleMatches(profile.role, 'recruiter')) {
+  } else if (roleMatches(profile.role, "recruiter")) {
     const myJobs = db.jobs.filter((j: any) => j.employerId === profile.id);
-    const myApps = db.applications.filter((a: any) => myJobs.some((j: any) => j.id === a.jobId));
+    const myApps = db.applications.filter((a: any) =>
+      myJobs.some((j: any) => j.id === a.jobId),
+    );
     res.json({
       data: {
         postedJobs: myJobs.length,
         totalApplications: myApps.length,
-        interviewsScheduled: myApps.filter((a: any) => a.status === 'interview').length,
-        shortlisted: myApps.filter((a: any) => a.status === 'shortlisted').length
-      }
+        interviewsScheduled: myApps.filter((a: any) => a.status === "interview")
+          .length,
+        shortlisted: myApps.filter((a: any) => a.status === "shortlisted")
+          .length,
+      },
     });
   } else {
     res.json({
@@ -3939,83 +4997,131 @@ app.get('/api/dashboard/stats', (req, res) => {
         totalCandidates: db.candidates.length,
         totalCourses: db.courses.length,
         totalResumes: db.resumes.length,
-      }
+      },
     });
   }
 });
 
-app.get('/api/admin/applications/summary', requireAuth, requireRoles('admin'), adminLimiter, (req, res) => {
-  const days = toPositiveInt(req.query?.days, 30, 365);
-  const summary = buildAdminApplicationSummary(days);
-  res.json({ data: summary });
-});
+app.get(
+  "/api/admin/applications/summary",
+  requireAuth,
+  requireRoles("admin"),
+  adminLimiter,
+  (req, res) => {
+    const days = toPositiveInt(req.query?.days, 30, 365);
+    const summary = buildAdminApplicationSummary(days);
+    res.json({ data: summary });
+  },
+);
 
-app.get('/api/admin/logs', requireAuth, requireRoles('admin'), adminLimiter, (req, res) => {
-  const { actionType, targetType } = req.query;
-  const pagination = getPagination(req.query as any, { page: 1, limit: 30, maxLimit: 100 });
+app.get(
+  "/api/admin/logs",
+  requireAuth,
+  requireRoles("admin"),
+  adminLimiter,
+  (req, res) => {
+    const { actionType, targetType } = req.query;
+    const pagination = getPagination(req.query as any, {
+      page: 1,
+      limit: 30,
+      maxLimit: 100,
+    });
 
-  let logs = [...db.adminLogs];
-  if (actionType) {
-    const normalized = String(actionType).toLowerCase();
-    logs = logs.filter((entry: any) => String(entry.actionType || '').toLowerCase() === normalized);
-  }
-  if (targetType) {
-    const normalized = String(targetType).toLowerCase();
-    logs = logs.filter((entry: any) => String(entry.targetType || '').toLowerCase() === normalized);
-  }
+    let logs = [...db.adminLogs];
+    if (actionType) {
+      const normalized = String(actionType).toLowerCase();
+      logs = logs.filter(
+        (entry: any) =>
+          String(entry.actionType || "").toLowerCase() === normalized,
+      );
+    }
+    if (targetType) {
+      const normalized = String(targetType).toLowerCase();
+      logs = logs.filter(
+        (entry: any) =>
+          String(entry.targetType || "").toLowerCase() === normalized,
+      );
+    }
 
-  logs.sort((left: any, right: any) => new Date(right.createdAt || 0).getTime() - new Date(left.createdAt || 0).getTime());
-  const paginated = paginateData(logs, pagination.page, pagination.limit);
-  res.json({ data: paginated.data, meta: paginated.meta });
-});
+    logs.sort(
+      (left: any, right: any) =>
+        new Date(right.createdAt || 0).getTime() -
+        new Date(left.createdAt || 0).getTime(),
+    );
+    const paginated = paginateData(logs, pagination.page, pagination.limit);
+    res.json({ data: paginated.data, meta: paginated.meta });
+  },
+);
 
 // Admin routes: monitoring, moderation, user management, and audit-friendly operations.
-app.get('/api/admin/monitoring', requireAuth, requireRoles('admin'), adminLimiter, async (req: RequestWithAuth, res) => {
-  const days = toPositiveInt(req.query?.days, 30, 365);
-  const resumes = db.resumes.map((entry: any) => buildResumeMonitoringRecord(entry));
-  const appSummary = buildAdminApplicationSummary(days);
-  const platformHealth = await getPlatformHealthSnapshot();
-  const averageResumeScore = Math.round(
-    average(
-      db.resumeScores
-        .map((entry: any) => Number(entry.score || 0))
-        .filter((entry: number) => Number.isFinite(entry) && entry > 0)
-    )
-  );
+app.get(
+  "/api/admin/monitoring",
+  requireAuth,
+  requireRoles("admin"),
+  adminLimiter,
+  async (req: RequestWithAuth, res) => {
+    const days = toPositiveInt(req.query?.days, 30, 365);
+    const resumes = db.resumes.map((entry: any) =>
+      buildResumeMonitoringRecord(entry),
+    );
+    const appSummary = buildAdminApplicationSummary(days);
+    const platformHealth = await getPlatformHealthSnapshot();
+    const averageResumeScore = Math.round(
+      average(
+        db.resumeScores
+          .map((entry: any) => Number(entry.score || 0))
+          .filter((entry: number) => Number.isFinite(entry) && entry > 0),
+      ),
+    );
 
-  const totals = {
-    totalUsers: db.profiles.length,
-    totalStudents: db.profiles.filter((entry: any) => roleMatches(entry.role, 'student')).length,
-    totalRecruiters: db.profiles.filter((entry: any) => roleMatches(entry.role, 'recruiter')).length,
-    totalAdmins: db.profiles.filter((entry: any) => roleMatches(entry.role, 'admin')).length,
-    totalResumes: db.resumes.length,
-    totalJobs: db.jobs.length,
-    activeJobs: db.jobs.filter((entry: any) => entry.status === 'active').length,
-    closedJobs: db.jobs.filter((entry: any) => entry.status === 'closed').length,
-    totalApplications: db.applications.length,
-    averageResumeScore,
-    averageMatchPercentage: appSummary.averageMatchPercentage,
-    resumeMonitoring: {
-      successfulParses: resumes.filter((entry: any) => entry.parseStatus === 'success').length,
-      failedParses: resumes.filter((entry: any) => entry.parseStatus === 'failed').length,
-      flaggedResumes: resumes.filter((entry: any) => entry.moderationStatus === 'flagged').length,
-    },
-    applicationSummary: appSummary,
-    mostAppliedJob: appSummary.applicationsPerJob[0] || null,
-    recentAdminActions: db.adminLogs.slice(0, 12),
-    platformHealth,
-  };
+    const totals = {
+      totalUsers: db.profiles.length,
+      totalStudents: db.profiles.filter((entry: any) =>
+        roleMatches(entry.role, "student"),
+      ).length,
+      totalRecruiters: db.profiles.filter((entry: any) =>
+        roleMatches(entry.role, "recruiter"),
+      ).length,
+      totalAdmins: db.profiles.filter((entry: any) =>
+        roleMatches(entry.role, "admin"),
+      ).length,
+      totalResumes: db.resumes.length,
+      totalJobs: db.jobs.length,
+      activeJobs: db.jobs.filter((entry: any) => entry.status === "active")
+        .length,
+      closedJobs: db.jobs.filter((entry: any) => entry.status === "closed")
+        .length,
+      totalApplications: db.applications.length,
+      averageResumeScore,
+      averageMatchPercentage: appSummary.averageMatchPercentage,
+      resumeMonitoring: {
+        successfulParses: resumes.filter(
+          (entry: any) => entry.parseStatus === "success",
+        ).length,
+        failedParses: resumes.filter(
+          (entry: any) => entry.parseStatus === "failed",
+        ).length,
+        flaggedResumes: resumes.filter(
+          (entry: any) => entry.moderationStatus === "flagged",
+        ).length,
+      },
+      applicationSummary: appSummary,
+      mostAppliedJob: appSummary.applicationsPerJob[0] || null,
+      recentAdminActions: db.adminLogs.slice(0, 12),
+      platformHealth,
+    };
 
-  res.json({ data: totals });
-});
+    res.json({ data: totals });
+  },
+);
 
 // Health check
-app.get('/api/health', async (_req, res) => {
+app.get("/api/health", async (_req, res) => {
   const platformHealth = await getPlatformHealthSnapshot();
   res.json({
-    status: isShuttingDown ? 'degraded' : 'ok',
-    message: 'Backend API is running',
-    dataProvider: supabaseStore.isActive() ? 'supabase' : 'memory',
+    status: isShuttingDown ? "degraded" : "ok",
+    message: "Backend API is running",
+    dataProvider: supabaseStore.isActive() ? "supabase" : "memory",
     uptimeSeconds: platformHealth.uptimeSeconds,
     requestsPerMinute: platformHealth.requestsPerMinute,
     latencyPercentilesMs: platformHealth.latencyPercentilesMs,
@@ -4023,7 +5129,7 @@ app.get('/api/health', async (_req, res) => {
   });
 });
 
-app.use('/api', (req: RequestWithAuth, res) => {
+app.use("/api", (req: RequestWithAuth, res) => {
   res.status(404).json({
     message: `No API route matches ${req.method} ${toRequestPath(req)}`,
   });
@@ -4031,13 +5137,22 @@ app.use('/api', (req: RequestWithAuth, res) => {
 
 const ensureBootstrapUsers = async () => {
   const bootstrapUsers = [
-    readOptionalBootstrapUser('INITIAL_ADMIN', 'admin', 'Platform Admin'),
-    readOptionalBootstrapUser('INITIAL_RECRUITER', 'employer', 'Initial Recruiter'),
-  ].filter(Boolean) as Array<{ email: string; password: string; name: string; role: SupportedRole }>;
+    readOptionalBootstrapUser("INITIAL_ADMIN", "admin", "Platform Admin"),
+    readOptionalBootstrapUser(
+      "INITIAL_RECRUITER",
+      "employer",
+      "Initial Recruiter",
+    ),
+  ].filter(Boolean) as Array<{
+    email: string;
+    password: string;
+    name: string;
+    role: SupportedRole;
+  }>;
 
   for (const bootstrapUser of bootstrapUsers) {
     const existing = db.profiles.find(
-      (entry: any) => entry.email?.toLowerCase() === bootstrapUser.email
+      (entry: any) => entry.email?.toLowerCase() === bootstrapUser.email,
     );
 
     if (existing) {
@@ -4053,7 +5168,9 @@ const ensureBootstrapUsers = async () => {
       if (!existing.passwordHash) {
         existing.passwordHash = await bcrypt.hash(bootstrapUser.password, 10);
         didChange = true;
-      } else if (!(await bcrypt.compare(bootstrapUser.password, existing.passwordHash))) {
+      } else if (
+        !(await bcrypt.compare(bootstrapUser.password, existing.passwordHash))
+      ) {
         existing.passwordHash = await bcrypt.hash(bootstrapUser.password, 10);
         didChange = true;
       }
@@ -4065,7 +5182,7 @@ const ensureBootstrapUsers = async () => {
     }
 
     const profile = {
-      id: uuidv4(),
+      id: crypto.randomUUID(),
       email: bootstrapUser.email,
       passwordHash: await bcrypt.hash(bootstrapUser.password, 10),
       name: bootstrapUser.name,
@@ -4082,19 +5199,19 @@ const ensureBootstrapUsers = async () => {
 
 const initializeRuntime = async () => {
   const bootstrap = await supabaseStore.bootstrap(db);
-  if (bootstrap.mode === 'supabase' && bootstrap.loaded) {
-    logEvent('info', 'runtime.bootstrap.loaded_supabase');
+  if (bootstrap.mode === "supabase" && bootstrap.loaded) {
+    logEvent("info", "runtime.bootstrap.loaded_supabase");
   } else if (supabaseStore.isActive()) {
-    logEvent('info', 'runtime.bootstrap.supabase_empty_store');
+    logEvent("info", "runtime.bootstrap.supabase_empty_store");
   } else {
-    logEvent('info', 'runtime.bootstrap.memory_empty_store');
+    logEvent("info", "runtime.bootstrap.memory_empty_store");
   }
 
   await ensureBootstrapUsers();
 };
 
 runtimeReady = initializeRuntime().catch((err) => {
-  logError('runtime.initialization_failed', err);
+  logError("runtime.initialization_failed", err);
   throw err;
 });
 
@@ -4105,21 +5222,21 @@ const startServer = async () => {
     server.keepAliveTimeout = 65_000;
     server.headersTimeout = 66_000;
     server.requestTimeout = 30_000;
-    server.on('connection', (socket) => {
+    server.on("connection", (socket) => {
       openConnections.add(socket);
-      socket.on('close', () => {
+      socket.on("close", () => {
         openConnections.delete(socket);
       });
     });
     server.listen(PORT, () => {
-      logEvent('info', 'server.started', {
+      logEvent("info", "server.started", {
         port: Number(PORT),
         nodeEnv: NODE_ENV,
-        dataProvider: supabaseStore.isActive() ? 'supabase' : DATA_PROVIDER,
+        dataProvider: supabaseStore.isActive() ? "supabase" : DATA_PROVIDER,
       });
     });
   } catch (err) {
-    logError('server.start_failed', err);
+    logError("server.start_failed", err);
     process.exitCode = 1;
   }
 };
@@ -4128,36 +5245,42 @@ if (process.env.VERCEL === undefined) {
   void startServer();
 }
 
-app.use((error: any, req: RequestWithAuth, res: Response, _next: NextFunction) => {
-  const statusCode =
-    Number(error?.statusCode || error?.status) >= 400 && Number(error?.statusCode || error?.status) < 600
-      ? Number(error?.statusCode || error?.status)
-      : 500;
-  const message = statusCode >= 500 ? 'Internal server error' : String(error?.message || 'Request failed');
-  logError('http.request.failed', error, {
-    requestId: req.requestId,
-    method: req.method,
-    path: normalizeMetricPath(toRequestPath(req)),
-    statusCode,
-    userId: req.profile?.id || null,
-  });
+app.use(
+  (error: any, req: RequestWithAuth, res: Response, _next: NextFunction) => {
+    const statusCode =
+      Number(error?.statusCode || error?.status) >= 400 &&
+      Number(error?.statusCode || error?.status) < 600
+        ? Number(error?.statusCode || error?.status)
+        : 500;
+    const message =
+      statusCode >= 500
+        ? "Internal server error"
+        : String(error?.message || "Request failed");
+    logError("http.request.failed", error, {
+      requestId: req.requestId,
+      method: req.method,
+      path: normalizeMetricPath(toRequestPath(req)),
+      statusCode,
+      userId: req.profile?.id || null,
+    });
 
-  if (res.headersSent) {
-    return;
-  }
+    if (res.headersSent) {
+      return;
+    }
 
-  res.status(statusCode).json({
-    error: statusCode >= 500 ? 'internal_server_error' : 'request_failed',
-    message,
-    code: statusCode >= 500 ? 'INTERNAL_SERVER_ERROR' : 'REQUEST_FAILED',
-    requestId: req.requestId,
-  });
-});
+    res.status(statusCode).json({
+      error: statusCode >= 500 ? "internal_server_error" : "request_failed",
+      message,
+      code: statusCode >= 500 ? "INTERNAL_SERVER_ERROR" : "REQUEST_FAILED",
+      requestId: req.requestId,
+    });
+  },
+);
 
 const shutdownServer = (signal: string) => {
   if (isShuttingDown) return;
   isShuttingDown = true;
-  logEvent('warn', 'server.shutdown_requested', {
+  logEvent("warn", "server.shutdown_requested", {
     signal,
     openConnections: openConnections.size,
   });
@@ -4166,7 +5289,7 @@ const shutdownServer = (signal: string) => {
     for (const socket of openConnections) {
       socket.destroy();
     }
-    logEvent('error', 'server.shutdown_forced', {
+    logEvent("error", "server.shutdown_forced", {
       signal,
       remainingConnections: openConnections.size,
     });
@@ -4180,29 +5303,29 @@ const shutdownServer = (signal: string) => {
   server.close((error) => {
     clearTimeout(forceCloseTimer);
     if (error) {
-      logError('server.shutdown_failed', error, { signal });
+      logError("server.shutdown_failed", error, { signal });
       process.exit(1);
       return;
     }
-    logEvent('info', 'server.stopped', { signal });
+    logEvent("info", "server.stopped", { signal });
     process.exit(0);
   });
 };
 
-process.on('SIGINT', () => {
-  shutdownServer('SIGINT');
+process.on("SIGINT", () => {
+  shutdownServer("SIGINT");
 });
 
-process.on('SIGTERM', () => {
-  shutdownServer('SIGTERM');
+process.on("SIGTERM", () => {
+  shutdownServer("SIGTERM");
 });
 
-process.on('unhandledRejection', (reason) => {
-  logError('process.unhandled_rejection', reason);
+process.on("unhandledRejection", (reason) => {
+  logError("process.unhandled_rejection", reason);
 });
 
-process.on('uncaughtException', (error) => {
-  logError('process.uncaught_exception', error);
+process.on("uncaughtException", (error) => {
+  logError("process.uncaught_exception", error);
 });
 
 export default app;

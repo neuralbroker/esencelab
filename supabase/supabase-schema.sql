@@ -1,4 +1,4 @@
--- EsenceLab Supabase Schema (SQL Editor)
+-- Esencelab Supabase Schema (SQL Editor)
 -- Safe to run multiple times.
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;

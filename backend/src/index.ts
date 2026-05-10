@@ -116,7 +116,7 @@ const toBooleanEnv = (name: string, defaultValue = false) => {
 const ALLOW_INSECURE_PASSWORD_RESET_TOKEN_RESPONSE = toBooleanEnv(
   "ALLOW_INSECURE_PASSWORD_RESET_TOKEN_RESPONSE",
 );
-const DATA_PROVIDER = String(process.env.DATA_PROVIDER || "memory")
+const DATA_PROVIDER = String(process.env.DATA_PROVIDER || "supabase")
   .trim()
   .toLowerCase();
 
@@ -139,9 +139,6 @@ const looksLikePlaceholderValue = (value: string) => {
 const assertProductionSafety = () => {
   if (!IS_PRODUCTION) return;
 
-  if (DATA_PROVIDER !== "supabase") {
-    throw new Error("Production requires DATA_PROVIDER=supabase.");
-  }
   if (ALLOW_INSECURE_PASSWORD_RESET_TOKEN_RESPONSE) {
     throw new Error(
       "ALLOW_INSECURE_PASSWORD_RESET_TOKEN_RESPONSE must remain disabled in production.",
@@ -209,6 +206,10 @@ const assertProductionSafety = () => {
     }
   }
 };
+
+if (DATA_PROVIDER !== "supabase") {
+  throw new Error("DATA_PROVIDER must be set to supabase.");
+}
 
 assertProductionSafety();
 
@@ -679,52 +680,6 @@ const resumeUploadMiddleware = (
 const db: any = createEmptyDb();
 
 const supabaseStore = new SupabaseStore();
-
-db.jobs = db.jobs.map((job: any) => ({
-  ...job,
-  updatedAt: job.updatedAt || job.createdAt || new Date(),
-}));
-db.courses = db.courses.map((course: any) => ({
-  ...course,
-  createdAt: course.createdAt || new Date(),
-  updatedAt: course.updatedAt || new Date(),
-}));
-db.candidates = db.candidates.map((candidate: any) => ({
-  ...candidate,
-  updatedAt: candidate.updatedAt || candidate.createdAt || new Date(),
-}));
-db.resumeScores = (db.resumeScores || []).map((entry: any) => ({
-  ...entry,
-  createdAt: entry.createdAt || new Date(),
-}));
-db.skillProgress = (db.skillProgress || []).map((entry: any) => ({
-  ...entry,
-  createdAt: entry.createdAt || new Date(),
-  updatedAt: entry.updatedAt || new Date(),
-}));
-db.learningPlans = (db.learningPlans || []).map((entry: any) => ({
-  ...entry,
-  createdAt: entry.createdAt || new Date(),
-  updatedAt: entry.updatedAt || new Date(),
-}));
-db.mockInterviewSessions = (db.mockInterviewSessions || []).map(
-  (entry: any) => ({
-    ...entry,
-    createdAt: entry.createdAt || new Date(),
-  }),
-);
-db.savedJobs = (db.savedJobs || []).map((entry: any) => ({
-  ...entry,
-  createdAt: entry.createdAt || new Date(),
-}));
-db.careerPreferences = (db.careerPreferences || []).map((entry: any) => ({
-  ...entry,
-  updatedAt: entry.updatedAt || new Date(),
-}));
-db.adminLogs = (db.adminLogs || []).map((entry: any) => ({
-  ...entry,
-  createdAt: entry.createdAt || new Date(),
-}));
 
 const normalizeMetricPath = (value: string) => {
   return value
@@ -5301,7 +5256,7 @@ app.get("/api/health", async (_req, res) => {
   res.json({
     status: isShuttingDown ? "degraded" : "ok",
     message: "Backend API is running",
-    dataProvider: supabaseStore.isActive() ? "supabase" : "memory",
+    dataProvider: "supabase",
     uptimeSeconds: platformHealth.uptimeSeconds,
     requestsPerMinute: platformHealth.requestsPerMinute,
     latencyPercentilesMs: platformHealth.latencyPercentilesMs,
@@ -5379,12 +5334,10 @@ const ensureBootstrapUsers = async () => {
 
 const initializeRuntime = async () => {
   const bootstrap = await supabaseStore.bootstrap(db);
-  if (bootstrap.mode === "supabase" && bootstrap.loaded) {
+  if (bootstrap.loaded) {
     logEvent("info", "runtime.bootstrap.loaded_supabase");
-  } else if (supabaseStore.isActive()) {
-    logEvent("info", "runtime.bootstrap.supabase_empty_store");
   } else {
-    logEvent("info", "runtime.bootstrap.memory_empty_store");
+    logEvent("info", "runtime.bootstrap.supabase_empty_store");
   }
 
   await ensureBootstrapUsers();
@@ -5412,7 +5365,7 @@ const startServer = async () => {
       logEvent("info", "server.started", {
         port: Number(PORT),
         nodeEnv: NODE_ENV,
-        dataProvider: supabaseStore.isActive() ? "supabase" : DATA_PROVIDER,
+        dataProvider: "supabase",
       });
     });
   } catch (err) {

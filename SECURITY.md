@@ -14,7 +14,7 @@ Do not open a public issue with secrets or exploit details. Report privately to 
 
 ## Secret handling
 
-- Never commit production secrets, demo credentials, JWT secrets, service tokens, database keys, or API keys.
+- Never commit production secrets, credentials, JWT secrets, service tokens, database keys, or API keys.
 - Use `.env.local` for local development and platform-managed environment variables in hosted environments.
 - Rotate any token that was ever shared outside a local disposable environment.
 

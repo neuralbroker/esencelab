@@ -143,29 +143,28 @@ export class SupabaseStore {
   private active = false;
 
   constructor() {
-    const provider = (process.env.DATA_PROVIDER || "memory").toLowerCase();
+    const provider = (process.env.DATA_PROVIDER || "supabase").toLowerCase();
     const url = process.env.SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const fallbackKey =
-      process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
-    const key = serviceRoleKey || fallbackKey;
 
-    if (
-      provider === "supabase" &&
-      process.env.NODE_ENV === "production" &&
-      !serviceRoleKey
-    ) {
+    if (provider !== "supabase") {
       throw new Error(
-        "Production Supabase mode requires SUPABASE_SERVICE_ROLE_KEY for server-side persistence.",
+        "Unsupported DATA_PROVIDER. The backend requires DATA_PROVIDER=supabase.",
+      );
+    }
+    if (!url) {
+      throw new Error("SUPABASE_URL is required for backend persistence.");
+    }
+    if (!serviceRoleKey) {
+      throw new Error(
+        "SUPABASE_SERVICE_ROLE_KEY is required for backend persistence.",
       );
     }
 
-    if (provider === "supabase" && url && key) {
-      this.client = createClient(url, key, {
-        auth: { persistSession: false },
-      });
-      this.active = true;
-    }
+    this.client = createClient(url, serviceRoleKey, {
+      auth: { persistSession: false },
+    });
+    this.active = true;
   }
 
   isActive() {
@@ -247,7 +246,7 @@ export class SupabaseStore {
 
   async bootstrap(db: AnyRecord) {
     if (!this.isActive() || !this.client) {
-      return { mode: "memory", loaded: false };
+      throw new Error("Supabase store is not active.");
     }
 
     try {

@@ -62,7 +62,7 @@ Supabase/Postgres persistence
 | Frontend | Next.js 15, React 18, TypeScript, Tailwind CSS, Framer Motion, Lucide React |
 | Backend | Node.js, Express, TypeScript, JWT, bcryptjs, multer, compression, helmet, rate limiting |
 | AI service | FastAPI, Python, pdfplumber, pypdf |
-| Data | Supabase/Postgres persistence with local in-memory runtime state |
+| Data | Supabase/Postgres persistence |
 | Tooling | PowerShell helper scripts, npm, TypeScript compiler, ESLint |
 
 ## Repository Layout
@@ -81,11 +81,11 @@ Esencelab/
 
 ## Security Note
 
-No public demo credentials are documented in this repository.
+No public credentials are documented in this repository.
 
 - Create local admin and recruiter users through backend bootstrap environment variables such as `INITIAL_ADMIN_*` and `INITIAL_RECRUITER_*`.
 - Create student accounts through the normal registration flow.
-- Do not commit or publish real passwords, demo login pairs, or production secrets in the README or any tracked file.
+- Do not commit or publish real passwords, login pairs, or production secrets in the README or any tracked file.
 
 ## Quick Start
 
@@ -138,20 +138,14 @@ AI service template:
 Copy-Item .\ai-service\.env.example .\ai-service\.env
 ```
 
-For the default local workflow, the root PowerShell launchers already use:
-
-```env
-FRONTEND=http://127.0.0.1:3100
-BACKEND=http://127.0.0.1:3101/api
-AI=http://127.0.0.1:3102
-DATA_PROVIDER=memory
-```
-
-The root launchers load `.env.local` first, then service-specific `.env.local` files. Set local-only secrets there instead of editing the scripts:
+The root launchers load `.env.local` first, then service-specific `.env.local` files. Set local secrets and Supabase credentials there instead of editing the scripts:
 
 ```env
 JWT_SECRET=replace-with-a-local-32-character-minimum-secret
 AI_INTERNAL_AUTH_TOKEN=replace-with-a-shared-local-internal-token
+DATA_PROVIDER=supabase
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=replace-with-your-service-role-key
 ```
 
 ### Run the local stack
@@ -191,17 +185,16 @@ Use [backend/.env.example](backend/.env.example) as the starting point.
 | `FRONTEND_URL` | No | Allowed frontend origin |
 | `FRONTEND_URLS` | Recommended for production | Comma-separated allowed frontend origins |
 | `TRUST_PROXY` | Recommended behind ingress | Enables correct proxy-aware request handling |
-| `DATA_PROVIDER` | Yes | `memory` for local-only mode, `supabase` for persistent mode |
-| `ALLOW_INSECURE_PASSWORD_RESET_TOKEN_RESPONSE` | No | Local-only reset token echo for test scripts |
+| `DATA_PROVIDER` | Yes | Must be `supabase` |
+| `ALLOW_INSECURE_PASSWORD_RESET_TOKEN_RESPONSE` | No | Local-only reset token echo for private development scripts |
 | `INITIAL_ADMIN_EMAIL` | Optional | Creates the first admin account if missing |
 | `INITIAL_ADMIN_PASSWORD` | Optional | Password for the first admin account |
 | `INITIAL_ADMIN_NAME` | No | Display name for the first admin account |
 | `INITIAL_RECRUITER_EMAIL` | Optional | Creates an initial recruiter account if missing |
 | `INITIAL_RECRUITER_PASSWORD` | Optional | Password for the initial recruiter account |
 | `INITIAL_RECRUITER_NAME` | No | Display name for the initial recruiter account |
-| `SUPABASE_URL` | Only for Supabase mode | Supabase project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | Only for Supabase mode | Server-side Supabase key |
-| `SUPABASE_ANON_KEY` | Optional fallback | Alternate Supabase key input |
+| `SUPABASE_URL` | Yes | Supabase project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Server-side Supabase service-role key |
 | `SLOW_ENDPOINT_THRESHOLD_MS` | No | Monitoring threshold for slow requests |
 
 ### AI service
@@ -229,25 +222,9 @@ Use [frontend/.env.example](frontend/.env.example) for build-time frontend setti
 | `AI_PROXY_TARGET` | If using same-domain proxy mode | Internal AI target for Next.js rewrites |
 | `NEXT_PUBLIC_MAX_RESUME_FILE_SIZE_MB` | Optional | Client-side resume upload limit |
 
-## Data Provider Modes
+## Data Provider
 
-### Memory mode
-
-`memory` mode is the default for local work. It provides:
-
-- Empty runtime state without an external database
-- No dependency on a running external database
-- Fast startup for development and debugging
-
-### Supabase mode
-
-Use Supabase when you want persisted data across runs.
-
-Required changes:
-
-1. Set `DATA_PROVIDER=supabase` in `backend/.env`.
-2. Configure `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.
-3. Apply [supabase/supabase-schema.sql](supabase/supabase-schema.sql).
+The backend uses Supabase/Postgres as the required source of truth. Before running the backend, set `DATA_PROVIDER=supabase`, configure `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`, and apply [supabase/supabase-schema.sql](supabase/supabase-schema.sql).
 
 ## Deployment
 
@@ -363,10 +340,10 @@ The frontend app router lives under [frontend/src/app](frontend/src/app).
 
 ## Operational Notes
 
-- Local development can use `memory` mode, but hosted environments should use `supabase`.
+- Local and hosted backend environments require `DATA_PROVIDER=supabase`.
 - The AI service is required for resume parsing and match-related flows.
 - JWT secrets and external API keys should be set through environment variables and never committed.
-- Use your own local users or bootstrap users through env vars; do not reintroduce public demo credentials into docs.
+- Use your own local users or bootstrap users through env vars; do not publish credentials in docs.
 
 
 

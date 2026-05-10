@@ -36,10 +36,12 @@ Set-DefaultEnv 'NODE_ENV' 'development'
 Set-DefaultEnv 'AI_SERVICE_URL' 'http://127.0.0.1:3102'
 Set-DefaultEnv 'FRONTEND_URL' 'http://127.0.0.1:3100'
 Set-DefaultEnv 'FRONTEND_URLS' 'http://127.0.0.1:3100,http://localhost:3100'
-Set-DefaultEnv 'DATA_PROVIDER' 'memory'
+Set-DefaultEnv 'DATA_PROVIDER' 'supabase'
 
 Require-Env 'JWT_SECRET'
 Require-Env 'AI_INTERNAL_AUTH_TOKEN'
+Require-Env 'SUPABASE_URL'
+Require-Env 'SUPABASE_SERVICE_ROLE_KEY'
 
 Set-Location (Join-Path $Root 'backend')
 npm run dev

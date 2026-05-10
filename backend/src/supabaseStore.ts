@@ -141,16 +141,29 @@ const isRetryableError = (error: any): boolean => {
 export class SupabaseStore {
   private client: SupabaseClient | null = null;
   private active = false;
+  private mockMode = false;
 
   constructor() {
     const provider = (process.env.DATA_PROVIDER || "supabase").toLowerCase();
     const url = process.env.SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const isTestMock =
+      process.env.NODE_ENV === "test" && process.env.SUPABASE_MOCK === "1";
 
     if (provider !== "supabase") {
       throw new Error(
         "Unsupported DATA_PROVIDER. The backend requires DATA_PROVIDER=supabase.",
       );
+    }
+    if (
+      process.env.NODE_ENV === "production" &&
+      process.env.SUPABASE_MOCK === "1"
+    ) {
+      throw new Error("SUPABASE_MOCK cannot be enabled in production.");
+    }
+    if (isTestMock) {
+      this.mockMode = true;
+      return;
     }
     if (!url) {
       throw new Error("SUPABASE_URL is required for backend persistence.");
@@ -245,6 +258,9 @@ export class SupabaseStore {
   }
 
   async bootstrap(db: AnyRecord) {
+    if (this.mockMode) {
+      return { mode: "supabase_mock", loaded: false };
+    }
     if (!this.isActive() || !this.client) {
       throw new Error("Supabase store is not active.");
     }
@@ -264,6 +280,7 @@ export class SupabaseStore {
         mockInterviewSessions,
         savedJobs,
         careerPreferences,
+        recruiterAccessRequests,
       ] = await Promise.all([
         this.selectAll("users"),
         this.selectAll("jobs"),
@@ -278,11 +295,25 @@ export class SupabaseStore {
         this.selectAll("mock_interview_sessions"),
         this.selectAll("saved_jobs"),
         this.selectAll("career_preferences"),
+        this.selectAll("recruiter_access_requests"),
       ]);
 
-      if ((users || []).length === 0) {
-        return { mode: "supabase", loaded: false };
-      }
+      const hasLoadedRows = [
+        users,
+        jobs,
+        resumes,
+        candidates,
+        applications,
+        courses,
+        recommendations,
+        resumeScores,
+        skillProgress,
+        learningPlans,
+        mockInterviewSessions,
+        savedJobs,
+        careerPreferences,
+        recruiterAccessRequests,
+      ].some((rows) => (rows || []).length > 0);
 
       db.profiles = (users || []).map((row: AnyRecord) => ({
         id: row.id,
@@ -454,7 +485,26 @@ export class SupabaseStore {
         }),
       );
 
-      return { mode: "supabase", loaded: true };
+      db.recruiterAccessRequests = (recruiterAccessRequests || []).map(
+        (row: AnyRecord) => ({
+          id: row.id,
+          name: row.name,
+          email: row.email,
+          companyName: row.company_name,
+          companyWebsite: row.company_website || "",
+          jobTitle: row.job_title || "",
+          message: row.message || "",
+          status: row.status || "pending",
+          adminNotes: row.admin_notes || "",
+          reviewedBy: row.reviewed_by || null,
+          reviewedAt: row.reviewed_at ? toDate(row.reviewed_at) : null,
+          userId: row.user_id || null,
+          createdAt: toDate(row.created_at),
+          updatedAt: toDate(row.updated_at),
+        }),
+      );
+
+      return { mode: "supabase", loaded: hasLoadedRows };
     } catch (error) {
       if (this.shouldDisable(error)) {
         this.disableWithError(error, "bootstrap");
@@ -756,7 +806,26 @@ export class SupabaseStore {
   }
 
   async deleteCareerPreference(userId: string) {
-    await this.delete("career_preferences", "user_id", userId);
+    return this.delete("career_preferences", "user_id", userId);
+  }
+
+  async upsertRecruiterAccessRequest(request: AnyRecord) {
+    return this.upsert("recruiter_access_requests", {
+      id: request.id,
+      name: request.name,
+      email: request.email,
+      company_name: request.companyName,
+      company_website: request.companyWebsite || "",
+      job_title: request.jobTitle || "",
+      message: request.message || "",
+      status: request.status || "pending",
+      admin_notes: request.adminNotes || "",
+      reviewed_by: request.reviewedBy || null,
+      reviewed_at: request.reviewedAt ? toIso(request.reviewedAt) : null,
+      user_id: request.userId || null,
+      created_at: toIso(request.createdAt),
+      updated_at: toIso(request.updatedAt),
+    });
   }
 
   async insertAdminLog(log: AnyRecord) {

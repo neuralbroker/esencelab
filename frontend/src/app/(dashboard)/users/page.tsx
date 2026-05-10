@@ -102,12 +102,18 @@ export default function UsersPage() {
   };
 
   const getRoleBadge = (role: string) => {
+    const displayRole = role === "employer" ? "recruiter" : role;
     const variants: Record<string, "primary" | "success" | "warning"> = {
       admin: "warning",
       employer: "success",
+      recruiter: "success",
       student: "primary",
     };
-    return <Badge variant={variants[role] || "secondary"}>{role}</Badge>;
+    return (
+      <Badge variant={variants[displayRole] || "secondary"}>
+        {displayRole}
+      </Badge>
+    );
   };
 
   if (loading) {
@@ -252,7 +258,9 @@ export default function UsersPage() {
                       <td className="py-3 px-4 text-secondary">
                         <span className="block truncate">{entry.email}</span>
                       </td>
-                      <td className="py-3 px-4">{getRoleBadge(entry.role)}</td>
+                      <td className="py-3 px-4">
+                        {getRoleBadge(entry.canonicalRole || entry.role)}
+                      </td>
                       <td className="py-3 px-4 text-secondary text-sm">
                         {entry.resumeUploaded
                           ? `${Math.round(entry.latestResumeScore || 0)}%`

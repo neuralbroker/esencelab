@@ -216,6 +216,12 @@ export default function HomePage() {
                 Login
               </Link>
               <Link
+                href="/recruiter-request"
+                className="px-3 py-2 text-sm font-semibold text-[#181818] transition hover:text-black/70"
+              >
+                Recruiter access
+              </Link>
+              <Link
                 href="/register"
                 className={`${primaryButtonClass} min-h-[42px] px-5 py-2`}
               >
@@ -249,9 +255,15 @@ export default function HomePage() {
                   {item.label}
                 </a>
               ))}
-              <div className="grid gap-2 pt-2 sm:grid-cols-2">
+              <div className="grid gap-2 pt-2 sm:grid-cols-3">
                 <Link href="/login" className={secondaryButtonClass}>
                   Login
+                </Link>
+                <Link
+                  href="/recruiter-request"
+                  className={secondaryButtonClass}
+                >
+                  Recruiter access
                 </Link>
                 <Link href="/register" className={primaryButtonClass}>
                   Start now
@@ -294,6 +306,12 @@ export default function HomePage() {
                   className={secondaryButtonClass}
                 >
                   Open dashboard
+                </Link>
+                <Link
+                  href="/recruiter-request"
+                  className={secondaryButtonClass}
+                >
+                  Recruiter request
                 </Link>
               </div>
             </motion.div>

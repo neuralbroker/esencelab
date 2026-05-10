@@ -1,21 +1,21 @@
-'use client';
+"use client";
 
-import { Suspense, useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { ArrowRight } from 'lucide-react';
-import { motion } from 'framer-motion';
-import { useAuth } from '@/contexts/AuthContext';
-import EsencelabLogo from '@/components/EsencelabLogo';
+import { Suspense, useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { ArrowRight } from "lucide-react";
+import { motion } from "framer-motion";
+import { useAuth } from "@/contexts/AuthContext";
+import EsencelabLogo from "@/components/EsencelabLogo";
 
 const shellClass =
-  'rounded-[34px] border border-[#ececec] bg-white/62 shadow-[0_30px_80px_-54px_rgba(17,17,17,0.32)] backdrop-blur-[18px]';
+  "rounded-[34px] border border-[#ececec] bg-white/62 shadow-[0_30px_80px_-54px_rgba(17,17,17,0.32)] backdrop-blur-[18px]";
 const panelClass =
-  'rounded-[30px] border border-[#ececec] bg-white/68 p-7 shadow-[0_18px_44px_-34px_rgba(17,17,17,0.22)] sm:p-9';
+  "rounded-[30px] border border-[#ececec] bg-white/68 p-7 shadow-[0_18px_44px_-34px_rgba(17,17,17,0.22)] sm:p-9";
 const chipClass =
-  'inline-flex rounded-full border border-[#ececec] bg-white/72 px-3 py-1.5 text-[0.76rem] font-semibold uppercase tracking-[0.22em] text-[#757575]';
+  "inline-flex rounded-full border border-[#ececec] bg-white/72 px-3 py-1.5 text-[0.76rem] font-semibold uppercase tracking-[0.22em] text-[#757575]";
 const inputClass =
-  'mt-2 w-full rounded-[18px] border border-[#ececec] bg-white px-5 py-3.5 text-base text-[#111111] outline-none transition placeholder:text-[#b3b8c3] focus:border-[#d8d8d8] focus:ring-2 focus:ring-[#e9e9e9]';
+  "mt-2 w-full rounded-[18px] border border-[#ececec] bg-white px-5 py-3.5 text-base text-[#111111] outline-none transition placeholder:text-[#b3b8c3] focus:border-[#d8d8d8] focus:ring-2 focus:ring-[#e9e9e9]";
 
 const pageFallback = (
   <div className="flex min-h-screen items-center justify-center bg-[#f4f4f2]">
@@ -24,11 +24,11 @@ const pageFallback = (
 );
 
 function RegisterPageContent() {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [error, setError] = useState('');
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   const { register, isAuthenticated, isLoading: authLoading } = useAuth();
@@ -36,7 +36,7 @@ function RegisterPageContent() {
 
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
-      router.replace('/dashboard');
+      router.replace("/dashboard");
     }
   }, [authLoading, isAuthenticated, router]);
 
@@ -48,21 +48,21 @@ function RegisterPageContent() {
     const normalizedPassword = password.trim();
 
     if (!trimmedName || !normalizedEmail || !normalizedPassword) {
-      setError('All fields are required.');
+      setError("All fields are required.");
       return;
     }
 
     if (normalizedPassword.length < 6) {
-      setError('Password must be at least 6 characters.');
+      setError("Password must be at least 6 characters.");
       return;
     }
 
     if (normalizedPassword !== confirmPassword.trim()) {
-      setError('Passwords do not match.');
+      setError("Passwords do not match.");
       return;
     }
 
-    setError('');
+    setError("");
     setIsLoading(true);
 
     try {
@@ -70,11 +70,14 @@ function RegisterPageContent() {
         name: trimmedName,
         email: normalizedEmail,
         password: normalizedPassword,
-        role: 'student',
+        role: "student",
       });
-      router.replace('/dashboard');
+      router.replace("/dashboard");
     } catch (err: any) {
-      setError(err?.response?.data?.message || 'Registration failed. Please try again.');
+      setError(
+        err?.response?.data?.message ||
+          "Registration failed. Please try again.",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -107,14 +110,23 @@ function RegisterPageContent() {
           transition={{ duration: 0.35 }}
           className={`${shellClass} grid gap-4 overflow-hidden p-3 sm:p-5 lg:grid-cols-[1fr_1.12fr]`}
         >
-          <section className={`${panelClass} flex min-h-[380px] flex-col justify-start sm:min-h-[560px]`}>
-            <span className={chipClass}>Create account</span>
+          <section
+            className={`${panelClass} flex min-h-[380px] flex-col justify-start sm:min-h-[560px]`}
+          >
+            <span className={chipClass}>Student account</span>
             <h1 className="mt-6 max-w-[350px] text-[2.35rem] font-semibold leading-[0.98] tracking-[-0.06em] text-[#111111] sm:mt-7 sm:text-[3.7rem]">
               Start with Esencelab.
             </h1>
             <p className="mt-4 max-w-[400px] text-[0.98rem] leading-[1.55] text-[#5f5f5f] sm:text-[1.02rem]">
-              Set up your account and access the project dashboard in a few steps.
+              Students can create an account instantly. Recruiters must request
+              admin approval before hiring tools are enabled.
             </p>
+            <Link
+              href="/recruiter-request"
+              className="mt-6 inline-flex items-center text-[0.98rem] font-semibold text-[#111111] underline decoration-[#cfcfcf] underline-offset-4"
+            >
+              Recruiter? Request platform access
+            </Link>
 
             <ul className="mt-7 space-y-3 text-[1rem] leading-[1.5] text-[#4f4f4f]">
               <li className="flex gap-3">
@@ -134,10 +146,10 @@ function RegisterPageContent() {
 
           <section className={`${panelClass} min-h-[380px] sm:min-h-[560px]`}>
             <h2 className="text-[1.9rem] font-semibold tracking-[-0.05em] text-[#111111] sm:text-[2.1rem]">
-              Account setup
+              Student account setup
             </h2>
             <p className="mt-2 text-[1.02rem] text-[#5f5f5f]">
-              Fill in the details below.
+              Fill in the details below to create your student workspace.
             </p>
 
             <form onSubmit={handleSubmit} className="mt-7 space-y-5">
@@ -148,7 +160,10 @@ function RegisterPageContent() {
               )}
 
               <div>
-                <label htmlFor="register-name" className="text-[0.98rem] font-semibold text-[#444444]">
+                <label
+                  htmlFor="register-name"
+                  className="text-[0.98rem] font-semibold text-[#444444]"
+                >
                   Full name
                 </label>
                 <input
@@ -164,7 +179,10 @@ function RegisterPageContent() {
               </div>
 
               <div>
-                <label htmlFor="register-email" className="text-[0.98rem] font-semibold text-[#444444]">
+                <label
+                  htmlFor="register-email"
+                  className="text-[0.98rem] font-semibold text-[#444444]"
+                >
                   Email
                 </label>
                 <input
@@ -180,7 +198,10 @@ function RegisterPageContent() {
               </div>
 
               <div>
-                <label htmlFor="register-password" className="text-[0.98rem] font-semibold text-[#444444]">
+                <label
+                  htmlFor="register-password"
+                  className="text-[0.98rem] font-semibold text-[#444444]"
+                >
                   Password
                 </label>
                 <input
@@ -196,7 +217,10 @@ function RegisterPageContent() {
               </div>
 
               <div>
-                <label htmlFor="register-confirm" className="text-[0.98rem] font-semibold text-[#444444]">
+                <label
+                  htmlFor="register-confirm"
+                  className="text-[0.98rem] font-semibold text-[#444444]"
+                >
                   Confirm password
                 </label>
                 <input
@@ -216,17 +240,28 @@ function RegisterPageContent() {
                 disabled={isLoading}
                 className="inline-flex w-full items-center justify-center gap-2 rounded-[20px] bg-[#111111] px-6 py-3.5 text-[1.02rem] font-semibold text-white transition hover:bg-[#1d1d1d] disabled:cursor-not-allowed disabled:opacity-70"
               >
-                {isLoading ? 'Creating account...' : 'Create account'}
+                {isLoading ? "Creating account..." : "Create account"}
                 {!isLoading && <ArrowRight className="h-4 w-4" />}
               </button>
             </form>
 
-            <p className="mt-5 text-[0.98rem] text-[#505050]">
-              Already have an account?{' '}
-              <Link href="/login" className="font-semibold text-[#111111]">
-                Sign in
-              </Link>
-            </p>
+            <div className="mt-5 space-y-2 text-[0.98rem] text-[#505050]">
+              <p>
+                Already have an account?{" "}
+                <Link href="/login" className="font-semibold text-[#111111]">
+                  Sign in
+                </Link>
+              </p>
+              <p>
+                Need recruiter access?{" "}
+                <Link
+                  href="/recruiter-request"
+                  className="font-semibold text-[#111111]"
+                >
+                  Request admin approval
+                </Link>
+              </p>
+            </div>
           </section>
         </motion.main>
       </div>

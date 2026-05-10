@@ -188,6 +188,23 @@ CREATE TABLE IF NOT EXISTS career_preferences (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS recruiter_access_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  company_name TEXT NOT NULL,
+  company_website TEXT NOT NULL DEFAULT '',
+  job_title TEXT NOT NULL DEFAULT '',
+  message TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+  admin_notes TEXT NOT NULL DEFAULT '',
+  reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  reviewed_at TIMESTAMPTZ,
+  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS admin_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   admin_id UUID REFERENCES users(id) ON DELETE SET NULL,
@@ -212,6 +229,9 @@ CREATE INDEX IF NOT EXISTS idx_skill_progress_user_id ON skill_progress(user_id)
 CREATE INDEX IF NOT EXISTS idx_learning_plans_user_id ON learning_plans(user_id);
 CREATE INDEX IF NOT EXISTS idx_mock_sessions_user_id ON mock_interview_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_saved_jobs_user_id ON saved_jobs(user_id);
+CREATE INDEX IF NOT EXISTS idx_recruiter_access_requests_status ON recruiter_access_requests(status);
+CREATE INDEX IF NOT EXISTS idx_recruiter_access_requests_created_at ON recruiter_access_requests(created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_recruiter_access_requests_pending_email ON recruiter_access_requests (lower(email)) WHERE status = 'pending';
 CREATE INDEX IF NOT EXISTS idx_admin_logs_admin_id ON admin_logs(admin_id);
 CREATE INDEX IF NOT EXISTS idx_admin_logs_created_at ON admin_logs(created_at DESC);
 
@@ -287,6 +307,13 @@ BEGIN
       FOR EACH ROW
       EXECUTE FUNCTION set_updated_at();
   END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'recruiter_access_requests_set_updated_at') THEN
+    CREATE TRIGGER recruiter_access_requests_set_updated_at
+      BEFORE UPDATE ON recruiter_access_requests
+      FOR EACH ROW
+      EXECUTE FUNCTION set_updated_at();
+  END IF;
 END $$;
 
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
@@ -302,6 +329,7 @@ ALTER TABLE learning_plans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE mock_interview_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE saved_jobs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE career_preferences ENABLE ROW LEVEL SECURITY;
+ALTER TABLE recruiter_access_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE admin_logs ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS users_all_access ON users;
@@ -317,6 +345,7 @@ DROP POLICY IF EXISTS learning_plans_all_access ON learning_plans;
 DROP POLICY IF EXISTS mock_interview_sessions_all_access ON mock_interview_sessions;
 DROP POLICY IF EXISTS saved_jobs_all_access ON saved_jobs;
 DROP POLICY IF EXISTS career_preferences_all_access ON career_preferences;
+DROP POLICY IF EXISTS recruiter_access_requests_all_access ON recruiter_access_requests;
 DROP POLICY IF EXISTS admin_logs_all_access ON admin_logs;
 
 CREATE POLICY users_all_access ON users FOR ALL USING (true) WITH CHECK (true);
@@ -332,4 +361,5 @@ CREATE POLICY learning_plans_all_access ON learning_plans FOR ALL USING (true) W
 CREATE POLICY mock_interview_sessions_all_access ON mock_interview_sessions FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY saved_jobs_all_access ON saved_jobs FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY career_preferences_all_access ON career_preferences FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY recruiter_access_requests_all_access ON recruiter_access_requests FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY admin_logs_all_access ON admin_logs FOR ALL USING (true) WITH CHECK (true);

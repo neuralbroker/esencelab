@@ -67,6 +67,7 @@ export default function Navbar() {
       case "admin":
         return [
           { href: "/dashboard", label: "Overview" },
+          { href: "/admin/recruiter-requests", label: "Requests" },
           { href: "/admin/resumes", label: "Resumes" },
           { href: "/jobs", label: "Jobs" },
           { href: "/users", label: "Users" },
@@ -78,6 +79,9 @@ export default function Navbar() {
   };
 
   const navLinks = getNavLinks();
+  const roleLabel =
+    user?.canonicalRole ||
+    (user?.role === "employer" ? "recruiter" : user?.role);
 
   if (!isAuthenticated) return null;
 
@@ -142,7 +146,7 @@ export default function Navbar() {
                         {user?.name}
                       </p>
                       <p className="mt-0.5 text-xs capitalize text-secondary">
-                        {user?.role}
+                        {roleLabel}
                       </p>
                     </div>
                     <button
@@ -187,7 +191,7 @@ export default function Navbar() {
                   {user?.name}
                 </p>
                 <p className="mt-1 text-xs capitalize text-secondary">
-                  {user?.role}
+                  {roleLabel}
                 </p>
               </div>
               {navLinks.map((link) => {

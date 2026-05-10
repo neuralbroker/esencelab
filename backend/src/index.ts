@@ -252,6 +252,7 @@ const createEmptyDb = () => ({
   mockInterviewSessions: [] as any[],
   savedJobs: [] as any[],
   careerPreferences: [] as any[],
+  recruiterAccessRequests: [] as any[],
   adminLogs: [] as any[],
   requestMetrics: {
     totalRequests: 0,
@@ -554,6 +555,7 @@ app.use((req, res, next) => {
     routePath.startsWith("/api/jobs") ||
     routePath.startsWith("/api/recruiter/overview") ||
     routePath.startsWith("/api/admin/monitoring") ||
+    routePath.startsWith("/api/admin/recruiter-requests") ||
     routePath.startsWith("/api/jobs/") ||
     routePath.startsWith("/api/dashboard/stats")
   ) {
@@ -574,6 +576,16 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Too many attempts, please try again later" },
+});
+
+const recruiterRequestLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 8,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    message: "Too many recruiter access requests, please retry later.",
+  },
 });
 
 const adminLimiter = rateLimit({
@@ -1091,6 +1103,88 @@ const appendAdminLog = async (
 
   await (supabaseStore as any).insertAdminLog?.(record);
   return record;
+};
+
+type RecruiterAccessRequestStatus = "pending" | "approved" | "rejected";
+
+const RECRUITER_ACCESS_REQUEST_STATUSES = new Set([
+  "pending",
+  "approved",
+  "rejected",
+]);
+
+const normalizeRecruiterAccessRequestStatus = (
+  value: unknown,
+  fallback: RecruiterAccessRequestStatus = "pending",
+): RecruiterAccessRequestStatus => {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+  return RECRUITER_ACCESS_REQUEST_STATUSES.has(normalized)
+    ? (normalized as RecruiterAccessRequestStatus)
+    : fallback;
+};
+
+const isValidEmail = (value: string) =>
+  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim().toLowerCase());
+
+const normalizeCompanyWebsite = (value: unknown) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const candidate = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  try {
+    const parsed = new URL(candidate);
+    if (!["http:", "https:"].includes(parsed.protocol)) return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+};
+
+const truncateForStorage = (value: unknown, maxLength: number) =>
+  String(value || "")
+    .trim()
+    .slice(0, maxLength);
+
+const sanitizeRecruiterAccessRequest = (request: any) => ({
+  id: request.id,
+  name: request.name,
+  email: request.email,
+  companyName: request.companyName,
+  companyWebsite: request.companyWebsite || "",
+  jobTitle: request.jobTitle || "",
+  message: request.message || "",
+  status: normalizeRecruiterAccessRequestStatus(request.status),
+  adminNotes: request.adminNotes || "",
+  reviewedBy: request.reviewedBy || null,
+  reviewedAt: request.reviewedAt || null,
+  userId: request.userId || null,
+  createdAt: request.createdAt,
+  updatedAt: request.updatedAt,
+});
+
+const summarizeRecruiterAccessRequests = () => {
+  const requests = db.recruiterAccessRequests || [];
+  return {
+    total: requests.length,
+    pending: requests.filter(
+      (entry: any) =>
+        normalizeRecruiterAccessRequestStatus(entry.status) === "pending",
+    ).length,
+    approved: requests.filter(
+      (entry: any) =>
+        normalizeRecruiterAccessRequestStatus(entry.status) === "approved",
+    ).length,
+    rejected: requests.filter(
+      (entry: any) =>
+        normalizeRecruiterAccessRequestStatus(entry.status) === "rejected",
+    ).length,
+  };
+};
+
+const generateTemporaryPassword = () => {
+  const randomPart = crypto.randomBytes(12).toString("base64url");
+  return `Esen-${randomPart}-1!`;
 };
 
 const toSkillList = (value: any): string[] => {
@@ -2334,7 +2428,7 @@ app.post("/api/auth/register", authLimiter, async (req, res) => {
   if (requestedRole && requestedRole !== "student") {
     return res.status(403).json({
       message:
-        "Only student accounts can register. Employers and admins please login.",
+        "Only student accounts can register directly. Recruiters must request admin approval before using Esencelab.",
     });
   }
   if (password.length < 6) {
@@ -2525,6 +2619,298 @@ app.post("/api/auth/password/reset", authLimiter, async (req, res) => {
 
   res.json({ message: "Password has been reset" });
 });
+
+// Recruiter access requests
+// Recruiters cannot self-register into hiring tools. They submit a public request,
+// then an admin approves or rejects it from the authenticated admin workspace.
+app.post(
+  "/api/recruiter-requests",
+  recruiterRequestLimiter,
+  async (req, res) => {
+    const name = truncateForStorage(req.body?.name, 120);
+    const email = String(req.body?.email || "")
+      .trim()
+      .toLowerCase();
+    const companyName = truncateForStorage(req.body?.companyName, 160);
+    const companyWebsite = normalizeCompanyWebsite(req.body?.companyWebsite);
+    const jobTitle = truncateForStorage(req.body?.jobTitle, 120);
+    const message = truncateForStorage(req.body?.message, 2000);
+
+    if (!name || !email || !companyName || !message) {
+      return res.status(400).json({
+        message:
+          "Name, email, company name, and platform use case are required.",
+      });
+    }
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ message: "A valid email is required." });
+    }
+    if (companyWebsite === null) {
+      return res.status(400).json({
+        message: "Company website must be a valid http or https URL.",
+      });
+    }
+
+    const existingProfile = db.profiles.find(
+      (entry: any) => entry.email?.toLowerCase() === email,
+    );
+    if (existingProfile) {
+      return res.status(409).json({
+        message:
+          "An account with this email already exists. Please sign in or contact an admin.",
+      });
+    }
+
+    const existingPendingRequest = db.recruiterAccessRequests.find(
+      (entry: any) =>
+        entry.email?.toLowerCase() === email &&
+        normalizeRecruiterAccessRequestStatus(entry.status) === "pending",
+    );
+    if (existingPendingRequest) {
+      return res.status(409).json({
+        message:
+          "A pending recruiter access request already exists for this email.",
+      });
+    }
+
+    const now = new Date();
+    const accessRequest = {
+      id: crypto.randomUUID(),
+      name,
+      email,
+      companyName,
+      companyWebsite,
+      jobTitle,
+      message,
+      status: "pending" as RecruiterAccessRequestStatus,
+      adminNotes: "",
+      reviewedBy: null,
+      reviewedAt: null,
+      userId: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    db.recruiterAccessRequests.unshift(accessRequest);
+    await (supabaseStore as any).upsertRecruiterAccessRequest?.(accessRequest);
+
+    return res.status(201).json({
+      message:
+        "Recruiter access request received. An admin will review it before platform access is enabled.",
+      data: sanitizeRecruiterAccessRequest(accessRequest),
+    });
+  },
+);
+
+app.get(
+  "/api/admin/recruiter-requests",
+  requireAuth,
+  requireRoles("admin"),
+  adminLimiter,
+  (req, res) => {
+    const { search, status, sortBy, order } = req.query;
+    const pagination = getPagination(req.query as any, {
+      page: 1,
+      limit: 20,
+      maxLimit: 100,
+    });
+    const direction = String(order || "desc").toLowerCase() === "asc" ? 1 : -1;
+    const sortKey = String(sortBy || "createdAt").toLowerCase();
+    const statusFilter = normalizeRecruiterAccessRequestStatus(
+      status,
+      "pending",
+    );
+    const hasStatusFilter =
+      status !== undefined && status !== null && String(status).trim() !== "";
+
+    let requests = [...db.recruiterAccessRequests].map((entry: any) =>
+      sanitizeRecruiterAccessRequest(entry),
+    );
+
+    if (hasStatusFilter && String(status).toLowerCase() !== "all") {
+      requests = requests.filter((entry: any) => entry.status === statusFilter);
+    }
+
+    if (search) {
+      const searchText = String(search).trim().toLowerCase();
+      requests = requests.filter((entry: any) =>
+        [entry.name, entry.email, entry.companyName, entry.jobTitle]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(searchText)),
+      );
+    }
+
+    requests.sort((left: any, right: any) => {
+      if (sortKey === "name") {
+        return (
+          String(left.name || "").localeCompare(String(right.name || "")) *
+          direction
+        );
+      }
+      if (sortKey === "company") {
+        return (
+          String(left.companyName || "").localeCompare(
+            String(right.companyName || ""),
+          ) * direction
+        );
+      }
+      if (sortKey === "status") {
+        return (
+          String(left.status || "").localeCompare(String(right.status || "")) *
+          direction
+        );
+      }
+      if (sortKey === "reviewedat") {
+        return (
+          (new Date(left.reviewedAt || 0).getTime() -
+            new Date(right.reviewedAt || 0).getTime()) *
+          direction
+        );
+      }
+      return (
+        (new Date(left.createdAt || 0).getTime() -
+          new Date(right.createdAt || 0).getTime()) *
+        direction
+      );
+    });
+
+    const paginated = paginateData(requests, pagination.page, pagination.limit);
+    res.json({
+      data: paginated.data,
+      meta: paginated.meta,
+      summary: summarizeRecruiterAccessRequests(),
+    });
+  },
+);
+
+app.patch(
+  "/api/admin/recruiter-requests/:id",
+  requireAuth,
+  requireRoles("admin"),
+  adminLimiter,
+  async (req: RequestWithAuth, res) => {
+    const adminProfile = req.profile;
+    if (!adminProfile) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+
+    const idx = db.recruiterAccessRequests.findIndex(
+      (entry: any) => entry.id === req.params.id,
+    );
+    if (idx === -1) {
+      return res.status(404).json({ message: "Recruiter request not found" });
+    }
+
+    const current = db.recruiterAccessRequests[idx];
+    const currentStatus = normalizeRecruiterAccessRequestStatus(current.status);
+    const requestedStatus = normalizeRecruiterAccessRequestStatus(
+      req.body?.status,
+      currentStatus,
+    );
+    const adminNotes = truncateForStorage(req.body?.adminNotes, 2000);
+
+    if (!["approved", "rejected"].includes(requestedStatus)) {
+      return res.status(400).json({
+        message: "status must be approved or rejected.",
+      });
+    }
+    if (currentStatus === "approved") {
+      return res.status(409).json({
+        message: "This recruiter request has already been approved.",
+      });
+    }
+    if (currentStatus === "rejected" && requestedStatus === "rejected") {
+      return res.status(409).json({
+        message: "This recruiter request has already been rejected.",
+      });
+    }
+
+    const now = new Date();
+    let temporaryPassword: string | null = null;
+    let linkedUserId = current.userId || null;
+
+    if (requestedStatus === "approved") {
+      const suppliedPassword = String(req.body?.temporaryPassword || "").trim();
+      if (suppliedPassword && suppliedPassword.length < 10) {
+        return res.status(400).json({
+          message: "temporaryPassword must be at least 10 characters.",
+        });
+      }
+
+      temporaryPassword = suppliedPassword || generateTemporaryPassword();
+      const existingProfile = db.profiles.find(
+        (entry: any) => entry.email?.toLowerCase() === current.email,
+      );
+
+      if (existingProfile && !roleMatches(existingProfile.role, "recruiter")) {
+        return res.status(409).json({
+          message:
+            "A non-recruiter account already exists for this email. Resolve the user account before approval.",
+        });
+      }
+
+      if (existingProfile) {
+        existingProfile.name = existingProfile.name || current.name;
+        existingProfile.role = "employer";
+        existingProfile.isActive = true;
+        existingProfile.passwordHash = await bcrypt.hash(temporaryPassword, 10);
+        existingProfile.updatedAt = now;
+        linkedUserId = existingProfile.id;
+        await supabaseStore.upsertUser(existingProfile);
+      } else {
+        const recruiterProfile = {
+          id: crypto.randomUUID(),
+          email: current.email,
+          passwordHash: await bcrypt.hash(temporaryPassword, 10),
+          name: current.name,
+          role: "employer" as SupportedRole,
+          avatarUrl: null,
+          isActive: true,
+          createdAt: now,
+          updatedAt: now,
+        };
+        db.profiles.push(recruiterProfile);
+        linkedUserId = recruiterProfile.id;
+        await supabaseStore.upsertUser(recruiterProfile);
+      }
+    }
+
+    const nextRequest = {
+      ...current,
+      status: requestedStatus,
+      adminNotes,
+      reviewedBy: adminProfile.id,
+      reviewedAt: now,
+      userId: linkedUserId,
+      updatedAt: now,
+    };
+    db.recruiterAccessRequests[idx] = nextRequest;
+    await (supabaseStore as any).upsertRecruiterAccessRequest?.(nextRequest);
+
+    await appendAdminLog(
+      adminProfile,
+      requestedStatus === "approved"
+        ? "recruiter_request_approved"
+        : "recruiter_request_rejected",
+      "recruiter_request",
+      nextRequest.id,
+      {
+        email: nextRequest.email,
+        companyName: nextRequest.companyName,
+        userId: linkedUserId,
+      },
+    );
+
+    return res.json({
+      message:
+        requestedStatus === "approved"
+          ? "Recruiter request approved. Share the temporary password securely."
+          : "Recruiter request rejected.",
+      data: sanitizeRecruiterAccessRequest(nextRequest),
+      temporaryPassword,
+    });
+  },
+);
 
 // Users Routes (admin only)
 app.get(
@@ -5222,6 +5608,7 @@ app.get(
       ).length,
       totalResumes: db.resumes.length,
       totalJobs: db.jobs.length,
+      recruiterAccessRequests: summarizeRecruiterAccessRequests(),
       activeJobs: db.jobs.filter((entry: any) => entry.status === "active")
         .length,
       closedJobs: db.jobs.filter((entry: any) => entry.status === "closed")
@@ -5463,6 +5850,13 @@ process.on("SIGINT", () => {
 process.on("SIGTERM", () => {
   shutdownServer("SIGTERM");
 });
+
+export { app, getRuntimeReady };
+export const __test = {
+  db,
+  createToken,
+  sanitizeUser,
+};
 
 process.on("unhandledRejection", (reason) => {
   logError("process.unhandled_rejection", reason);

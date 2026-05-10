@@ -788,7 +788,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <Card hoverable={false} className="p-5 text-center">
           <p className="text-xs uppercase tracking-[0.12em] text-secondary mb-1">
             Total Users
@@ -821,6 +821,17 @@ export default function DashboardPage() {
           </p>
           <p className="text-xs text-secondary mt-1">
             Active {stats?.activeJobs || 0} - Closed {stats?.closedJobs || 0}
+          </p>
+        </Card>
+        <Card hoverable={false} className="p-5 text-center">
+          <p className="text-xs uppercase tracking-[0.12em] text-secondary mb-1">
+            Recruiter Requests
+          </p>
+          <p className="text-3xl font-semibold text-primary">
+            {stats?.recruiterAccessRequests?.pending || 0}
+          </p>
+          <p className="text-xs text-secondary mt-1">
+            Pending of {stats?.recruiterAccessRequests?.total || 0}
           </p>
         </Card>
         <Card hoverable={false} className="p-5 text-center">

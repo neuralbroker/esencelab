@@ -26,7 +26,8 @@ The project is split into a Next.js frontend, an Express API, and a FastAPI AI s
 
 ### Recruiter module
 
-- Recruiter login and protected recruiter flows
+- Recruiter login and protected recruiter flows after admin approval
+- Public recruiter access request submission for teams that want to join the platform
 - Job posting, editing, deletion, and listing
 - Candidate ranking by match score
 - Candidate match breakdowns for each job
@@ -37,6 +38,7 @@ The project is split into a Next.js frontend, an Express API, and a FastAPI AI s
 
 - Admin-only authentication and route protection
 - User management
+- Recruiter access request review, approval, rejection, and temporary-password issuance
 - Resume monitoring and moderation actions
 - Course management
 - Application summaries
@@ -83,8 +85,9 @@ Esencelab/
 
 No public credentials are documented in this repository.
 
-- Create local admin and recruiter users through backend bootstrap environment variables such as `INITIAL_ADMIN_*` and `INITIAL_RECRUITER_*`.
+- Create the first local admin through backend bootstrap environment variables such as `INITIAL_ADMIN_*`.
 - Create student accounts through the normal registration flow.
+- Recruiters should submit the public recruiter access request form; admins approve requests before recruiter login and hiring tools are enabled. `INITIAL_RECRUITER_*` remains available only for trusted bootstrap/admin-controlled environments.
 - Do not commit or publish real passwords, login pairs, or production secrets in the README or any tracked file.
 
 ## Quick Start
@@ -286,10 +289,11 @@ After starting the local stack, verify:
 Recommended manual workflow checks:
 
 - Student registration and login
+- Recruiter request submission, admin approval, and approved recruiter login
 - Beginner onboarding and target-role save
 - Resume upload and parsed profile retrieval
 - Career overview, roadmap, learning plan, AI coach, and mock interview
-- Recruiter login and job creation
+- Approved recruiter login and job creation
 - Student job visibility and application submission
 - Recruiter applicant visibility and status updates
 - Admin monitoring, users, and resume views
@@ -298,7 +302,8 @@ Recommended manual workflow checks:
 
 The backend currently exposes grouped endpoints for:
 
-- Auth: register, login, me, logout, profile update, password reset flow
+- Auth: student register, login, me, logout, profile update, password reset flow
+- Recruiter access requests: public submit plus admin list/review/approve/reject
 - Users: admin listing, lookup, update, deactivate/delete
 - Resume: upload, fetch current student resume, delete resume
 - Admin resume moderation: list, inspect, moderate, remove
@@ -318,11 +323,11 @@ The main API implementation lives in [backend/src/index.ts](backend/src/index.ts
 The frontend includes:
 
 - Public landing page
-- Login and registration
+- Login, student registration, and recruiter access request pages
 - Shared dashboard shell
 - Student dashboard, resume, applications, courses, interview, jobs, and roadmaps
 - Recruiter applicants and job details pages
-- Admin resume review and user management pages
+- Admin recruiter request review, resume review, and user management pages
 
 The frontend app router lives under [frontend/src/app](frontend/src/app).
 

@@ -1,21 +1,21 @@
-'use client';
+"use client";
 
-import { Suspense, useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowRight } from 'lucide-react';
-import { motion } from 'framer-motion';
-import { useAuth } from '@/contexts/AuthContext';
-import EsencelabLogo from '@/components/EsencelabLogo';
+import { Suspense, useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { ArrowRight } from "lucide-react";
+import { motion } from "framer-motion";
+import { useAuth } from "@/contexts/AuthContext";
+import EsencelabLogo from "@/components/EsencelabLogo";
 
 const shellClass =
-  'rounded-[34px] border border-[#ececec] bg-white/62 shadow-[0_30px_80px_-54px_rgba(17,17,17,0.32)] backdrop-blur-[18px]';
+  "rounded-[34px] border border-[#ececec] bg-white/62 shadow-[0_30px_80px_-54px_rgba(17,17,17,0.32)] backdrop-blur-[18px]";
 const panelClass =
-  'rounded-[30px] border border-[#ececec] bg-white/68 p-7 shadow-[0_18px_44px_-34px_rgba(17,17,17,0.22)] sm:p-9';
+  "rounded-[30px] border border-[#ececec] bg-white/68 p-7 shadow-[0_18px_44px_-34px_rgba(17,17,17,0.22)] sm:p-9";
 const chipClass =
-  'inline-flex rounded-full border border-[#ececec] bg-white/72 px-3 py-1.5 text-[0.76rem] font-semibold uppercase tracking-[0.22em] text-[#757575]';
+  "inline-flex rounded-full border border-[#ececec] bg-white/72 px-3 py-1.5 text-[0.76rem] font-semibold uppercase tracking-[0.22em] text-[#757575]";
 const inputClass =
-  'mt-2 w-full rounded-[18px] border border-[#ececec] bg-white px-5 py-3.5 text-base text-[#111111] outline-none transition placeholder:text-[#b3b8c3] focus:border-[#d8d8d8] focus:ring-2 focus:ring-[#e9e9e9]';
+  "mt-2 w-full rounded-[18px] border border-[#ececec] bg-white px-5 py-3.5 text-base text-[#111111] outline-none transition placeholder:text-[#b3b8c3] focus:border-[#d8d8d8] focus:ring-2 focus:ring-[#e9e9e9]";
 
 const pageFallback = (
   <div className="flex min-h-screen items-center justify-center bg-[#f4f4f2]">
@@ -27,21 +27,21 @@ const getAuthError = (error: any) => {
   const status = error?.response?.status;
   const serverMessage = error?.response?.data?.message;
 
-  if (status === 401) return 'Invalid email or password.';
-  if (!error?.response) return 'Unable to connect. Please try again later.';
-  return serverMessage || 'Login failed. Please try again.';
+  if (status === 401) return "Invalid email or password.";
+  if (!error?.response) return "Unable to connect. Please try again later.";
+  return serverMessage || "Login failed. Please try again.";
 };
 
 function LoginPageContent() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   const { login, isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const nextPath = searchParams.get('next') || '/dashboard';
+  const nextPath = searchParams.get("next") || "/dashboard";
 
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
@@ -56,11 +56,11 @@ function LoginPageContent() {
     const normalizedPassword = password.trim();
 
     if (!normalizedEmail || !normalizedPassword) {
-      setError('Email and password are required.');
+      setError("Email and password are required.");
       return;
     }
 
-    setError('');
+    setError("");
     setIsLoading(true);
 
     try {
@@ -100,22 +100,33 @@ function LoginPageContent() {
           transition={{ duration: 0.35 }}
           className={`${shellClass} grid gap-4 overflow-hidden p-3 sm:p-5 lg:grid-cols-[1fr_1.12fr]`}
         >
-          <section className={`${panelClass} flex min-h-[320px] flex-col justify-start sm:min-h-[430px]`}>
-            <span className={chipClass}>Sign in</span>
+          <section
+            className={`${panelClass} flex min-h-[320px] flex-col justify-start sm:min-h-[430px]`}
+          >
+            <span className={chipClass}>Student sign in</span>
             <h1 className="mt-6 max-w-[330px] text-[2.35rem] font-semibold leading-[0.98] tracking-[-0.06em] text-[#111111] sm:mt-7 sm:text-[3.7rem]">
               Welcome back.
             </h1>
             <p className="mt-4 max-w-[380px] text-[0.98rem] leading-[1.55] text-[#5f5f5f] sm:text-[1.02rem]">
-              Access your Esencelab dashboard, resume analysis, and role-fit workflows.
+              Students use this main login for dashboards, resume analysis, and
+              role-fit workflows. Approved recruiters can sign in here after
+              admin onboarding.
             </p>
+            <Link
+              href="/recruiter-request"
+              className="mt-6 inline-flex items-center text-[0.98rem] font-semibold text-[#111111] underline decoration-[#cfcfcf] underline-offset-4"
+            >
+              Recruiter? Request admin approval
+            </Link>
           </section>
 
           <section className={`${panelClass} min-h-[320px] sm:min-h-[430px]`}>
             <h2 className="text-[1.9rem] font-semibold tracking-[-0.05em] text-[#111111] sm:text-[2.1rem]">
-              Account login
+              Student account login
             </h2>
             <p className="mt-2 text-[1.02rem] text-[#5f5f5f]">
-              Enter your credentials to continue.
+              Enter your credentials to continue. Recruiter access is enabled
+              only after admin approval.
             </p>
 
             <form onSubmit={handleSubmit} className="mt-7 space-y-5">
@@ -126,7 +137,10 @@ function LoginPageContent() {
               )}
 
               <div>
-                <label htmlFor="login-email" className="text-[0.98rem] font-semibold text-[#444444]">
+                <label
+                  htmlFor="login-email"
+                  className="text-[0.98rem] font-semibold text-[#444444]"
+                >
                   Email
                 </label>
                 <input
@@ -142,7 +156,10 @@ function LoginPageContent() {
               </div>
 
               <div>
-                <label htmlFor="login-password" className="text-[0.98rem] font-semibold text-[#444444]">
+                <label
+                  htmlFor="login-password"
+                  className="text-[0.98rem] font-semibold text-[#444444]"
+                >
                   Password
                 </label>
                 <input
@@ -162,17 +179,28 @@ function LoginPageContent() {
                 disabled={isLoading}
                 className="inline-flex w-full items-center justify-center gap-2 rounded-[20px] bg-[#111111] px-6 py-3.5 text-[1.02rem] font-semibold text-white transition hover:bg-[#1d1d1d] disabled:cursor-not-allowed disabled:opacity-70"
               >
-                {isLoading ? 'Signing in...' : 'Continue'}
+                {isLoading ? "Signing in..." : "Continue"}
                 {!isLoading && <ArrowRight className="h-4 w-4" />}
               </button>
             </form>
 
-            <p className="mt-5 text-[0.98rem] text-[#505050]">
-              New to Esencelab?{' '}
-              <Link href="/register" className="font-semibold text-[#111111]">
-                Create an account
-              </Link>
-            </p>
+            <div className="mt-5 space-y-2 text-[0.98rem] text-[#505050]">
+              <p>
+                New student?{" "}
+                <Link href="/register" className="font-semibold text-[#111111]">
+                  Create a student account
+                </Link>
+              </p>
+              <p>
+                Recruiter onboarding?{" "}
+                <Link
+                  href="/recruiter-request"
+                  className="font-semibold text-[#111111]"
+                >
+                  Send a request to admin
+                </Link>
+              </p>
+            </div>
           </section>
         </motion.main>
       </div>

@@ -4,14 +4,14 @@
  * These interfaces describe the shapes returned by the backend so pages,
  * components, and API helpers all work from the same contract.
  */
-export type UserRole = 'student' | 'employer' | 'admin';
+export type UserRole = "student" | "employer" | "admin";
 
 export interface User {
   id: string;
   email: string;
   name: string;
   role: UserRole;
-  canonicalRole?: 'student' | 'recruiter' | 'admin';
+  canonicalRole?: "student" | "recruiter" | "admin";
   avatarUrl?: string | null;
   isActive?: boolean;
   createdAt?: string;
@@ -91,8 +91,8 @@ export interface Job {
   location: string;
   salaryMin?: number | null;
   salaryMax?: number | null;
-  jobType: 'full_time' | 'part_time' | 'internship' | 'contract';
-  status: 'active' | 'closed';
+  jobType: "full_time" | "part_time" | "internship" | "contract";
+  status: "active" | "closed";
   employerId: string;
   createdAt: string;
   updatedAt?: string;
@@ -103,9 +103,16 @@ export interface Application {
   jobId: string;
   candidateId: string;
   candidateProfileId?: string | null;
-  status: 'pending' | 'shortlisted' | 'rejected' | 'interview' | 'applied' | 'interviewing' | 'offer';
-  trackerStatus?: 'applied' | 'interviewing' | 'offer' | 'rejected';
-  storageStatus?: 'pending' | 'shortlisted' | 'interview' | 'rejected';
+  status:
+    | "pending"
+    | "shortlisted"
+    | "rejected"
+    | "interview"
+    | "applied"
+    | "interviewing"
+    | "offer";
+  trackerStatus?: "applied" | "interviewing" | "offer" | "rejected";
+  storageStatus?: "pending" | "shortlisted" | "interview" | "rejected";
   matchScore?: number;
   matchedSkills?: string[];
   missingSkills?: string[];
@@ -210,6 +217,32 @@ export interface RecruiterOverview {
   }>;
 }
 
+export type RecruiterAccessRequestStatus = "pending" | "approved" | "rejected";
+
+export interface RecruiterAccessRequest {
+  id: string;
+  name: string;
+  email: string;
+  companyName: string;
+  companyWebsite?: string;
+  jobTitle?: string;
+  message: string;
+  status: RecruiterAccessRequestStatus;
+  adminNotes?: string;
+  reviewedBy?: string | null;
+  reviewedAt?: string | null;
+  userId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RecruiterAccessRequestSummary {
+  total: number;
+  pending: number;
+  approved: number;
+  rejected: number;
+}
+
 export interface CourseRecommendation extends Course {
   matchedMissingSkills: string[];
   relevanceScore: number;
@@ -229,12 +262,12 @@ export interface StudentResource {
   provider: string;
   url: string;
   description: string;
-  format: 'official_docs' | 'guided_course' | 'hands_on' | 'reference';
-  level: 'beginner' | 'intermediate' | 'all_levels';
+  format: "official_docs" | "guided_course" | "hands_on" | "reference";
+  level: "beginner" | "intermediate" | "all_levels";
   skills: string[];
   roleIds: string[];
   whyItHelps: string;
-  supportFocus?: 'learn' | 'practice' | 'build' | 'interview_prep';
+  supportFocus?: "learn" | "practice" | "build" | "interview_prep";
   branchTags?: string[];
   recommendedYears?: string[];
   roadmapSource?: string;
@@ -275,8 +308,8 @@ export interface CareerRole {
 
 export interface RoadmapItem {
   skill: string;
-  status: 'completed' | 'in_progress' | 'missing';
-  level?: 'beginner' | 'intermediate' | 'advanced';
+  status: "completed" | "in_progress" | "missing";
+  level?: "beginner" | "intermediate" | "advanced";
 }
 
 export interface WeeklyPlannerItem {
@@ -350,7 +383,12 @@ export interface MockInterviewPack {
 export interface StudentAICoachResponse {
   provider: string;
   model?: string | null;
-  feature: 'skill_gap' | 'resume_improvement' | 'interview_prep' | 'project_ideas' | 'study_plan';
+  feature:
+    | "skill_gap"
+    | "resume_improvement"
+    | "interview_prep"
+    | "project_ideas"
+    | "study_plan";
   title: string;
   summary: string;
   actionItems: string[];
@@ -431,7 +469,7 @@ export interface AdminPlatformHealth {
   slowThresholdMs: number;
   avgResponseMs: number;
   aiService: {
-    status: 'up' | 'degraded' | 'down' | 'unknown';
+    status: "up" | "degraded" | "down" | "unknown";
     statusCode: number | null;
     latencyMs: number | null;
   };
@@ -455,6 +493,7 @@ export interface AdminMonitoringData {
   totalAdmins: number;
   totalResumes: number;
   totalJobs: number;
+  recruiterAccessRequests?: RecruiterAccessRequestSummary;
   activeJobs: number;
   closedJobs: number;
   totalApplications: number;
@@ -499,11 +538,11 @@ export interface AdminResumeRecord {
   fileName: string;
   fileUrl: string;
   skills: string[];
-  parseStatus: 'success' | 'failed';
+  parseStatus: "success" | "failed";
   flags: string[];
   resumeScore: number;
   parsedData: ResumeParsedData | Record<string, unknown>;
-  moderationStatus: 'clean' | 'flagged' | 'review';
+  moderationStatus: "clean" | "flagged" | "review";
   moderationNotes: string;
   moderationUpdatedAt: string | null;
   moderationUpdatedBy: string | null;

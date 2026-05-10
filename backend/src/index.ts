@@ -98,7 +98,7 @@ const SHUTDOWN_TIMEOUT_MS = Math.max(
   1000,
   Number(process.env.SHUTDOWN_TIMEOUT_MS || 10000),
 );
-let runtimeReady: Promise<void> = Promise.resolve();
+let runtimeReady: Promise<void> | null = null;
 
 const toBooleanEnv = (name: string, defaultValue = false) => {
   const rawValue = process.env[name];
@@ -522,7 +522,7 @@ app.use((req, res, next) => {
 
 app.use(async (req: RequestWithAuth, res, next) => {
   try {
-    await runtimeReady;
+    await getRuntimeReady();
     next();
   } catch (error: any) {
     logError("runtime.bootstrap_failed", error, {
@@ -5343,14 +5343,19 @@ const initializeRuntime = async () => {
   await ensureBootstrapUsers();
 };
 
-runtimeReady = initializeRuntime().catch((err) => {
-  logError("runtime.initialization_failed", err);
-  throw err;
-});
+const getRuntimeReady = () => {
+  if (!runtimeReady) {
+    runtimeReady = initializeRuntime().catch((err) => {
+      logError("runtime.initialization_failed", err);
+      throw err;
+    });
+  }
+  return runtimeReady;
+};
 
 const startServer = async () => {
   try {
-    await runtimeReady;
+    await getRuntimeReady();
     server = createServer(app);
     server.keepAliveTimeout = 65_000;
     server.headersTimeout = 66_000;
@@ -5374,7 +5379,11 @@ const startServer = async () => {
   }
 };
 
-if (process.env.VERCEL === undefined) {
+const shouldAutoStartServer =
+  process.env.VERCEL === undefined &&
+  process.env.SKIP_BACKEND_AUTOSTART !== "1";
+
+if (shouldAutoStartServer) {
   void startServer();
 }
 

@@ -10,44 +10,50 @@
  * 2. load remote tables into the in-memory runtime shape at startup
  * 3. persist writes from the API routes back into Supabase
  */
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 type AnyRecord = Record<string, any>;
 type QueryResult<T = any> = { data: T | null; error: any };
 
-const RETRYABLE_STATUS_CODES = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
+const RETRYABLE_STATUS_CODES = new Set([
+  408, 409, 425, 429, 500, 502, 503, 504,
+]);
 const RETRYABLE_ERROR_CODES = new Set([
-  'aborted',
-  'eai_again',
-  'econnaborted',
-  'econnrefused',
-  'econnreset',
-  'enetdown',
-  'enetreset',
-  'enetwork',
-  'enotfound',
-  'etimedout',
+  "aborted",
+  "eai_again",
+  "econnaborted",
+  "econnrefused",
+  "econnreset",
+  "enetdown",
+  "enetreset",
+  "enetwork",
+  "enotfound",
+  "etimedout",
 ]);
 const RETRYABLE_MESSAGE_FRAGMENTS = [
-  'connection terminated unexpectedly',
-  'dns lookup timed out',
-  'fetch failed',
-  'network request failed',
-  'network timeout',
-  'socket hang up',
-  'timed out',
-  'timeout',
-  'too many requests',
-  'try again later',
+  "connection terminated unexpectedly",
+  "dns lookup timed out",
+  "fetch failed",
+  "network request failed",
+  "network timeout",
+  "socket hang up",
+  "timed out",
+  "timeout",
+  "too many requests",
+  "try again later",
 ];
 const TRANSIENT_RETRY_DELAYS_MS = [150, 450, 900];
+const SUPABASE_BOOTSTRAP_PAGE_SIZE = Math.max(
+  100,
+  Math.min(1000, Number(process.env.SUPABASE_BOOTSTRAP_PAGE_SIZE || 1000)),
+);
 
 const toArray = (value: any): string[] => {
   if (Array.isArray(value)) {
     return value.filter(Boolean).map((item) => String(item));
   }
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     return value
-      .split(',')
+      .split(",")
       .map((item) => item.trim())
       .filter(Boolean);
   }
@@ -65,7 +71,7 @@ const toIso = (value: any): string => {
 };
 
 const toNumberOrNull = (value: any): number | null => {
-  if (value === null || value === undefined || value === '') return null;
+  if (value === null || value === undefined || value === "") return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 };
@@ -77,13 +83,13 @@ const toNumberOrZero = (value: any): number => {
 
 const toJsonArray = (value: any): any[] => {
   if (Array.isArray(value)) return value;
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     try {
       const parsed = JSON.parse(value);
       return Array.isArray(parsed) ? parsed : [];
     } catch {
       return value
-        .split(',')
+        .split(",")
         .map((item) => item.trim())
         .filter(Boolean);
     }
@@ -94,11 +100,12 @@ const toJsonArray = (value: any): any[] => {
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const stringifyError = (error: any): string => {
-  if (!error) return 'Unknown error';
-  if (typeof error === 'string') return error;
+  if (!error) return "Unknown error";
+  if (typeof error === "string") return error;
 
   const message = error.message || error.details || error.hint || String(error);
-  const code = error.code || error.status || error.statusCode || error.cause?.code;
+  const code =
+    error.code || error.status || error.statusCode || error.cause?.code;
   return code ? `${message} (code: ${code})` : String(message);
 };
 
@@ -109,7 +116,9 @@ const getErrorStatus = (error: any): number | null => {
 };
 
 const getErrorCode = (error: any): string => {
-  return String(error?.code || error?.cause?.code || '').trim().toLowerCase();
+  return String(error?.code || error?.cause?.code || "")
+    .trim()
+    .toLowerCase();
 };
 
 const isRetryableError = (error: any): boolean => {
@@ -124,7 +133,9 @@ const isRetryableError = (error: any): boolean => {
   }
 
   const message = stringifyError(error).toLowerCase();
-  return RETRYABLE_MESSAGE_FRAGMENTS.some((fragment) => message.includes(fragment));
+  return RETRYABLE_MESSAGE_FRAGMENTS.some((fragment) =>
+    message.includes(fragment),
+  );
 };
 
 export class SupabaseStore {
@@ -132,14 +143,24 @@ export class SupabaseStore {
   private active = false;
 
   constructor() {
-    const provider = (process.env.DATA_PROVIDER || 'memory').toLowerCase();
+    const provider = (process.env.DATA_PROVIDER || "memory").toLowerCase();
     const url = process.env.SUPABASE_URL;
-    const key =
-      process.env.SUPABASE_SERVICE_ROLE_KEY ||
-      process.env.SUPABASE_ANON_KEY ||
-      process.env.SUPABASE_KEY;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const fallbackKey =
+      process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
+    const key = serviceRoleKey || fallbackKey;
 
-    if (provider === 'supabase' && url && key) {
+    if (
+      provider === "supabase" &&
+      process.env.NODE_ENV === "production" &&
+      !serviceRoleKey
+    ) {
+      throw new Error(
+        "Production Supabase mode requires SUPABASE_SERVICE_ROLE_KEY for server-side persistence.",
+      );
+    }
+
+    if (provider === "supabase" && url && key) {
       this.client = createClient(url, key, {
         auth: { persistSession: false },
       });
@@ -153,25 +174,39 @@ export class SupabaseStore {
 
   private disableWithError(error: any, context?: string) {
     this.active = false;
-    const prefix = context ? `Supabase store disabled during ${context}:` : 'Supabase store disabled:';
+    const prefix = context
+      ? `Supabase store disabled during ${context}:`
+      : "Supabase store disabled:";
     console.error(prefix, stringifyError(error));
   }
 
-  private async runWithRetry<T>(context: string, operation: () => Promise<T>): Promise<T> {
+  private async runWithRetry<T>(
+    context: string,
+    operation: () => Promise<T>,
+  ): Promise<T> {
     let lastError: any;
 
-    for (let attempt = 0; attempt <= TRANSIENT_RETRY_DELAYS_MS.length; attempt += 1) {
+    for (
+      let attempt = 0;
+      attempt <= TRANSIENT_RETRY_DELAYS_MS.length;
+      attempt += 1
+    ) {
       try {
         return await operation();
       } catch (error) {
         lastError = error;
-        if (!isRetryableError(error) || attempt === TRANSIENT_RETRY_DELAYS_MS.length) {
+        if (
+          !isRetryableError(error) ||
+          attempt === TRANSIENT_RETRY_DELAYS_MS.length
+        ) {
           throw error;
         }
       }
 
       await delay(TRANSIENT_RETRY_DELAYS_MS[attempt]);
-      console.warn(`Supabase transient failure during ${context}; retrying attempt ${attempt + 2}.`);
+      console.warn(
+        `Supabase transient failure during ${context}; retrying attempt ${attempt + 2}.`,
+      );
     }
 
     throw lastError;
@@ -179,15 +214,31 @@ export class SupabaseStore {
 
   private async selectAll(table: string): Promise<any[]> {
     if (!this.client) return [];
-    const result = await this.runWithRetry(`bootstrap.select.${table}`, async () => {
-      const response = (await this.client!.from(table).select('*')) as QueryResult<any[]>;
-      if (response.error) {
-        throw response.error;
-      }
-      return response;
-    });
+    const rows: any[] = [];
+    let from = 0;
 
-    return Array.isArray(result.data) ? result.data : [];
+    while (true) {
+      const to = from + SUPABASE_BOOTSTRAP_PAGE_SIZE - 1;
+      const result = await this.runWithRetry(
+        `bootstrap.select.${table}.${from}-${to}`,
+        async () => {
+          const response = (await this.client!.from(table)
+            .select("*")
+            .range(from, to)) as QueryResult<any[]>;
+          if (response.error) {
+            throw response.error;
+          }
+          return response;
+        },
+      );
+
+      const page = Array.isArray(result.data) ? result.data : [];
+      rows.push(...page);
+      if (page.length < SUPABASE_BOOTSTRAP_PAGE_SIZE) break;
+      from += SUPABASE_BOOTSTRAP_PAGE_SIZE;
+    }
+
+    return rows;
   }
 
   private shouldDisable(error: any): boolean {
@@ -196,7 +247,7 @@ export class SupabaseStore {
 
   async bootstrap(db: AnyRecord) {
     if (!this.isActive() || !this.client) {
-      return { mode: 'memory', loaded: false };
+      return { mode: "memory", loaded: false };
     }
 
     try {
@@ -215,31 +266,31 @@ export class SupabaseStore {
         savedJobs,
         careerPreferences,
       ] = await Promise.all([
-        this.selectAll('users'),
-        this.selectAll('jobs'),
-        this.selectAll('resumes'),
-        this.selectAll('candidates'),
-        this.selectAll('applications'),
-        this.selectAll('courses'),
-        this.selectAll('recommendations'),
-        this.selectAll('resume_scores'),
-        this.selectAll('skill_progress'),
-        this.selectAll('learning_plans'),
-        this.selectAll('mock_interview_sessions'),
-        this.selectAll('saved_jobs'),
-        this.selectAll('career_preferences'),
+        this.selectAll("users"),
+        this.selectAll("jobs"),
+        this.selectAll("resumes"),
+        this.selectAll("candidates"),
+        this.selectAll("applications"),
+        this.selectAll("courses"),
+        this.selectAll("recommendations"),
+        this.selectAll("resume_scores"),
+        this.selectAll("skill_progress"),
+        this.selectAll("learning_plans"),
+        this.selectAll("mock_interview_sessions"),
+        this.selectAll("saved_jobs"),
+        this.selectAll("career_preferences"),
       ]);
 
       if ((users || []).length === 0) {
-        return { mode: 'supabase', loaded: false };
+        return { mode: "supabase", loaded: false };
       }
 
       db.profiles = (users || []).map((row: AnyRecord) => ({
         id: row.id,
         email: row.email,
-        passwordHash: row.password_hash || '',
+        passwordHash: row.password_hash || "",
         name: row.name,
-        role: row.role === 'recruiter' ? 'employer' : row.role,
+        role: row.role === "recruiter" ? "employer" : row.role,
         avatarUrl: row.avatar_url || null,
         isActive: row.is_active !== false,
         createdAt: toDate(row.created_at),
@@ -257,8 +308,9 @@ export class SupabaseStore {
         skills: toArray(row.skills),
         salaryMin: toNumberOrNull(row.salary_min),
         salaryMax: toNumberOrNull(row.salary_max),
-        jobType: row.job_type || 'full_time',
-        status: row.status || 'active',
+        jobType: row.job_type || "full_time",
+        experienceLevel: row.experience_level || "mid",
+        status: row.status || "active",
         createdAt: toDate(row.created_at),
         updatedAt: toDate(row.updated_at),
       }));
@@ -270,26 +322,38 @@ export class SupabaseStore {
         fileName: row.file_name,
         parsedData: row.parsed_data || {},
         skills: toArray(row.skills),
+        moderationStatus: row.moderation_status || "clean",
+        moderationNotes: row.moderation_notes || "",
+        moderationUpdatedBy: row.moderation_updated_by || null,
+        moderationUpdatedAt: row.moderation_updated_at
+          ? toDate(row.moderation_updated_at)
+          : null,
         createdAt: toDate(row.created_at),
         updatedAt: toDate(row.updated_at),
       }));
 
       db.candidates = (candidates || []).map((row: AnyRecord) => {
-        const skills = Array.isArray(row.skills) ? row.skills : toArray(row.skills);
-        const education = Array.isArray(row.education) ? row.education : row.education || [];
-        const experience = Array.isArray(row.experience) ? row.experience : row.experience || [];
+        const skills = Array.isArray(row.skills)
+          ? row.skills
+          : toArray(row.skills);
+        const education = Array.isArray(row.education)
+          ? row.education
+          : row.education || [];
+        const experience = Array.isArray(row.experience)
+          ? row.experience
+          : row.experience || [];
         return {
           id: row.id,
           userId: row.user_id,
           name: row.name,
           email: row.email,
-          role: row.role || 'Student',
+          role: row.role || "Student",
           skills: JSON.stringify(skills),
           education: JSON.stringify(education),
           experience: JSON.stringify(experience),
           parsedData: row.parsed_data || null,
           matchScore: toNumberOrZero(row.match_score),
-          status: row.status || 'new',
+          status: row.status || "new",
           createdAt: toDate(row.created_at),
           updatedAt: toDate(row.updated_at),
         };
@@ -299,12 +363,12 @@ export class SupabaseStore {
         id: row.id,
         jobId: row.job_id,
         candidateId: row.candidate_id,
-        status: row.status || 'pending',
+        status: row.status || "pending",
         matchScore: toNumberOrZero(row.match_score),
         matchedSkills: toArray(row.matched_skills),
         missingSkills: toArray(row.missing_skills),
         explanation: row.explanation || null,
-        notes: row.notes || '',
+        notes: row.notes || "",
         appliedAt: toDate(row.applied_at),
         updatedAt: toDate(row.updated_at),
       }));
@@ -337,7 +401,7 @@ export class SupabaseStore {
       db.resumeScores = (resumeScores || []).map((row: AnyRecord) => ({
         id: row.id,
         userId: row.user_id,
-        roleId: row.role_id || 'backend_developer',
+        roleId: row.role_id || "backend_developer",
         score: toNumberOrZero(row.score),
         sectionScores: row.section_scores || {},
         suggestions: Array.isArray(row.suggestions) ? row.suggestions : [],
@@ -347,9 +411,9 @@ export class SupabaseStore {
       db.skillProgress = (skillProgress || []).map((row: AnyRecord) => ({
         id: row.id,
         userId: row.user_id,
-        roleId: row.role_id || 'backend_developer',
+        roleId: row.role_id || "backend_developer",
         skillName: row.skill_name,
-        status: row.status || 'missing',
+        status: row.status || "missing",
         createdAt: toDate(row.created_at),
         updatedAt: toDate(row.updated_at),
       }));
@@ -357,22 +421,24 @@ export class SupabaseStore {
       db.learningPlans = (learningPlans || []).map((row: AnyRecord) => ({
         id: row.id,
         userId: row.user_id,
-        roleId: row.role_id || 'backend_developer',
+        roleId: row.role_id || "backend_developer",
         durationDays: toNumberOrZero(row.duration_days),
         planData: row.plan_data || {},
         createdAt: toDate(row.created_at),
         updatedAt: toDate(row.updated_at),
       }));
 
-      db.mockInterviewSessions = (mockInterviewSessions || []).map((row: AnyRecord) => ({
-        id: row.id,
-        userId: row.user_id,
-        roleId: row.role_id || 'backend_developer',
-        question: row.question || '',
-        answer: row.answer || '',
-        rating: toNumberOrZero(row.rating),
-        createdAt: toDate(row.created_at),
-      }));
+      db.mockInterviewSessions = (mockInterviewSessions || []).map(
+        (row: AnyRecord) => ({
+          id: row.id,
+          userId: row.user_id,
+          roleId: row.role_id || "backend_developer",
+          question: row.question || "",
+          answer: row.answer || "",
+          rating: toNumberOrZero(row.rating),
+          createdAt: toDate(row.created_at),
+        }),
+      );
 
       db.savedJobs = (savedJobs || []).map((row: AnyRecord) => ({
         id: row.id,
@@ -381,28 +447,35 @@ export class SupabaseStore {
         createdAt: toDate(row.created_at),
       }));
 
-      db.careerPreferences = (careerPreferences || []).map((row: AnyRecord) => ({
-        userId: row.user_id,
-        roleId: row.role_id || 'backend_developer',
-        updatedAt: toDate(row.updated_at),
-      }));
+      db.careerPreferences = (careerPreferences || []).map(
+        (row: AnyRecord) => ({
+          userId: row.user_id,
+          roleId: row.role_id || "backend_developer",
+          updatedAt: toDate(row.updated_at),
+        }),
+      );
 
-      return { mode: 'supabase', loaded: true };
+      return { mode: "supabase", loaded: true };
     } catch (error) {
       if (this.shouldDisable(error)) {
-        this.disableWithError(error, 'bootstrap');
+        this.disableWithError(error, "bootstrap");
       } else {
-        console.error('Supabase bootstrap failed after retries:', stringifyError(error));
+        console.error(
+          "Supabase bootstrap failed after retries:",
+          stringifyError(error),
+        );
       }
       throw error;
     }
   }
 
-  private async upsert(table: string, payload: AnyRecord, onConflict = 'id') {
+  private async upsert(table: string, payload: AnyRecord, onConflict = "id") {
     if (!this.isActive() || !this.client) return;
     try {
       await this.runWithRetry(`upsert.${table}`, async () => {
-        const { error } = await this.client!.from(table).upsert(payload, { onConflict });
+        const { error } = await this.client!.from(table).upsert(payload, {
+          onConflict,
+        });
         if (error) {
           throw error;
         }
@@ -419,7 +492,9 @@ export class SupabaseStore {
     if (!this.isActive() || !this.client) return;
     try {
       await this.runWithRetry(`delete.${table}`, async () => {
-        const { error } = await this.client!.from(table).delete().eq(column, value);
+        const { error } = await this.client!.from(table)
+          .delete()
+          .eq(column, value);
         if (error) {
           throw error;
         }
@@ -433,7 +508,7 @@ export class SupabaseStore {
   }
 
   async upsertUser(profile: AnyRecord) {
-    await this.upsert('users', {
+    await this.upsert("users", {
       id: profile.id,
       email: profile.email,
       password_hash: profile.passwordHash,
@@ -447,32 +522,38 @@ export class SupabaseStore {
   }
 
   async deleteUser(id: string) {
-    await this.delete('users', 'id', id);
+    await this.delete("users", "id", id);
   }
 
   async upsertResume(resume: AnyRecord) {
-    await this.upsert('resumes', {
+    await this.upsert("resumes", {
       id: resume.id,
       user_id: resume.userId,
       file_url: resume.fileUrl,
       file_name: resume.fileName,
       parsed_data: resume.parsedData || {},
       skills: toArray(resume.skills),
+      moderation_status: resume.moderationStatus || "clean",
+      moderation_notes: resume.moderationNotes || "",
+      moderation_updated_by: resume.moderationUpdatedBy || null,
+      moderation_updated_at: resume.moderationUpdatedAt
+        ? toIso(resume.moderationUpdatedAt)
+        : null,
       created_at: toIso(resume.createdAt),
       updated_at: toIso(resume.updatedAt),
     });
   }
 
   async deleteResume(id: string) {
-    await this.delete('resumes', 'id', id);
+    await this.delete("resumes", "id", id);
   }
 
   async deleteResumesByUser(userId: string) {
-    await this.delete('resumes', 'user_id', userId);
+    await this.delete("resumes", "user_id", userId);
   }
 
   async upsertCandidate(candidate: AnyRecord) {
-    await this.upsert('candidates', {
+    await this.upsert("candidates", {
       id: candidate.id,
       user_id: candidate.userId,
       name: candidate.name,
@@ -483,18 +564,18 @@ export class SupabaseStore {
       experience: toJsonArray(candidate.experience),
       parsed_data: candidate.parsedData || null,
       match_score: toNumberOrZero(candidate.matchScore),
-      status: candidate.status || 'new',
+      status: candidate.status || "new",
       created_at: toIso(candidate.createdAt),
       updated_at: toIso(candidate.updatedAt),
     });
   }
 
   async deleteCandidatesByUser(userId: string) {
-    await this.delete('candidates', 'user_id', userId);
+    await this.delete("candidates", "user_id", userId);
   }
 
   async upsertJob(job: AnyRecord) {
-    await this.upsert('jobs', {
+    await this.upsert("jobs", {
       id: job.id,
       employer_id: job.employerId,
       title: job.title,
@@ -505,19 +586,20 @@ export class SupabaseStore {
       location: job.location,
       salary_min: toNumberOrNull(job.salaryMin),
       salary_max: toNumberOrNull(job.salaryMax),
-      job_type: job.jobType || 'full_time',
-      status: job.status || 'active',
+      job_type: job.jobType || "full_time",
+      experience_level: job.experienceLevel || "mid",
+      status: job.status || "active",
       created_at: toIso(job.createdAt),
       updated_at: toIso(job.updatedAt),
     });
   }
 
   async deleteJob(id: string) {
-    await this.delete('jobs', 'id', id);
+    await this.delete("jobs", "id", id);
   }
 
   async upsertApplication(application: AnyRecord) {
-    await this.upsert('applications', {
+    await this.upsert("applications", {
       id: application.id,
       job_id: application.jobId,
       candidate_id: application.candidateId,
@@ -533,19 +615,19 @@ export class SupabaseStore {
   }
 
   async deleteApplicationsByJob(jobId: string) {
-    await this.delete('applications', 'job_id', jobId);
+    await this.delete("applications", "job_id", jobId);
   }
 
   async deleteApplicationsByCandidate(candidateId: string) {
-    await this.delete('applications', 'candidate_id', candidateId);
+    await this.delete("applications", "candidate_id", candidateId);
   }
 
   async deleteApplication(id: string) {
-    await this.delete('applications', 'id', id);
+    await this.delete("applications", "id", id);
   }
 
   async upsertCourse(course: AnyRecord) {
-    await this.upsert('courses', {
+    await this.upsert("courses", {
       id: course.id,
       title: course.title,
       description: course.description,
@@ -561,11 +643,11 @@ export class SupabaseStore {
   }
 
   async deleteCourse(id: string) {
-    await this.delete('courses', 'id', id);
+    await this.delete("courses", "id", id);
   }
 
   async upsertRecommendation(recommendation: AnyRecord) {
-    await this.upsert('recommendations', {
+    await this.upsert("recommendations", {
       id: recommendation.id,
       user_id: recommendation.userId,
       job_id: recommendation.jobId,
@@ -578,11 +660,11 @@ export class SupabaseStore {
   }
 
   async deleteRecommendationsByUser(userId: string) {
-    await this.delete('recommendations', 'user_id', userId);
+    await this.delete("recommendations", "user_id", userId);
   }
 
   async upsertResumeScore(score: AnyRecord) {
-    await this.upsert('resume_scores', {
+    await this.upsert("resume_scores", {
       id: score.id,
       user_id: score.userId,
       role_id: score.roleId,
@@ -594,11 +676,11 @@ export class SupabaseStore {
   }
 
   async deleteResumeScoresByUser(userId: string) {
-    await this.delete('resume_scores', 'user_id', userId);
+    await this.delete("resume_scores", "user_id", userId);
   }
 
   async upsertSkillProgress(progress: AnyRecord) {
-    await this.upsert('skill_progress', {
+    await this.upsert("skill_progress", {
       id: progress.id,
       user_id: progress.userId,
       role_id: progress.roleId,
@@ -610,11 +692,11 @@ export class SupabaseStore {
   }
 
   async deleteSkillProgressByUser(userId: string) {
-    await this.delete('skill_progress', 'user_id', userId);
+    await this.delete("skill_progress", "user_id", userId);
   }
 
   async upsertLearningPlan(plan: AnyRecord) {
-    await this.upsert('learning_plans', {
+    await this.upsert("learning_plans", {
       id: plan.id,
       user_id: plan.userId,
       role_id: plan.roleId,
@@ -626,11 +708,11 @@ export class SupabaseStore {
   }
 
   async deleteLearningPlansByUser(userId: string) {
-    await this.delete('learning_plans', 'user_id', userId);
+    await this.delete("learning_plans", "user_id", userId);
   }
 
   async upsertMockInterviewSession(session: AnyRecord) {
-    await this.upsert('mock_interview_sessions', {
+    await this.upsert("mock_interview_sessions", {
       id: session.id,
       user_id: session.userId,
       role_id: session.roleId,
@@ -642,11 +724,11 @@ export class SupabaseStore {
   }
 
   async deleteMockInterviewSessionsByUser(userId: string) {
-    await this.delete('mock_interview_sessions', 'user_id', userId);
+    await this.delete("mock_interview_sessions", "user_id", userId);
   }
 
   async upsertSavedJob(saved: AnyRecord) {
-    await this.upsert('saved_jobs', {
+    await this.upsert("saved_jobs", {
       id: saved.id,
       user_id: saved.userId,
       job_id: saved.jobId,
@@ -655,33 +737,33 @@ export class SupabaseStore {
   }
 
   async deleteSavedJob(id: string) {
-    await this.delete('saved_jobs', 'id', id);
+    await this.delete("saved_jobs", "id", id);
   }
 
   async deleteSavedJobsByUser(userId: string) {
-    await this.delete('saved_jobs', 'user_id', userId);
+    await this.delete("saved_jobs", "user_id", userId);
   }
 
   async upsertCareerPreference(preference: AnyRecord) {
     await this.upsert(
-      'career_preferences',
+      "career_preferences",
       {
         user_id: preference.userId,
         role_id: preference.roleId,
         updated_at: toIso(preference.updatedAt || new Date()),
       },
-      'user_id'
+      "user_id",
     );
   }
 
   async deleteCareerPreference(userId: string) {
-    await this.delete('career_preferences', 'user_id', userId);
+    await this.delete("career_preferences", "user_id", userId);
   }
 
   async insertAdminLog(log: AnyRecord) {
     if (!this.isActive() || !this.client) return;
     try {
-      const { error } = await this.client.from('admin_logs').insert({
+      const { error } = await this.client.from("admin_logs").insert({
         id: log.id,
         admin_id: log.adminId,
         action_type: log.actionType,
@@ -691,18 +773,24 @@ export class SupabaseStore {
         created_at: toIso(log.createdAt),
       });
       if (error) {
-        const message = String(error.message || '').toLowerCase();
+        const message = String(error.message || "").toLowerCase();
         if (
-          message.includes('relation') ||
-          message.includes('does not exist') ||
-          message.includes('schema cache')
+          message.includes("relation") ||
+          message.includes("does not exist") ||
+          message.includes("schema cache")
         ) {
           return;
         }
-        console.warn('Supabase admin_logs insert warning:', error.message || error);
+        console.warn(
+          "Supabase admin_logs insert warning:",
+          error.message || error,
+        );
       }
     } catch (error: any) {
-      console.warn('Supabase admin_logs insert failed:', error?.message || error);
+      console.warn(
+        "Supabase admin_logs insert failed:",
+        error?.message || error,
+      );
     }
   }
 }

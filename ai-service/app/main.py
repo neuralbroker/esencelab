@@ -16,6 +16,7 @@ The service is intentionally defensive:
 
 from __future__ import annotations
 
+from collections import OrderedDict
 import hashlib
 import importlib
 import io
@@ -36,6 +37,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 
 load_dotenv()
 
@@ -61,11 +63,21 @@ except Exception:  # pragma: no cover
     TfidfVectorizer = None
     cosine_similarity = None
 
+
+def _int_env(name: str, default: int, minimum: int, maximum: int) -> int:
+    raw = str(os.getenv(name, str(default))).strip()
+    try:
+        parsed = int(raw)
+    except (TypeError, ValueError):
+        parsed = default
+    return max(minimum, min(maximum, parsed))
+
+
 app = FastAPI(title="Esencelab AI Service")
 NODE_ENV = str(os.getenv("NODE_ENV", "development")).strip().lower()
 IS_PRODUCTION = NODE_ENV == "production"
 AI_INTERNAL_AUTH_TOKEN = str(os.getenv("AI_INTERNAL_AUTH_TOKEN", "")).strip()
-MAX_RESUME_FILE_SIZE_MB = max(1, min(8, int(os.getenv("AI_MAX_UPLOAD_MB", "4"))))
+MAX_RESUME_FILE_SIZE_MB = _int_env("AI_MAX_UPLOAD_MB", 4, 1, 8)
 MAX_RESUME_FILE_SIZE_BYTES = MAX_RESUME_FILE_SIZE_MB * 1024 * 1024
 LOG_LEVEL = str(os.getenv("LOG_LEVEL", "INFO")).strip().upper() or "INFO"
 
@@ -247,7 +259,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
 
 NLP_MODEL = None
-if spacy:
+if spacy and str(os.getenv("AI_ENABLE_SPACY", "true")).strip().lower() != "false":
     try:
         NLP_MODEL = spacy.load("en_core_web_sm")
     except Exception:
@@ -330,7 +342,7 @@ SKILL_KEYWORDS = [
     "figma",
 ]
 
-EMAIL_REGEX = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z|a-z]{2,}\b")
+EMAIL_REGEX = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
 PHONE_REGEX = re.compile(
     r"\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b"
 )
@@ -365,8 +377,11 @@ STUDENT_ASSISTANT_PROMPTS = {
     "study_plan": "Create a concise weekly study plan with milestones and realistic outcomes.",
 }
 
-ASSISTANT_CACHE_TTL_SEC = int(os.getenv("STUDENT_ASSISTANT_CACHE_TTL_SEC", "300"))
-_assistant_cache: Dict[str, Dict[str, Any]] = {}
+ASSISTANT_CACHE_TTL_SEC = _int_env("STUDENT_ASSISTANT_CACHE_TTL_SEC", 300, 30, 3600)
+ASSISTANT_CACHE_MAX_ENTRIES = _int_env(
+    "STUDENT_ASSISTANT_CACHE_MAX_ENTRIES", 256, 16, 4096
+)
+_assistant_cache: "OrderedDict[str, Dict[str, Any]]" = OrderedDict()
 
 
 class ResumeParseResponse(BaseModel):
@@ -405,10 +420,12 @@ class StudentAssistantResponse(BaseModel):
 
 
 def extract_text_from_pdf_bytes(content: bytes) -> str:
-    text_chunks: List[str] = []
+    if not content.startswith(b"%PDF"):
+        raise ValueError("Uploaded file is not a valid PDF")
 
     if pdfplumber is not None:
         try:
+            text_chunks: List[str] = []
             with pdfplumber.open(io.BytesIO(content)) as pdf:
                 for page in pdf.pages:
                     text_chunks.append(page.extract_text() or "")
@@ -420,10 +437,13 @@ def extract_text_from_pdf_bytes(content: bytes) -> str:
 
     if pypdf is not None:
         try:
+            text_chunks = []
             reader = pypdf.PdfReader(io.BytesIO(content))
             for page in reader.pages:
                 text_chunks.append(page.extract_text() or "")
-            return "\n".join(text_chunks).strip()
+            extracted = "\n".join(text_chunks).strip()
+            if extracted:
+                return extracted
         except Exception:
             pass
 
@@ -461,13 +481,36 @@ def extract_name(lines: List[str], normalized_text: str) -> Optional[str]:
     return None
 
 
+def _skill_display_name(skill: str) -> str:
+    special = {
+        "c++": "C++",
+        "c#": "C#",
+        "node.js": "Node.js",
+        "ci/cd": "CI/CD",
+        "aws": "AWS",
+        "gcp": "GCP",
+        "html": "HTML",
+        "css": "CSS",
+        "sql": "SQL",
+        "nlp": "NLP",
+        "etl": "ETL",
+    }
+    normalized = skill.strip().lower()
+    return special.get(normalized, skill.title() if len(skill) > 3 else skill.upper())
+
+
+def _skill_pattern(skill: str) -> re.Pattern[str]:
+    escaped = re.escape(skill.lower())
+    return re.compile(rf"(?<![a-z0-9+#.]){escaped}(?![a-z0-9+#.])", re.IGNORECASE)
+
+
 def extract_skills(text: str) -> List[str]:
     text_lower = text.lower()
     found_skills: List[str] = []
 
-    for skill in SKILL_KEYWORDS:
-        if skill in text_lower:
-            formatted = skill.title() if len(skill) > 3 else skill.upper()
+    for skill in sorted(SKILL_KEYWORDS, key=len, reverse=True):
+        if _skill_pattern(skill).search(text_lower):
+            formatted = _skill_display_name(skill)
             if formatted not in found_skills:
                 found_skills.append(formatted)
 
@@ -664,10 +707,22 @@ def calculate_tfidf_match(
             return 0.0
         return len(resume_set & required_set) / len(required_set)
 
-    vectorizer = TfidfVectorizer(ngram_range=(1, 2))
-    tfidf_matrix = vectorizer.fit_transform(corpus)
-    score = float(cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:2])[0][0])
-    return max(0.0, min(score, 1.0))
+    resume_set = {skill.lower() for skill in resume_skills}
+    required_set = {skill.lower() for skill in required_skills} or {
+        skill.lower() for skill in extract_skills(job_requirements)
+    }
+    if not required_set:
+        return 0.0
+
+    try:
+        vectorizer = TfidfVectorizer(
+            ngram_range=(1, 2), token_pattern=r"(?u)\b\w[\w+#.\-/]*\b"
+        )
+        tfidf_matrix = vectorizer.fit_transform(corpus)
+        score = float(cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:2])[0][0])
+        return max(0.0, min(score, 1.0))
+    except ValueError:
+        return len(resume_set & required_set) / len(required_set)
 
 
 def generate_explanation(
@@ -684,6 +739,14 @@ def generate_explanation(
     return f"Candidate is a {verdict}. Matched skills: {', '.join(matched[:6]) or 'none'}. Missing focus areas: {missing_hint}."
 
 
+def _as_list(value: Any) -> List[Any]:
+    return value if isinstance(value, list) else []
+
+
+def _as_dict(value: Any) -> Dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
 def _compact_context(context: Dict[str, Any]) -> Dict[str, Any]:
     """
     Keep only the fields that matter for the student assistant request.
@@ -691,24 +754,27 @@ def _compact_context(context: Dict[str, Any]) -> Dict[str, Any]:
     This protects latency and token usage by trimming large objects before we
     send the payload to Groq.
     """
-    role = str(context.get("targetRole") or "").strip()
+    safe_context = _as_dict(context)
+    role = str(safe_context.get("targetRole") or "").strip()
     skills = [
-        str(item).strip() for item in (context.get("skills") or []) if str(item).strip()
+        str(item).strip()
+        for item in _as_list(safe_context.get("skills"))
+        if str(item).strip()
     ]
     missing_skills = [
         str(item).strip()
-        for item in (context.get("missingSkills") or [])
+        for item in _as_list(safe_context.get("missingSkills"))
         if str(item).strip()
     ]
-    resume_summary = str(context.get("resumeSummary") or "").strip()
-    readiness = context.get("readinessScore")
+    resume_summary = str(safe_context.get("resumeSummary") or "").strip()
+    readiness = safe_context.get("readinessScore")
     roadmap_highlights = [
         str(item).strip()
-        for item in (context.get("roadmapHighlights") or [])
+        for item in _as_list(safe_context.get("roadmapHighlights"))
         if str(item).strip()
     ]
     top_resources = []
-    for item in (context.get("topResources") or [])[:3]:
+    for item in _as_list(safe_context.get("topResources"))[:3]:
         if not isinstance(item, dict):
             continue
         title = str(item.get("title") or "").strip()
@@ -723,7 +789,7 @@ def _compact_context(context: Dict[str, Any]) -> Dict[str, Any]:
                 }
             )
     top_jobs = []
-    for item in (context.get("topRecommendedJobs") or [])[:3]:
+    for item in _as_list(safe_context.get("topRecommendedJobs"))[:3]:
         if not isinstance(item, dict):
             continue
         title = str(item.get("title") or "").strip()
@@ -737,8 +803,8 @@ def _compact_context(context: Dict[str, Any]) -> Dict[str, Any]:
                     "matchScore": match_score,
                 }
             )
-    score_sections = context.get("scoreSections") or {}
-    application_status_counts = context.get("applicationStatusCounts") or {}
+    score_sections = _as_dict(safe_context.get("scoreSections"))
+    application_status_counts = _as_dict(safe_context.get("applicationStatusCounts"))
     role = role[:120]
     resume_summary = resume_summary[:700]
     skills = skills[:30]
@@ -777,6 +843,9 @@ def _prune_assistant_cache() -> None:
     ]
     for key in stale_keys:
         _assistant_cache.pop(key, None)
+
+    while len(_assistant_cache) > ASSISTANT_CACHE_MAX_ENTRIES:
+        _assistant_cache.popitem(last=False)
 
 
 def _extract_json_object(raw_text: str) -> Dict[str, Any]:
@@ -970,22 +1039,26 @@ def _call_groq_assistant(
     )
 
     try:
-        with urllib.request.urlopen(req, timeout=22) as response:
+        with urllib.request.urlopen(req, timeout=18) as response:
             payload = json.loads(response.read().decode("utf-8"))
-            content = (
-                payload.get("choices", [{}])[0].get("message", {}).get("content", "")
+            choices = payload.get("choices") if isinstance(payload, dict) else None
+            if not isinstance(choices, list) or not choices:
+                return _fallback_student_assistant(feature, prompt, context)
+            message = (
+                choices[0].get("message") if isinstance(choices[0], dict) else None
             )
+            content = message.get("content", "") if isinstance(message, dict) else ""
             parsed = _extract_json_object(content)
             title = str(parsed.get("title") or "").strip() or "AI Career Guidance"
             summary = str(parsed.get("summary") or "").strip()
             action_items = [
                 str(item).strip()
-                for item in (parsed.get("actionItems") or [])
+                for item in _as_list(parsed.get("actionItems"))
                 if str(item).strip()
             ][:8]
             follow_ups = [
                 str(item).strip()
-                for item in (parsed.get("followUpQuestions") or [])
+                for item in _as_list(parsed.get("followUpQuestions"))
                 if str(item).strip()
             ][:5]
 
@@ -1002,7 +1075,10 @@ def _call_groq_assistant(
                 "followUpQuestions": follow_ups
                 or ["Do you want a more advanced version of this plan?"],
             }
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError):
+    except Exception as exc:
+        _log_event(
+            "warning", "assistant.provider_fallback", error=_serialize_error(exc)
+        )
         return _fallback_student_assistant(feature, prompt, context)
 
 
@@ -1024,22 +1100,40 @@ async def ai_health_alias():
 @app.post("/ai/parse-resume", response_model=ResumeParseResponse)
 async def parse_resume_endpoint(request: Request, file: UploadFile = File(...)):
     filename = str(file.filename or "").strip().lower()
+    content_length = request.headers.get("content-length")
+    try:
+        raw_content_length = int(content_length) if content_length else 0
+    except ValueError:
+        raw_content_length = 0
+    if raw_content_length > MAX_RESUME_FILE_SIZE_BYTES + 2048:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Maximum size is {MAX_RESUME_FILE_SIZE_MB}MB.",
+        )
     if not filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
 
     try:
-        content = await file.read()
-        if len(content) > MAX_RESUME_FILE_SIZE_BYTES:
-            raise HTTPException(
-                status_code=413,
-                detail=f"File too large. Maximum size is {MAX_RESUME_FILE_SIZE_MB}MB.",
-            )
+        chunks: List[bytes] = []
+        bytes_read = 0
+        while True:
+            chunk = await file.read(1024 * 1024)
+            if not chunk:
+                break
+            bytes_read += len(chunk)
+            if bytes_read > MAX_RESUME_FILE_SIZE_BYTES:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"File too large. Maximum size is {MAX_RESUME_FILE_SIZE_MB}MB.",
+                )
+            chunks.append(chunk)
+        content = b"".join(chunks)
         parsed_data = empty_parsed_resume()
 
         try:
-            text = extract_text_from_pdf_bytes(content)
+            text = await run_in_threadpool(extract_text_from_pdf_bytes, content)
             if text:
-                parsed_data = parse_resume_text(text)
+                parsed_data = await run_in_threadpool(parse_resume_text, text)
         except Exception as exc:
             _log_event(
                 "warning",
@@ -1090,7 +1184,8 @@ async def match_jobs(request: MatchRequest, http_request: Request):
         )
 
         skill_overlap = len(matched) / len(job_set) if job_set else 0.0
-        tfidf_score = calculate_tfidf_match(
+        tfidf_score = await run_in_threadpool(
+            calculate_tfidf_match,
             resume_skills,
             job_skills,
             request.jobRequirements,
@@ -1147,9 +1242,10 @@ async def student_assistant_endpoint(
     _prune_assistant_cache()
     cached = _assistant_cache.get(cache_key)
     if cached and cached.get("expiresAt", 0) > time.time():
+        _assistant_cache.move_to_end(cache_key)
         return StudentAssistantResponse(**cached["data"])
 
-    result = _call_groq_assistant(feature, prompt, context)
+    result = await run_in_threadpool(_call_groq_assistant, feature, prompt, context)
     # Ensure response safety and shape
     safe_result = {
         "provider": str(result.get("provider") or "fallback"),
@@ -1161,13 +1257,13 @@ async def student_assistant_endpoint(
         ],
         "actionItems": [
             str(item).strip()
-            for item in (result.get("actionItems") or [])
+            for item in _as_list(result.get("actionItems"))
             if str(item).strip()
         ][:8]
         or ["Try again with a more specific question."],
         "followUpQuestions": [
             str(item).strip()
-            for item in (result.get("followUpQuestions") or [])
+            for item in _as_list(result.get("followUpQuestions"))
             if str(item).strip()
         ][:5],
     }
@@ -1176,6 +1272,8 @@ async def student_assistant_endpoint(
         "expiresAt": time.time() + max(30, ASSISTANT_CACHE_TTL_SEC),
         "data": safe_result,
     }
+    _assistant_cache.move_to_end(cache_key)
+    _prune_assistant_cache()
     _log_event(
         "info",
         "student_assistant.completed",

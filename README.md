@@ -286,6 +286,17 @@ After starting the local stack, verify:
 - Backend health: [http://127.0.0.1:3101/api/health](http://127.0.0.1:3101/api/health)
 - AI health: [http://127.0.0.1:3102/health](http://127.0.0.1:3102/health)
 
+Automated launch validation commands:
+
+- Backend RBAC smoke + stress: `npm --prefix backend run test:all`
+- Frontend production build/type/lint: `npm --prefix frontend run build`
+- Frontend lint only: `npm --prefix frontend run lint`
+- Backend dependency audit: `npm --prefix backend audit --audit-level=moderate`
+- Frontend dependency audit: `npm --prefix frontend audit --audit-level=moderate`
+- AI smoke tests: `python ai-service/tests/smoke_test.py`
+- AI audit tool setup: `python -m pip install -r ai-service/requirements-dev.txt`
+- AI dependency audit: `python -m pip_audit -r ai-service/requirements.txt`
+
 Recommended manual workflow checks:
 
 - Student registration and login

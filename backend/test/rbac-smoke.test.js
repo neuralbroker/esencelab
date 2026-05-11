@@ -7,9 +7,13 @@ process.env.NODE_ENV = "test";
 process.env.SKIP_BACKEND_AUTOSTART = "1";
 process.env.DATA_PROVIDER = "supabase";
 process.env.SUPABASE_MOCK = "1";
-process.env.JWT_SECRET =
-  "test-jwt-secret-with-more-than-thirty-two-characters";
+process.env.JWT_SECRET = "test-jwt-secret-with-more-than-thirty-two-characters";
 process.env.FRONTEND_URLS = "http://localhost:3000";
+
+if (process.env.DEBUG_TEST_LOGS !== "1") {
+  console.log = () => undefined;
+  console.warn = () => undefined;
+}
 
 const { app, __test } = require("../dist/index.js");
 
@@ -207,7 +211,10 @@ test("student auth and recruiter admin approval flow", async () => {
       recruiterToken,
     );
     assert.equal(recruiterJob.response.status, 201);
-    assert.equal(recruiterJob.payload.data.employerId, recruiterLogin.payload.user.id);
+    assert.equal(
+      recruiterJob.payload.data.employerId,
+      recruiterLogin.payload.user.id,
+    );
   } finally {
     await close(server);
   }

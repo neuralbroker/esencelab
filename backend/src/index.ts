@@ -569,18 +569,28 @@ app.use((req, res, next) => {
   return next();
 });
 
-// Rate limiter for auth routes (max 15 attempts per 15 minutes)
+// Rate limiter for auth routes (max 15 attempts per 15 minutes by default)
+const AUTH_RATE_LIMIT_MAX_REQUESTS = (() => {
+  const parsed = Number(process.env.AUTH_RATE_LIMIT_MAX_REQUESTS || 15);
+  return Math.max(5, Number.isFinite(parsed) ? parsed : 15);
+})();
+
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 15,
+  max: AUTH_RATE_LIMIT_MAX_REQUESTS,
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Too many attempts, please try again later" },
 });
 
+const RECRUITER_REQUEST_RATE_LIMIT_PER_HOUR = (() => {
+  const parsed = Number(process.env.RECRUITER_REQUEST_RATE_LIMIT_PER_HOUR || 8);
+  return Math.max(4, Number.isFinite(parsed) ? parsed : 8);
+})();
+
 const recruiterRequestLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
-  max: 8,
+  max: RECRUITER_REQUEST_RATE_LIMIT_PER_HOUR,
   standardHeaders: true,
   legacyHeaders: false,
   message: {

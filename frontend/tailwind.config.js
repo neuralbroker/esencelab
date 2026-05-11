@@ -8,7 +8,7 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        background: "#f2f2f2",
+        background: "#f4f4f2",
         primary: "#111111",
         secondary: "rgba(17,17,17,0.72)",
         accent: "#111111",
@@ -20,10 +20,10 @@ module.exports = {
         serif: ["var(--font-playfair-display)", "serif"],
       },
       backgroundImage: {
-        'mesh-ivory': 'radial-gradient(at 40% 20%, hsla(43,40%,95%,1) 0px, transparent 50%), radial-gradient(at 80% 0%, hsla(43,20%,97%,1) 0px, transparent 50%), radial-gradient(at 0% 50%, hsla(43,30%,96%,1) 0px, transparent 50%)',
+        "mesh-ivory":
+          "radial-gradient(at 40% 20%, hsla(43,40%,95%,1) 0px, transparent 50%), radial-gradient(at 80% 0%, hsla(43,20%,97%,1) 0px, transparent 50%), radial-gradient(at 0% 50%, hsla(43,30%,96%,1) 0px, transparent 50%)",
       },
     },
   },
   plugins: [],
 };
-

@@ -17,6 +17,48 @@
     @apply py-8 sm:py-10 lg:py-14;
   }
 
+  .app-page-surface {
+    background:
+      radial-gradient(
+        circle at 0% 0%,
+        rgba(210, 210, 210, 0.42),
+        transparent 34%
+      ),
+      radial-gradient(
+        circle at 100% 0%,
+        rgba(245, 245, 245, 0.94),
+        transparent 34%
+      ),
+      linear-gradient(
+        180deg,
+        var(--surface-mid) 0%,
+        var(--surface-soft) 55%,
+        var(--surface-light) 100%
+      );
+  }
+
+  .app-glass-shell {
+    @apply rounded-[34px] border shadow-[0_30px_80px_-54px_rgba(17,17,17,0.32)] backdrop-blur-[18px];
+    border-color: var(--border-soft);
+    background: rgba(255, 255, 255, 0.62);
+  }
+
+  .app-glass-panel {
+    @apply rounded-[30px] border p-7 shadow-[0_18px_44px_-34px_rgba(17,17,17,0.22)] sm:p-9;
+    border-color: var(--border-soft);
+    background: rgba(255, 255, 255, 0.68);
+  }
+
+  .app-chip {
+    @apply inline-flex rounded-full border px-3 py-1.5 text-[0.76rem] font-semibold uppercase tracking-[0.22em] text-[#757575];
+    border-color: var(--border-soft);
+    background: rgba(255, 255, 255, 0.72);
+  }
+
+  .app-input {
+    @apply mt-2 w-full rounded-[18px] border border-[#ececec] bg-white px-5 py-3.5 text-base text-[#111111] outline-none transition placeholder:text-[#b3b8c3] focus:border-[#d8d8d8] focus:ring-2 focus:ring-[#e9e9e9];
+  }
+
   .glass-card {
     @apply rounded-2xl border p-[3%] backdrop-blur-md transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_20px_42px_-34px_rgba(20,20,20,0.55)];
     border-color: rgba(255, 255, 255, 0.72);
@@ -37,15 +79,36 @@
 
   .dashboard-shell {
     background:
-      radial-gradient(circle at 0% 0%, rgba(200, 200, 200, 0.33), transparent 38%),
-      radial-gradient(circle at 100% 5%, rgba(245, 245, 245, 0.88), transparent 32%),
-      linear-gradient(180deg, #f2f2f2 0%, #f5f5f5 52%, #fafafa 100%);
+      radial-gradient(
+        circle at 0% 0%,
+        rgba(210, 210, 210, 0.42),
+        transparent 34%
+      ),
+      radial-gradient(
+        circle at 100% 0%,
+        rgba(245, 245, 245, 0.94),
+        transparent 34%
+      ),
+      linear-gradient(
+        180deg,
+        var(--surface-mid) 0%,
+        var(--surface-soft) 55%,
+        var(--surface-light) 100%
+      );
   }
 
   .notion-surface {
     background:
-      radial-gradient(circle at 12% -8%, rgba(172, 172, 172, 0.1), transparent 35%),
-      radial-gradient(circle at 85% 0%, rgba(10, 10, 10, 0.05), transparent 30%),
+      radial-gradient(
+        circle at 12% -8%,
+        rgba(172, 172, 172, 0.1),
+        transparent 35%
+      ),
+      radial-gradient(
+        circle at 85% 0%,
+        rgba(10, 10, 10, 0.05),
+        transparent 30%
+      ),
       #fafafa;
   }
 
@@ -54,7 +117,11 @@
       linear-gradient(to right, rgba(10, 10, 10, 0.045) 1px, transparent 1px),
       linear-gradient(to bottom, rgba(10, 10, 10, 0.045) 1px, transparent 1px);
     background-size: 38px 38px;
-    mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1), rgba(0, 0, 0, 0.25));
+    mask-image: linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 1),
+      rgba(0, 0, 0, 0.25)
+    );
   }
 
   .notion-panel {
@@ -67,8 +134,16 @@
 
   .landing-shell {
     background:
-      radial-gradient(circle at 8% -6%, rgba(172, 172, 172, 0.12), transparent 34%),
-      radial-gradient(circle at 95% 0%, rgba(10, 10, 10, 0.08), transparent 30%),
+      radial-gradient(
+        circle at 8% -6%,
+        rgba(172, 172, 172, 0.12),
+        transparent 34%
+      ),
+      radial-gradient(
+        circle at 95% 0%,
+        rgba(10, 10, 10, 0.08),
+        transparent 30%
+      ),
       #f7f7f7;
   }
 
@@ -77,33 +152,60 @@
       linear-gradient(to right, rgba(10, 10, 10, 0.04) 1px, transparent 1px),
       linear-gradient(to bottom, rgba(10, 10, 10, 0.04) 1px, transparent 1px);
     background-size: 42px 42px;
-    mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1), rgba(0, 0, 0, 0.2));
+    mask-image: linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 1),
+      rgba(0, 0, 0, 0.2)
+    );
   }
 
   .landing-aura {
     @apply absolute h-[340px] w-[340px] rounded-full;
-    background: radial-gradient(circle, rgba(172, 172, 172, 0.2) 0%, rgba(172, 172, 172, 0) 70%);
+    background: radial-gradient(
+      circle,
+      rgba(172, 172, 172, 0.2) 0%,
+      rgba(172, 172, 172, 0) 70%
+    );
     filter: blur(6px);
     animation: drift 11s ease-in-out infinite;
   }
 
   .landing-aura-secondary {
     @apply absolute h-[420px] w-[420px] rounded-full;
-    background: radial-gradient(circle, rgba(20, 20, 20, 0.14) 0%, rgba(20, 20, 20, 0) 72%);
+    background: radial-gradient(
+      circle,
+      rgba(20, 20, 20, 0.14) 0%,
+      rgba(20, 20, 20, 0) 72%
+    );
     filter: blur(10px);
     animation: drift-alt 14s ease-in-out infinite;
   }
 
   .landing-noise {
-    background-image: radial-gradient(rgba(10, 10, 10, 0.06) 0.5px, transparent 0.5px);
+    background-image: radial-gradient(
+      rgba(10, 10, 10, 0.06) 0.5px,
+      transparent 0.5px
+    );
     background-size: 4px 4px;
-    mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.35), transparent 90%);
+    mask-image: linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0.35),
+      transparent 90%
+    );
   }
 
   .velocity-shell {
     background:
-      radial-gradient(circle at 8% 12%, rgba(184, 184, 184, 0.24), transparent 36%),
-      radial-gradient(circle at 90% -4%, rgba(196, 196, 196, 0.2), transparent 34%),
+      radial-gradient(
+        circle at 8% 12%,
+        rgba(184, 184, 184, 0.24),
+        transparent 36%
+      ),
+      radial-gradient(
+        circle at 90% -4%,
+        rgba(196, 196, 196, 0.2),
+        transparent 34%
+      ),
       linear-gradient(180deg, #f8f8f8 0%, #fbfbfb 46%, #f7f7f7 100%);
   }
 
@@ -112,7 +214,11 @@
       linear-gradient(to right, rgba(17, 17, 17, 0.06) 1px, transparent 1px),
       linear-gradient(to bottom, rgba(17, 17, 17, 0.06) 1px, transparent 1px);
     background-size: 46px 46px;
-    mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.85), rgba(0, 0, 0, 0.12));
+    mask-image: linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0.85),
+      rgba(0, 0, 0, 0.12)
+    );
   }
 
   .velocity-card {
@@ -142,27 +248,45 @@
   .velocity-orb-mint {
     height: 320px;
     width: 320px;
-    background: radial-gradient(circle, rgba(184, 184, 184, 0.32) 0%, rgba(184, 184, 184, 0) 74%);
+    background: radial-gradient(
+      circle,
+      rgba(184, 184, 184, 0.32) 0%,
+      rgba(184, 184, 184, 0) 74%
+    );
     animation: float-soft 13s ease-in-out infinite;
   }
 
   .velocity-orb-sky {
     height: 340px;
     width: 340px;
-    background: radial-gradient(circle, rgba(196, 196, 196, 0.28) 0%, rgba(196, 196, 196, 0) 72%);
+    background: radial-gradient(
+      circle,
+      rgba(196, 196, 196, 0.28) 0%,
+      rgba(196, 196, 196, 0) 72%
+    );
     animation: float-soft-reverse 15s ease-in-out infinite;
   }
 
   .velocity-orb-coral {
     height: 280px;
     width: 280px;
-    background: radial-gradient(circle, rgba(208, 208, 208, 0.24) 0%, rgba(208, 208, 208, 0) 74%);
+    background: radial-gradient(
+      circle,
+      rgba(208, 208, 208, 0.24) 0%,
+      rgba(208, 208, 208, 0) 74%
+    );
     animation: float-soft 11s ease-in-out infinite;
   }
 }
 
 :root {
-  --background: #f2f2f2;
+  --background: #f4f4f2;
+  --surface-soft: #f4f4f2;
+  --surface-mid: #efefed;
+  --surface-light: #f8f8f6;
+  --ink: #111111;
+  --muted-ink: #5f5f5f;
+  --border-soft: #ececec;
   --landing-ink: #111111;
   --landing-mint: #111111;
   --landing-sky: #bfbfbf;
@@ -348,4 +472,3 @@ video {
     display: none;
   }
 }
-

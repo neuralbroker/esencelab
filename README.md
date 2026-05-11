@@ -199,6 +199,12 @@ Use [backend/.env.example](backend/.env.example) as the starting point.
 | `SUPABASE_URL` | Yes | Supabase project URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | Yes | Server-side Supabase service-role key |
 | `SLOW_ENDPOINT_THRESHOLD_MS` | No | Monitoring threshold for slow requests |
+| `AUTH_RATE_LIMIT_MAX_REQUESTS` | No | Auth route rate limit override for controlled test/load environments |
+| `RECRUITER_REQUEST_RATE_LIMIT_PER_HOUR` | No | Public recruiter request hourly rate limit override |
+| `ALERT_API_ERROR_RATE_PERCENT` | No | Admin monitoring alert threshold for API error rate |
+| `ALERT_AUTH_FAILURES` | No | Admin monitoring alert threshold for auth failures |
+| `ALERT_SLOW_REQUESTS` | No | Admin monitoring alert threshold for slow request count |
+| `ALERT_P95_LATENCY_MS` | No | Admin monitoring alert threshold for p95 latency |
 
 ### AI service
 
@@ -288,6 +294,7 @@ After starting the local stack, verify:
 
 Automated launch validation commands:
 
+- Supabase schema contract: `node scripts/verify-supabase-schema.js`
 - Backend RBAC smoke + stress: `npm --prefix backend run test:all`
 - Frontend production build/type/lint: `npm --prefix frontend run build`
 - Frontend lint only: `npm --prefix frontend run lint`

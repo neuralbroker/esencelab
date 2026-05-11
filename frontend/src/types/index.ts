@@ -459,6 +459,16 @@ export interface AdminApplicationSummary {
   }>;
 }
 
+export interface AdminPlatformAlert {
+  id: string;
+  severity: "info" | "warning" | "critical";
+  title: string;
+  message: string;
+  metric: string;
+  value: number | string;
+  threshold?: number;
+}
+
 export interface AdminPlatformHealth {
   uptimeSeconds: number;
   totalRequests: number;
@@ -473,6 +483,7 @@ export interface AdminPlatformHealth {
     statusCode: number | null;
     latencyMs: number | null;
   };
+  alerts?: AdminPlatformAlert[];
   slowEndpoints: Array<{
     endpoint: string;
     count: number;

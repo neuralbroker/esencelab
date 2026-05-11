@@ -8,17 +8,13 @@ import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import EsencelabLogo from "@/components/EsencelabLogo";
 
-const shellClass =
-  "rounded-[34px] border border-[#ececec] bg-white/62 shadow-[0_30px_80px_-54px_rgba(17,17,17,0.32)] backdrop-blur-[18px]";
-const panelClass =
-  "rounded-[30px] border border-[#ececec] bg-white/68 p-7 shadow-[0_18px_44px_-34px_rgba(17,17,17,0.22)] sm:p-9";
-const chipClass =
-  "inline-flex rounded-full border border-[#ececec] bg-white/72 px-3 py-1.5 text-[0.76rem] font-semibold uppercase tracking-[0.22em] text-[#757575]";
-const inputClass =
-  "mt-2 w-full rounded-[18px] border border-[#ececec] bg-white px-5 py-3.5 text-base text-[#111111] outline-none transition placeholder:text-[#b3b8c3] focus:border-[#d8d8d8] focus:ring-2 focus:ring-[#e9e9e9]";
+const shellClass = "app-glass-shell";
+const panelClass = "app-glass-panel";
+const chipClass = "app-chip";
+const inputClass = "app-input";
 
 const pageFallback = (
-  <div className="flex min-h-screen items-center justify-center bg-[#f4f4f2]">
+  <div className="app-page-surface flex min-h-screen items-center justify-center">
     <div className="h-10 w-10 animate-spin rounded-full border-2 border-black/15 border-t-[#111111]" />
   </div>
 );
@@ -88,8 +84,8 @@ function RegisterPageContent() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f4f4f2] text-[#111111]">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_0%_0%,rgba(210,210,210,0.42),transparent_34%),radial-gradient(circle_at_100%_0%,rgba(245,245,245,0.94),transparent_34%),linear-gradient(180deg,#efefed_0%,#f5f5f3_55%,#f8f8f6_100%)]" />
+    <div className="app-page-surface min-h-screen text-[#111111]">
+      <div className="pointer-events-none fixed inset-0 app-page-surface" />
 
       <div className="relative z-10 mx-auto flex w-full max-w-[1040px] flex-col px-4 py-5 sm:px-6 sm:py-7 lg:px-0 lg:py-8">
         <header className="mb-5 flex flex-wrap items-center justify-between gap-3">

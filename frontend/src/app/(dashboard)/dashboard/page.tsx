@@ -58,6 +58,14 @@ const formatUptime = (uptimeSeconds: number) => {
   return `${minutes}m`;
 };
 
+const getAlertClassName = (severity?: string) => {
+  if (severity === "critical")
+    return "border-[#d8c7c7] bg-[#fbf4f4] text-[#513131]";
+  if (severity === "warning")
+    return "border-[#ddd4c4] bg-[#fbf8f0] text-[#554831]";
+  return "border-border bg-white text-secondary";
+};
+
 function DashboardSkeleton() {
   return (
     <div className="layout-container section-spacing space-y-8">
@@ -920,8 +928,38 @@ export default function DashboardPage() {
               </p>
             </div>
           </div>
+          {stats?.platformHealth?.alerts?.length ? (
+            <div className="space-y-2">
+              <p className="text-[11px] uppercase tracking-[0.12em] text-secondary">
+                Active alerts
+              </p>
+              {stats.platformHealth.alerts.slice(0, 4).map((alert) => (
+                <div
+                  key={alert.id}
+                  className={`rounded-lg border p-3 text-xs ${getAlertClassName(alert.severity)}`}
+                >
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                    <span className="font-semibold text-primary">
+                      {alert.title}
+                    </span>
+                    <span className="uppercase tracking-[0.12em]">
+                      {alert.severity}
+                    </span>
+                  </div>
+                  <p className="mt-1 leading-5">{alert.message}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="rounded-lg border border-border bg-white p-3 text-sm text-secondary">
+              No active platform alerts.
+            </p>
+          )}
           {stats?.platformHealth?.slowEndpoints?.length ? (
             <div className="space-y-2">
+              <p className="text-[11px] uppercase tracking-[0.12em] text-secondary">
+                Slow endpoints
+              </p>
               {stats.platformHealth.slowEndpoints.slice(0, 3).map((entry) => (
                 <div
                   key={entry.endpoint}
@@ -934,11 +972,7 @@ export default function DashboardPage() {
                 </div>
               ))}
             </div>
-          ) : (
-            <p className="text-sm text-secondary">
-              No slow endpoints detected.
-            </p>
-          )}
+          ) : null}
         </Card>
       </section>
 

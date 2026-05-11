@@ -9,6 +9,7 @@ process.env.DATA_PROVIDER = "supabase";
 process.env.SUPABASE_MOCK = "1";
 process.env.JWT_SECRET = "test-jwt-secret-with-more-than-thirty-two-characters";
 process.env.FRONTEND_URLS = "http://localhost:3000";
+process.env.AI_HEALTH_TIMEOUT_MS = "50";
 
 if (process.env.DEBUG_TEST_LOGS !== "1") {
   console.log = () => undefined;
@@ -155,6 +156,15 @@ test("student auth and recruiter admin approval flow", async () => {
     assert.equal(pendingRequests.response.status, 200);
     assert.equal(pendingRequests.payload.summary.pending, 1);
     assert.equal(pendingRequests.payload.data[0].email, "rita@example.com");
+
+    const monitoring = await request(
+      "GET",
+      "/admin/monitoring",
+      undefined,
+      adminToken,
+    );
+    assert.equal(monitoring.response.status, 200);
+    assert.ok(Array.isArray(monitoring.payload.data.platformHealth.alerts));
 
     const temporaryPassword = "RecruiterPass123!";
     const approveRequest = await request(

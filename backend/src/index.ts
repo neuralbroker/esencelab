@@ -1699,6 +1699,29 @@ const buildAdminApplicationSummary = (days = 30) => {
 };
 
 const PLATFORM_HEALTH_CACHE_TTL_MS = 8000;
+const toAlertThreshold = (
+  envName: string,
+  defaultValue: number,
+  minimumValue: number,
+) => {
+  const parsed = Number(process.env[envName] || defaultValue);
+  return Math.max(
+    minimumValue,
+    Number.isFinite(parsed) ? parsed : defaultValue,
+  );
+};
+const ALERT_API_ERROR_RATE_PERCENT = toAlertThreshold(
+  "ALERT_API_ERROR_RATE_PERCENT",
+  5,
+  1,
+);
+const ALERT_AUTH_FAILURES = toAlertThreshold("ALERT_AUTH_FAILURES", 25, 5);
+const ALERT_SLOW_REQUESTS = toAlertThreshold("ALERT_SLOW_REQUESTS", 25, 5);
+const ALERT_P95_LATENCY_MS = toAlertThreshold(
+  "ALERT_P95_LATENCY_MS",
+  2500,
+  500,
+);
 let platformHealthCache: {
   expiresAt: number;
   key: string;
@@ -1794,6 +1817,83 @@ const getPlatformHealthSnapshot = async () => {
       ? Math.round((totalRequests / Math.max(1, uptimeSeconds)) * 60 * 100) /
         100
       : 0;
+  const latencyPercentilesMs = {
+    p50: toPercentile(latencySamples, 50),
+    p95: toPercentile(latencySamples, 95),
+    p99: toPercentile(latencySamples, 99),
+  };
+  const alerts = [] as Array<{
+    id: string;
+    severity: "info" | "warning" | "critical";
+    title: string;
+    message: string;
+    metric: string;
+    value: number | string;
+    threshold?: number;
+  }>;
+  if (apiErrorRate >= ALERT_API_ERROR_RATE_PERCENT) {
+    alerts.push({
+      id: "api_error_rate_high",
+      severity:
+        apiErrorRate >= ALERT_API_ERROR_RATE_PERCENT * 2
+          ? "critical"
+          : "warning",
+      title: "API error rate is elevated",
+      message: "Investigate recent 4xx/5xx responses and failing endpoints.",
+      metric: "apiErrorRate",
+      value: apiErrorRate,
+      threshold: ALERT_API_ERROR_RATE_PERCENT,
+    });
+  }
+  if (authFailures >= ALERT_AUTH_FAILURES) {
+    alerts.push({
+      id: "auth_failures_high",
+      severity:
+        authFailures >= ALERT_AUTH_FAILURES * 2 ? "critical" : "warning",
+      title: "Authentication failures are elevated",
+      message:
+        "Check for credential attacks, expired sessions, or role-access regressions.",
+      metric: "authFailures",
+      value: authFailures,
+      threshold: ALERT_AUTH_FAILURES,
+    });
+  }
+  if (Number(db.requestMetrics.slowRequests || 0) >= ALERT_SLOW_REQUESTS) {
+    alerts.push({
+      id: "slow_requests_high",
+      severity: "warning",
+      title: "Slow request count is elevated",
+      message: "Review slow endpoints, AI calls, and database latency.",
+      metric: "slowRequests",
+      value: Number(db.requestMetrics.slowRequests || 0),
+      threshold: ALERT_SLOW_REQUESTS,
+    });
+  }
+  if (latencyPercentilesMs.p95 >= ALERT_P95_LATENCY_MS) {
+    alerts.push({
+      id: "p95_latency_high",
+      severity:
+        latencyPercentilesMs.p95 >= ALERT_P95_LATENCY_MS * 2
+          ? "critical"
+          : "warning",
+      title: "P95 latency is elevated",
+      message: "Investigate expensive endpoints and upstream service latency.",
+      metric: "latencyPercentilesMs.p95",
+      value: latencyPercentilesMs.p95,
+      threshold: ALERT_P95_LATENCY_MS,
+    });
+  }
+  if (aiHealth.status === "down" || aiHealth.status === "degraded") {
+    alerts.push({
+      id: "ai_service_unhealthy",
+      severity: aiHealth.status === "down" ? "critical" : "warning",
+      title: "AI service health degraded",
+      message:
+        "Resume parsing, matching, or coach responses may use fallbacks.",
+      metric: "aiService.status",
+      value: aiHealth.status,
+    });
+  }
 
   const snapshot = {
     uptimeSeconds,
@@ -1812,11 +1912,8 @@ const getPlatformHealthSnapshot = async () => {
             ),
           )
         : 0,
-    latencyPercentilesMs: {
-      p50: toPercentile(latencySamples, 50),
-      p95: toPercentile(latencySamples, 95),
-      p99: toPercentile(latencySamples, 99),
-    },
+    latencyPercentilesMs,
+    alerts,
     slowEndpoints,
     aiService: aiHealth,
   };

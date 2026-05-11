@@ -157,15 +157,15 @@ export default function HomePage() {
 
   if (isLoading || isAuthenticated) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#f6f5f1]">
+      <div className="app-page-surface flex min-h-screen items-center justify-center">
         <div className="h-10 w-10 animate-spin rounded-full border-2 border-black/15 border-t-[#111111]" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-[#f6f5f1] text-[#101010] antialiased">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_12%_8%,rgba(255,255,255,0.95),transparent_30%),radial-gradient(circle_at_88%_4%,rgba(214,214,206,0.7),transparent_30%),linear-gradient(180deg,#f6f5f1_0%,#fbfaf7_48%,#f3f1ea_100%)]" />
+    <div className="app-page-surface min-h-screen overflow-x-hidden text-[#101010] antialiased">
+      <div className="pointer-events-none fixed inset-0 app-page-surface" />
       <div className="pointer-events-none fixed inset-0 opacity-[0.2] [background-image:linear-gradient(to_right,rgba(20,20,20,0.055)_1px,transparent_1px),linear-gradient(to_bottom,rgba(20,20,20,0.055)_1px,transparent_1px)] [background-size:56px_56px] [mask-image:linear-gradient(to_bottom,black,transparent_82%)]" />
       <motion.div
         className="pointer-events-none fixed left-[7%] top-[18%] h-28 w-28 rounded-full bg-white/50 blur-2xl"

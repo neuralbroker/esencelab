@@ -131,6 +131,7 @@ export const getAdminMonitoring = async (): Promise<AdminMonitoringData> => {
         slowThresholdMs: 1200,
         avgResponseMs: 0,
         aiService: { status: "unknown", statusCode: null, latencyMs: null },
+        alerts: [],
         slowEndpoints: [],
       },
     }

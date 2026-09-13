@@ -1,393 +1,77 @@
-# Esencelab
+# EsenceLab
 
-**Multi-service SaaS platform combining TypeScript and Python services with PostgreSQL, RBAC and AI workflows.**
+Hiring loop: resume in, structured skills out, job match + recruiter shortlist.
 
-```text
-Next.js frontend (frontend)
-    ->
-Express API (backend, JWT + RBAC, rate limits, request IDs)
-    ->
-FastAPI AI service (ai-service, resume parse/match, Groq optional with fallback)
-    ->
-Supabase/Postgres persistence (supabase/supabase-schema.sql: 15 tables, GIN indexes)
-```
+## Problem
 
-Engineering scope: service boundaries over HTTP (`x-internal-service-token`, 8–12s timeouts), gated recruiter onboarding (request → admin approve → temp password → login), per-endpoint in-memory metrics + `/api/health`, Docker per service + `render.yaml` + Vercel frontend, CI (schema/backend/frontend/ai-service). AI career features below are the product workload on top of that platform.
+Students can't map resumes to skill gaps; recruiters screen manually; admins lack one control surface.
 
-> Notes for reviewers: `backend/src/index.ts` is currently a ~6K-line monolith (see `docs/ARCHITECTURE.md` for the planned split); Supabase RLS policies are permissive (`USING(true)`) with enforcement in the app layer; there are no background workers/queues yet (AI calls are synchronous `fetch` with concurrency limit 4); monitoring is in-memory only (no external APM). See `docs/SCALING.md`, `docs/RUNBOOK.md`, `docs/TESTING.md`.
+## Solution
 
-## Product overview
-
-Three role-based experiences:
-
-- Students upload resumes, discover skill gaps, follow roadmaps and learning plans, and track applications.
-- Recruiters post jobs, rank candidates by fit, and review structured resume insights instead of screening manually.
-- Admins monitor users, resumes, applications, moderation flows, and platform health from a single control surface.
-
-The project is split into a Next.js frontend, an Express API, and a FastAPI AI service, with Supabase/Postgres used for persistent production data.
-
-## Product Scope
-
-### Student module
-
-- Authentication, protected dashboard access, and profile management
-- Beginner onboarding with domain discovery and guided resume starting points
-- Resume upload, parsing, and structured profile extraction
-- Resume strength scoring and career readiness overview
-- Skill-gap analysis against target roles
-- Job recommendations and job match visibility
-- Skill roadmap tracking
-- 30-day and 60-day learning plan generation
-- Mock interview questions and saved practice sessions
-- Saved jobs, application tracking, and progress history
-- Optional AI career coach backed by Groq with local fallback guidance
-
-### Recruiter module
-
-- Recruiter login and protected recruiter flows after admin approval
-- Public recruiter access request submission for teams that want to join the platform
-- Job posting, editing, deletion, and listing
-- Candidate ranking by match score
-- Candidate match breakdowns for each job
-- Applicant views and recruiter analytics endpoints
-- Faster shortlisting workflow through structured candidate summaries
-
-### Admin module
-
-- Admin-only authentication and route protection
-- User management
-- Recruiter access request review, approval, rejection, and temporary-password issuance
-- Resume monitoring and moderation actions
-- Course management
-- Application summaries
-- System monitoring and audit log endpoints
-- Platform-level dashboard statistics
+Three deployables demonstrating multi-service product engineering, kept to one meaningful AI workflow (resume parse + match). Secondary LMS/coach/admin features are de-emphasized.
 
 ## Architecture
 
 ```text
-Next.js frontend (frontend)
-    ->
-Express API (backend)
-    ->
-FastAPI AI service (ai-service)
-    ->
-Supabase/Postgres persistence
+Frontend (Next.js)
+  ↓
+API (Express, JWT + RBAC, rate limits, request IDs)
+  ↓
+PostgreSQL (Supabase-managed: users, resumes, candidates, jobs, applications)
+  ↓
+AI service (FastAPI: /ai/parse-resume, /ai/match)
 ```
+
+Service calls are synchronous `fetch` with `x-internal-service-token` and 8–12s timeouts (no queues yet).
+
+## Key Engineering Decisions
+
+1. Supabase as managed PostgreSQL; authorization in Express (RLS policies are permissive `USING(true)` — documented, not relied on).
+2. Gated recruiter onboarding: request → admin approve → temp password → login.
+3. Deterministic parse/match first (`overlap*0.55 + TF-IDF*0.45` with fallbacks); Groq optional with local fallback, removable.
+4. Per-endpoint in-memory metrics + `/api/health`; no external APM (documented gap).
+5. Docker per service + `render.yaml` + Vercel frontend + 4-job CI.
 
 ## Tech Stack
 
-| Layer | Stack |
-| --- | --- |
-| Frontend | Next.js 15, React 18, TypeScript, Tailwind CSS, Framer Motion, Lucide React |
-| Backend | Node.js, Express, TypeScript, JWT, bcryptjs, multer, compression, helmet, rate limiting |
-| AI service | FastAPI, Python, pdfplumber, pypdf |
-| Data | Supabase/Postgres persistence |
-| Tooling | PowerShell helper scripts, npm, TypeScript compiler, ESLint |
+TypeScript · Next.js · Express · Python FastAPI · PostgreSQL · Docker
 
-## Repository Layout
+## Features
 
-```text
-Esencelab/
-|- frontend/                     # Next.js app
-|- backend/                      # Express API and data-provider layer
-|- ai-service/                   # FastAPI AI and resume processing service
-|- supabase/                     # Supabase config and schema
-|- render.yaml                   # Render service blueprint
-|- run-frontend-3100.ps1         # Local frontend launcher
-|- run-backend-3101.ps1          # Local backend launcher
-|- run-ai-3102.ps1               # Local AI launcher
-```
+1. Auth + RBAC (student/recruiter/admin)
+2. Resume upload (PDF, 4MB) + structured parse
+3. Jobs CRUD + applications
+4. Skill-overlap + TF-IDF match with explanations
+5. Gated recruiter flow + admin review
+6. Health/monitoring endpoints
 
-## Security Note
-
-No public credentials are documented in this repository.
-
-- Create the first local admin through backend bootstrap environment variables such as `INITIAL_ADMIN_*`.
-- Create student accounts through the normal registration flow.
-- Recruiters should submit the public recruiter access request form; admins approve requests before recruiter login and hiring tools are enabled. `INITIAL_RECRUITER_*` remains available only for trusted bootstrap/admin-controlled environments.
-- Do not commit or publish real passwords, login pairs, or production secrets in the README or any tracked file.
-
-## Quick Start
-
-### Prerequisites
-
-- Node.js 18+ with `npm`
-- Python 3.11+ with `pip`
-- PowerShell on Windows
-
-### Install dependencies
-
-Frontend:
+## Running Locally
 
 ```powershell
-cd .\frontend
-npm ci
+# Windows PowerShell (ports 3100/3101/3102)
+.\run-frontend-3100.ps1
+.\run-backend-3101.ps1
+.\run-ai-3102.ps1
 ```
 
-Backend:
+Linux: `cd frontend && npm ci && npm run dev`; `cd backend && npm ci && npm run dev`; `cd ai-service && pip install -r requirements.txt && uvicorn app.main:app --port 3102`. Configure `JWT_SECRET`, `AI_INTERNAL_AUTH_TOKEN`, `SUPABASE_*`, `AI_SERVICE_URL`.
 
-```powershell
-cd .\backend
-npm ci
+## Testing
+
+```bash
+cd backend && npm run test:all   # RBAC smoke + stress (SUPABASE_MOCK=1)
+cd ../ai-service && python -m unittest tests.smoke_test
+node scripts/verify-supabase-schema.js
 ```
 
-AI service:
+## Performance
 
-```powershell
-cd .\ai-service
-python -m pip install -r requirements.txt
-```
+No published benchmarks. Only thresholds (e.g. slow-endpoint 1200ms, p95 alert 2500ms) — not measurements.
 
-### Configure local environment
+## Limitations
 
-Backend template:
+`backend/src/index.ts` is a ~6K-line monolith (split planned in `docs/ARCHITECTURE.md`); no background workers; RLS permissive; monitoring in-memory; secondary features (roadmaps, courses, mock interviews, coach, analytics) hidden from this story.
 
-```powershell
-Copy-Item .\backend\.env.example .\backend\.env
-```
+## Future Improvements
 
-Frontend template:
-
-```powershell
-Copy-Item .\frontend\.env.example .\frontend\.env.local
-```
-
-AI service template:
-
-```powershell
-Copy-Item .\ai-service\.env.example .\ai-service\.env
-```
-
-The root launchers load `.env.local` first, then service-specific `.env.local` files. Set local secrets and Supabase credentials there instead of editing the scripts:
-
-```env
-JWT_SECRET=replace-with-a-local-32-character-minimum-secret
-AI_INTERNAL_AUTH_TOKEN=replace-with-a-shared-local-internal-token
-DATA_PROVIDER=supabase
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=replace-with-your-service-role-key
-```
-
-### Run the local stack
-
-From the repo root:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\run-ai-3102.ps1
-```
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\run-backend-3101.ps1
-```
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\run-frontend-3100.ps1
-```
-
-### Local URLs
-
-- Frontend: `http://127.0.0.1:3100`
-- Backend API: `http://127.0.0.1:3101/api`
-- AI service: `http://127.0.0.1:3102`
-
-## Environment Variables
-
-### Backend
-
-Use [backend/.env.example](backend/.env.example) as the starting point.
-
-| Variable | Required | Purpose |
-| --- | --- | --- |
-| `PORT` | No | API port, defaults to `3001` |
-| `JWT_SECRET` | Yes | JWT signing secret |
-| `AI_SERVICE_URL` | No | FastAPI base URL |
-| `AI_INTERNAL_AUTH_TOKEN` | Recommended | Shared backend-to-AI auth token |
-| `FRONTEND_URL` | No | Allowed frontend origin |
-| `FRONTEND_URLS` | Recommended for production | Comma-separated allowed frontend origins |
-| `TRUST_PROXY` | Recommended behind ingress | Enables correct proxy-aware request handling |
-| `DATA_PROVIDER` | Yes | Must be `supabase` |
-| `ALLOW_INSECURE_PASSWORD_RESET_TOKEN_RESPONSE` | No | Local-only reset token echo for private development scripts |
-| `INITIAL_ADMIN_EMAIL` | Optional | Creates the first admin account if missing |
-| `INITIAL_ADMIN_PASSWORD` | Optional | Password for the first admin account |
-| `INITIAL_ADMIN_NAME` | No | Display name for the first admin account |
-| `INITIAL_RECRUITER_EMAIL` | Optional | Creates an initial recruiter account if missing |
-| `INITIAL_RECRUITER_PASSWORD` | Optional | Password for the initial recruiter account |
-| `INITIAL_RECRUITER_NAME` | No | Display name for the initial recruiter account |
-| `SUPABASE_URL` | Yes | Supabase project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Server-side Supabase service-role key |
-| `SLOW_ENDPOINT_THRESHOLD_MS` | No | Monitoring threshold for slow requests |
-| `AUTH_RATE_LIMIT_MAX_REQUESTS` | No | Auth route rate limit override for controlled test/load environments |
-| `RECRUITER_REQUEST_RATE_LIMIT_PER_HOUR` | No | Public recruiter request hourly rate limit override |
-| `ALERT_API_ERROR_RATE_PERCENT` | No | Admin monitoring alert threshold for API error rate |
-| `ALERT_AUTH_FAILURES` | No | Admin monitoring alert threshold for auth failures |
-| `ALERT_SLOW_REQUESTS` | No | Admin monitoring alert threshold for slow request count |
-| `ALERT_P95_LATENCY_MS` | No | Admin monitoring alert threshold for p95 latency |
-
-### AI service
-
-Use [ai-service/.env.example](ai-service/.env.example) for AI-specific deployment values.
-
-| Variable | Required | Purpose |
-| --- | --- | --- |
-| `AI_ALLOWED_ORIGINS` | Recommended for production | Comma-separated origins allowed to call the AI service |
-| `AI_INTERNAL_AUTH_TOKEN` | Recommended | Shared backend-to-AI auth token |
-| `GROQ_API_KEY` | Optional | Enables the student AI coach using Groq |
-| `GROQ_MODEL` | Optional | Groq model name, defaults to `openai/gpt-oss-120b` |
-| `GROQ_REASONING_EFFORT` | Optional | Reasoning level for Groq models that support it |
-| `GROQ_SERVICE_TIER` | Optional | Groq service tier, defaults to `auto` |
-| `STUDENT_ASSISTANT_CACHE_TTL_SEC` | Optional | Cache TTL for assistant responses |
-
-### Frontend
-
-Use [frontend/.env.example](frontend/.env.example) for build-time frontend settings.
-
-| Variable | Required | Purpose |
-| --- | --- | --- |
-| `NEXT_PUBLIC_API_URL` | No | Public API base URL used by the browser |
-| `BACKEND_PROXY_TARGET` | If using same-domain proxy mode | Internal backend target for Next.js rewrites |
-| `AI_PROXY_TARGET` | If using same-domain proxy mode | Internal AI target for Next.js rewrites |
-| `NEXT_PUBLIC_MAX_RESUME_FILE_SIZE_MB` | Optional | Client-side resume upload limit |
-
-## Data Provider
-
-The backend uses Supabase/Postgres as the required source of truth. Before running the backend, set `DATA_PROVIDER=supabase`, configure `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`, and apply [supabase/supabase-schema.sql](supabase/supabase-schema.sql).
-
-## Deployment
-
-### Recommended hosted setup
-
-This repo is currently designed to run best as:
-
-- Frontend on Vercel
-- Backend on Render
-- AI service on Render
-- Database on Supabase
-
-Use these files as the starting point:
-
-- [render.yaml](render.yaml)
-- [frontend/vercel.json](frontend/vercel.json)
-
-### Container assets
-
-The repo also includes Dockerfiles for each service:
-
-- [frontend/Dockerfile](frontend/Dockerfile)
-- [backend/Dockerfile](backend/Dockerfile)
-- [ai-service/Dockerfile](ai-service/Dockerfile)
-
-## Validation And Testing
-
-### Static checks
-
-Frontend:
-
-```powershell
-cd .\frontend
-npm run build
-```
-
-Backend:
-
-```powershell
-cd .\backend
-npm run build
-```
-
-AI service syntax check:
-
-```powershell
-cd .\ai-service
-python -m py_compile .\app\main.py
-```
-
-### Runtime checks
-
-After starting the local stack, verify:
-
-- Frontend: [http://127.0.0.1:3100](http://127.0.0.1:3100)
-- Backend health: [http://127.0.0.1:3101/api/health](http://127.0.0.1:3101/api/health)
-- AI health: [http://127.0.0.1:3102/health](http://127.0.0.1:3102/health)
-
-Automated launch validation commands:
-
-- Supabase schema contract: `node scripts/verify-supabase-schema.js`
-- Backend RBAC smoke + stress: `npm --prefix backend run test:all`
-- Frontend production build/type/lint: `npm --prefix frontend run build`
-- Frontend lint only: `npm --prefix frontend run lint`
-- Backend dependency audit: `npm --prefix backend audit --audit-level=moderate`
-- Frontend dependency audit: `npm --prefix frontend audit --audit-level=moderate`
-- AI smoke tests: `python ai-service/tests/smoke_test.py`
-- AI audit tool setup: `python -m pip install -r ai-service/requirements-dev.txt`
-- AI dependency audit: `python -m pip_audit -r ai-service/requirements.txt`
-
-Recommended manual workflow checks:
-
-- Student registration and login
-- Recruiter request submission, admin approval, and approved recruiter login
-- Beginner onboarding and target-role save
-- Resume upload and parsed profile retrieval
-- Career overview, roadmap, learning plan, AI coach, and mock interview
-- Approved recruiter login and job creation
-- Student job visibility and application submission
-- Recruiter applicant visibility and status updates
-- Admin monitoring, users, and resume views
-
-## API Overview
-
-The backend currently exposes grouped endpoints for:
-
-- Auth: student register, login, me, logout, profile update, password reset flow
-- Recruiter access requests: public submit plus admin list/review/approve/reject
-- Users: admin listing, lookup, update, deactivate/delete
-- Resume: upload, fetch current student resume, delete resume
-- Admin resume moderation: list, inspect, moderate, remove
-- Jobs: list, detail, create, update, delete
-- Applications: create, list, my applications, recruiter status updates
-- Recommendations: student recommendation feed
-- Career engine: roles, target role, overview, roadmap, AI coach, learning plans, mock interview, saved jobs, application tracker
-- Recruiter analytics: recruiter overview, candidate matches, job analytics
-- Courses: list plus admin CRUD
-- Admin monitoring: dashboard stats, application summary, monitoring, audit logs
-- Health: API health endpoint
-
-The main API implementation lives in [backend/src/index.ts](backend/src/index.ts).
-
-## Frontend Surface
-
-The frontend includes:
-
-- Public landing page
-- Login, student registration, and recruiter access request pages
-- Shared dashboard shell
-- Student dashboard, resume, applications, courses, interview, jobs, and roadmaps
-- Recruiter applicants and job details pages
-- Admin recruiter request review, resume review, and user management pages
-
-The frontend app router lives under [frontend/src/app](frontend/src/app).
-
-
-
-## Documentation
-
-- [Architecture](docs/ARCHITECTURE.md)
-- [Deployment Guide](docs/DEPLOYMENT.md)
-- [Operations Runbook](docs/RUNBOOK.md)
-- [Scaling Roadmap](docs/SCALING.md)
-- [Testing Strategy](docs/TESTING.md)
-- [Contributing](CONTRIBUTING.md)
-- [Security Policy](SECURITY.md)
-
-## Operational Notes
-
-- Local and hosted backend environments require `DATA_PROVIDER=supabase`.
-- The AI service is required for resume parsing and match-related flows.
-- JWT secrets and external API keys should be set through environment variables and never committed.
-- Use your own local users or bootstrap users through env vars; do not publish credentials in docs.
-
-
-
-## Contributing
-
-Contributions are welcome!
+Split API into routes/services/stores; harden RLS or document managed-PG choice; add queue for AI calls; external observability; expand tests beyond RBAC/smoke.

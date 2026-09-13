@@ -1,6 +1,24 @@
 # Esencelab
 
-Esencelab is a full-stack AI-assisted hiring and career intelligence platform built around three role-based experiences:
+**Multi-service SaaS platform combining TypeScript and Python services with PostgreSQL, RBAC and AI workflows.**
+
+```text
+Next.js frontend (frontend)
+    ->
+Express API (backend, JWT + RBAC, rate limits, request IDs)
+    ->
+FastAPI AI service (ai-service, resume parse/match, Groq optional with fallback)
+    ->
+Supabase/Postgres persistence (supabase/supabase-schema.sql: 15 tables, GIN indexes)
+```
+
+Engineering scope: service boundaries over HTTP (`x-internal-service-token`, 8–12s timeouts), gated recruiter onboarding (request → admin approve → temp password → login), per-endpoint in-memory metrics + `/api/health`, Docker per service + `render.yaml` + Vercel frontend, CI (schema/backend/frontend/ai-service). AI career features below are the product workload on top of that platform.
+
+> Notes for reviewers: `backend/src/index.ts` is currently a ~6K-line monolith (see `docs/ARCHITECTURE.md` for the planned split); Supabase RLS policies are permissive (`USING(true)`) with enforcement in the app layer; there are no background workers/queues yet (AI calls are synchronous `fetch` with concurrency limit 4); monitoring is in-memory only (no external APM). See `docs/SCALING.md`, `docs/RUNBOOK.md`, `docs/TESTING.md`.
+
+## Product overview
+
+Three role-based experiences:
 
 - Students upload resumes, discover skill gaps, follow roadmaps and learning plans, and track applications.
 - Recruiters post jobs, rank candidates by fit, and review structured resume insights instead of screening manually.

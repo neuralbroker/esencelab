@@ -21,6 +21,15 @@ import { createServer, Server } from "http";
 import { Socket } from "net";
 import { SupabaseStore } from "./supabaseStore";
 import {
+  CanonicalRole,
+  SupportedRole,
+  roleFilterMatches,
+  roleMatches,
+  sanitizeUser,
+  toCanonicalRole,
+  toStorageRole,
+} from "./auth/roles";
+import {
   CAREER_ROLES,
   buildRecommendationExplanation,
   buildRoadmap,
@@ -777,35 +786,8 @@ app.use((req: RequestWithAuth, res, next) => {
   next();
 });
 
-type CanonicalRole = "student" | "recruiter" | "admin";
-type SupportedRole = CanonicalRole | "employer";
-
 const resetTokens = new Map<string, { userId: string; expiresAt: number }>();
 const revokedTokens = new Set<string>();
-
-const toStorageRole = (inputRole: unknown): SupportedRole => {
-  const normalized = String(inputRole || "")
-    .trim()
-    .toLowerCase();
-  if (normalized === "recruiter") return "employer";
-  if (normalized === "employer") return "employer";
-  if (normalized === "admin") return "admin";
-  return "student";
-};
-
-const toCanonicalRole = (inputRole: unknown): CanonicalRole => {
-  const normalized = String(inputRole || "")
-    .trim()
-    .toLowerCase();
-  if (normalized === "recruiter" || normalized === "employer")
-    return "recruiter";
-  if (normalized === "admin") return "admin";
-  return "student";
-};
-
-const roleMatches = (inputRole: unknown, requiredRole: CanonicalRole) => {
-  return toCanonicalRole(inputRole) === requiredRole;
-};
 
 const readOptionalBootstrapUser = (
   prefix: string,
@@ -839,29 +821,6 @@ const readOptionalBootstrapUser = (
     role,
   };
 };
-
-const roleFilterMatches = (inputRole: unknown, filterRole: string) => {
-  const normalized = filterRole.trim().toLowerCase();
-  if (!normalized) return true;
-  if (normalized === "employer" || normalized === "recruiter") {
-    return roleMatches(inputRole, "recruiter");
-  }
-  if (normalized === "admin") return roleMatches(inputRole, "admin");
-  if (normalized === "student") return roleMatches(inputRole, "student");
-  return false;
-};
-
-const sanitizeUser = (profile: any) => ({
-  id: profile.id,
-  email: profile.email,
-  name: profile.name,
-  role: profile.role,
-  canonicalRole: toCanonicalRole(profile.role),
-  avatarUrl: profile.avatarUrl,
-  isActive: profile.isActive,
-  createdAt: profile.createdAt,
-  updatedAt: profile.updatedAt,
-});
 
 const createToken = (userId: string) =>
   jwt.sign(

@@ -18,13 +18,28 @@ Esencelab is split into independent deployable services:
 
 ## Current refactor direction
 
-The largest future scale improvement is splitting `backend/src/index.ts` into modules:
+The largest future scale improvement is splitting `backend/src/index.ts`
+(~6K lines) into modules. Verified pattern (2026-09-14): extract pure,
+dependency-free functions first, re-import, then `tsc --noEmit` + RBAC
+smoke/stress (`SUPABASE_MOCK=1`, run files separately — joint runs collide
+under one process even on main).
 
-- `config/` for environment parsing and production safety checks
-- `middleware/` for auth, request IDs, logging, rate limits, and error handling
-- `routes/` for auth, users, resumes, jobs, applications, career, recruiter, admin, health
-- `services/` for matching, recommendations, monitoring, bootstrap, and audit logging
-- `stores/` for memory and Supabase persistence adapters
+- [x] Step 1 — `backend/src/auth/roles.ts`: `CanonicalRole/SupportedRole`,
+  `toStorageRole/toCanonicalRole/roleMatches/roleFilterMatches/sanitizeUser`
+  (pure; RBAC smoke + stress green individually)
+- [ ] Step 2 — `middleware/requestId.ts`: request-ID + error-normalization
+  middlewares (depend only on types + `crypto`)
+- [ ] Step 3 — `utils/metrics.ts`: `normalizeMetricPath/toPercentile/...`
+  (depend on in-memory store shape — pass store as arg, no module closure)
+- [ ] Step 4 — `routes/health.ts`: `/api/health` + monitoring endpoints
+  (first vertical slice; needs store + config injection)
+- [ ] Step 5+ — `routes/` per domain (auth, jobs, applications, recruiter,
+  admin), `services/` (matching, audit), `stores/` (memory vs Supabase
+  adapters behind one interface)
+
+Rule: never move a function that closes over module-level `db`/limiters
+without converting the closure to an argument. Each step must keep
+`npm run test:all` green before the next begins.
 
 The AI service should similarly evolve from one large module into:
 
